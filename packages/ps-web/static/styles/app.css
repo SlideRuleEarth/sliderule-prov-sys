@@ -1,0 +1,496 @@
+.ps-img-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
+/*=======================
+  Login/SignUp
+========================*/
+
+.auth {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.auth::after {
+  z-index: -1;
+  opacity: 0.1;
+  content: "";
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+}
+
+.auth > .card {
+  padding: 3rem 4rem;
+  width: 95%;
+  max-width: 65rem;
+}
+
+@media screen and (min-width: 650px) {
+  .auth > .card {
+    padding: 5rem 8rem;
+    width: 95%;
+    max-width: 50rem;
+  }
+}
+
+.auth__header h3 {
+  color: var(--color-sub);
+  font-weight: 700;
+  margin-top: 1rem;
+}
+
+.auth__header p {
+  font-weight: 400;
+  font-size: 1.8rem;
+  margin-bottom: 2rem;
+}
+
+.auth__form {
+  margin: 3rem 0;
+}
+
+.auth .auth__form label,
+.auth .auth__alternative p {
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: var(--color-sub-light);
+}
+
+.auth .auth__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0.5rem 0 1.0rem;
+}
+.auth .auth__actions a {
+  text-decoration: underline;
+}
+
+.auth .auth__alternative a {
+  font-size: 2rem;
+  font-weight: 500;
+}
+
+.messages {
+  list-style: none;
+  background: var(--color-white);
+  padding: 0.5rem 3rem;
+  border: 2px solid var(--color-light);
+  border-radius: 0.7rem;
+}
+
+.message {
+  padding: 2.5rem 0;
+}
+
+.message > a span {
+  font-size: 1.45rem;
+  font-weight: 500;
+}
+
+.message.message--unread a span {
+  font-weight: 700;
+  color: var(--color-sub);
+}
+
+.message:not(:last-child) {
+  border-bottom: 2px solid var(--color-white-light);
+}
+
+.message > a {
+  display: flex;
+  gap: 1rem;
+}
+
+.message__author,
+.message__date {
+  flex-basis: 25%;
+}
+
+.message__subject {
+  flex-basis: 50%;
+}
+
+.message__date {
+  text-align: right;
+}
+
+.asteriskField {
+  display: none;
+}
+/*=======================
+  Single Message
+========================*/
+
+.messagePage .message {
+  list-style: none;
+  background: var(--color-white);
+  padding: 3.5rem 5rem;
+  border: 2px solid var(--color-light);
+  border-radius: 0.7rem;
+}
+
+.messagePage .message__subject {
+  font-size: 2.8rem;
+  color: var(--color-sub);
+  margin-bottom: 1rem;
+  margin-top: 2rem;
+}
+
+.messagePage .message__author {
+  font-size: 1.8rem;
+  font-weight: 500;
+}
+
+.messagePage .message__date {
+  font-size: 1.4rem;
+  font-weight: 400;
+  text-align: left;
+  margin-bottom: 3rem;
+}
+
+.backButton {
+  background: var(--color-main-light);
+  color: var(--color-main);
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.backButton i {
+  font-size: 1.8rem;
+}
+
+/*=======================
+  Fixed Position Alerts Wrapper
+========================*/
+
+.alert {
+  position: fixed;
+  left: 50%;
+  top: 120px;
+  transform: translate(-50%, -50%);
+
+  z-index: 99999;
+}
+
+/* Below were added by CEU */
+.table-mc-border {
+  border-width: 2px;
+  border-style: solid;
+  border-color: black;
+  border-radius: 10px;
+  text-align: center;
+  padding: auto;
+  margin: auto;
+  color: var(--color-sub);
+  font-size: 2.8rem;
+  font-weight: 700;
+}
+
+.gran-sel-border {
+  border-width: 2px;
+  border-style: solid;
+  border-color: black;
+  border-radius: 10px;
+  text-align: center;
+  padding: auto;
+  margin: auto;
+  color: var(--color-sub);
+}
+.manage-cluster-title {
+  text-align: center;
+  padding: auto;
+  margin: auto;
+  color: var(--color-sub);
+  font-size: 4rem;
+  font-weight: 700;
+}
+
+.table-manage-cluster {
+  padding: auto;
+  margin: auto;
+  margin-top: 0rem;
+}
+
+.table-mc-caption {
+  text-align: center;
+  font-weight: bolder;
+  font-size: 2rem;
+}
+
+.table-mc-labels-col {
+  text-align: right;
+  font-weight: bold;
+}
+
+.table-mc-data-col {
+  text-align: left;
+  padding-left: 2rem;
+  font-weight: normal;
+}
+
+.mc-ip {
+  text-align: left;
+  font-weight: normal;
+}
+
+.td-mc-ip {
+  text-align: left;
+  padding-left: 2rem;
+  font-weight: normal;
+}
+
+.mc-cluster-state-not-running {
+  text-align: left;
+  font-weight: normal;
+  color: #FF0000; 
+}
+
+.mc-cluster-ps-cmd-failed {
+  text-align: left;
+  font-weight: normal;
+  color: #FF0000; 
+}
+
+.mc-cluster-ps-cmd-success {
+  text-align: left;
+  font-weight: bold;
+  color: #106910; 
+}
+
+.mc-cluster-ps-cmd-summary {
+  text-align: left;
+  font-weight:normal
+}
+
+.mc-cluster-ps-cmd-pending {
+  text-align: left;
+  font-weight: bold;
+}
+
+.mc-cluster-state-running {
+  text-align: left;
+  font-weight: bold;
+  color: #106910; 
+}
+
+.mc-cluster-state-processing {
+  text-align: left;
+  font-weight: normal;
+  color: #cbcf05; 
+}
+
+.mc-connection-status-good {
+  text-align: left;
+  font-weight: bold;
+  color: #106910; 
+}
+
+.mc-connection-status-bad {
+  text-align: left;
+  font-weight: bold;
+  color: #ff0000; 
+}
+
+.mc-connection-status-unknown {
+  text-align: left;
+  font-weight: bold;
+  color: #e5ff00; 
+}
+
+.mc-cmd-status {
+  text-align: left;
+  font-weight: normal;  
+}
+
+.mc-cmd-descr {
+  text-align: left;
+  padding-left: 0.5rem;
+  font-weight: normal;
+  font-size: 1.25rem;
+  
+}
+
+.mc-last-refresh {
+  text-align: center;
+  margin-left: 0rem;
+  padding-left: 0rem;
+  font-weight: normal;
+  font-size: 1.5rem;
+}
+.table-mc-body {
+  border-width: 2px;
+  border-style: solid;
+  border-color: black;
+  border: radius 11px;
+  margin: 0.5rem;
+}
+
+.provision-console-border {
+  border-width: 2px;
+  border-style: solid;
+  border-color: black;
+  border-radius: 11px;
+  text-align: center;
+  font-weight: bolder;
+  font-size: 1.5rem;
+  padding: auto;
+  margin: 0.5rem;
+}
+
+.provision-log-border {
+  border-width: 2px;
+  border-style: solid;
+  border-color: black;
+  border-radius: 11px;
+  text-align: center;
+  font-weight: bolder;
+  font-size: 1.5rem;
+  padding: auto;
+  margin: 0.5rem;
+}
+
+.provision-console-div {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.provision-log-div {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.provision-console-output {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  white-space: pre-wrap;
+  text-align: left;
+  line-height: 1;
+  color: black;
+}
+
+.provision-log-output {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  white-space: pre-wrap;
+  text-align: center;
+  line-height: 1;
+  color: #106910; 
+}
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 25rem;
+  background-color: black;
+  color: #fff;
+  text-align: match-parent;
+  font-size: smaller;
+  border-radius: 6px;
+  padding: 5px 0;
+
+  /* Position the tooltip */
+  position: absolute;
+  z-index: 1;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+}
+
+.div-scroll {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.auto-scroll-x-y {
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.table-manage-members {
+  padding: auto;
+  margin: auto;
+  margin-top: 0rem;
+}
+.table-mm-caption {
+  padding: auto;
+  margin: auto;
+  font-weight: bolder;
+  font-size: xx-large;
+}
+.table-mm-labels-col {
+  margin: 1rem;
+  text-align: right;
+  font-weight: bold;
+}
+.table-mm-data-col {
+  text-align: left;
+  padding-left: 1rem;
+  font-weight: normal;
+}
+
+.mm-btn-group {
+  padding: auto;
+  margin: auto;
+  margin-top: 0.5rem;
+}
+
+.browse-search-container {
+  align-self: center;
+  align-items: center;
+}
+
+.fieldset-centered {
+  align-items: center;
+  justify-content: center;
+}
+
+.new-org-table {
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-link-left {
+  justify-content: left;
+}
+
+.chart-container {
+  position: relative;
+  margin: auto;
+  height: 60vh;
+  width: 90vw;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.chart-container-short {
+  position: relative;
+  margin: auto;
+  height: 35vh;
+  width: 90vw;
+}
+
+.prov-sys-navbar {
+  padding-top: 75px !important;
+}

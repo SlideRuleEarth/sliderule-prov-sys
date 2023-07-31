@@ -1,0 +1,23 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<!-- Main Section -->
+<main class="profile my-md">
+    <div class="container">
+        <div class="layout">
+            <div class="column column--1of3">
+                <div class="card text-center">
+                    <div class="card__body">
+                        <p class="dev__name">{{user.first_name}} {{user.last_name}} ({{user.username}})</p>
+                        <b>
+                            Your request for a new {{account_type}} account with {{m.org.name}} from owner:{{m.org.owner.firstname}} {{m.org.owner.lastname}} using email account:{{m.org.owner.email}} has FAILED.
+                        </b>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+{% endblock content %}

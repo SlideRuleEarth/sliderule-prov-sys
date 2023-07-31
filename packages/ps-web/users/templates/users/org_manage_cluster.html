@@ -1,0 +1,478 @@
+{% extends 'main.html' %}
+{% load crispy_forms_tags %}
+{% load form_extras %}
+
+{% load i18n %}
+
+{% load tz %}
+
+{% block nav %}
+    <div class="container text-center"> 
+        {% with cluster_page="active" %}           
+        {% include 'users/org_button_bar.html' %} 
+        {% endwith %}
+    </div>
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">            
+                <div class="card-body">
+                    {% if PROVISIONING_DISABLED  %}
+                        <div class="text-center">
+                            <p class="text-danger font-weight-bold fs-1">Provisioning Disabled!</p>
+                        </div>
+                    {% endif %}
+                    <div class="accordion shadow" id="manage_cluster_accordian_{{org.name}}"> 
+                        <div class="accordian-item shadow">
+                            <h2 class="accordian-header" id="mc_ah_{{org.name}}_state">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_state" aria-expanded="true" aria-controls="collapse_{{org.name}}_state">
+                                    Cluster
+                                </button>
+                            </h2>                                             
+                            <div id="collapse_{{org.name}}_state" class="accordion-collapse collapse show my-1" aria-labelledby="mc_hd_{{org.name}}_state">
+                                <div class="accordion-body">
+                                    <div class="container-fluid" style="width: fit-content;">
+                                        <div class="row py-2 d-flex align-items-stretch justify-content-center" style="width: fit-content;">
+                                            <div class="col">
+                                                <div class="card shadow mx-auto my-1 h-100">
+                                                    <h5 class="card-title mt-2">
+                                                        Current Cluster State
+                                                    </h5>
+                                                    <div class="card-body d-flex flex-column">
+                                                        <dl>
+                                                            <dt>Version</dt>
+                                                            {% if cluster.is_deployed %}
+                                                                <dd>{{ cluster.cur_version }}</dd>
+                                                            {% else %}
+                                                               <dd>TBD</dd>
+                                                            {% endif %}
+                                                            <dt>Node Scaling Limits</dt>
+                                                            {% if cluster.is_deployed %}
+                                                                <dd>{{org.min_node_cap}}-{% if cluster.cur_nodes == 0 %}<span class="text-warning">{{cluster.cur_nodes}}</span>{% else %}<span class="mc-cluster-state-running">{{cluster.cur_nodes}}</span>{% endif %}-{{org.max_node_cap}}  </dd> 
+                                                            {% else %}
+                                                                <!-- not deployed so cur_nodes must be zero or something is wrong --> 
+                                                                <dd>TBD</dd> 
+                                                            {% endif %}
+                                                            <dt>Is Public</dt>
+                                                            {% if cluster.is_deployed %}
+                                                                <dd>{{ cluster.is_public }}</dd>
+                                                            {% else %}
+                                                                <dd>TBD</dd>
+                                                            {% endif %}
+                                                        </dl>
+                                                        <dl>
+                                                            <dt>Current Capacity Request Expires</dt>                                                           
+                                                            {% if cluster.is_deployed %}
+                                                                {% if cluster.expire_time %}
+                                                                    <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ cluster.expire_time.isoformat }}">Loading...</p></dd>
+                                                                {% else %}
+                                                                    No Expiration
+                                                                {% endif %}
+                                                            {% else %}
+                                                                <dd>-</dd>
+                                                            {% endif %}
+                                                            <dt>Deploy State</dt>
+                                                            <dd>
+                                                                {% with active_ps_cmd=cluster.active_ps_cmd deployed_state=cluster.deployed_state is_deployed=cluster.is_deployed cur_nodes=cluster.cur_nodes cur_version=cluster.cur_version connection_status=cluster.connection_status %}
+                                                                {% include 'users/cluster_state.html' %}                                        
+                                                                {% endwith %}
+                                                            </dd>
+                                                            {% if pending_refresh %}
+                                                            <dt class="text-warning">Pending Refresh</dt> 
+                                                            {% endif %}
+                                                            {% if pending_destroy %}
+                                                            <dt class="text-warning">Pending Destroy</dt> 
+                                                            {% endif %}
+                                                        </dl>
+                                                        <div class="mt-auto d-flex justify-content-center ">
+                                                            {% if user_is_developer %}
+                                                            <button class="btn btn-primary mt-1 me-1" type="button" id="refresh_modal_btn" data-bs-toggle="modal" data-bs-target="#psRefreshModal" data-bs-url="{% url 'org-refresh-cluster' org.id %}" data-bs-action="Refresh">Refresh</button>
+                                                            {% endif %}
+                                                            {% if cluster.is_deployed %}
+                                                                <a class="btn btn-primary mt-1 me-1" href="https://{{org.name}}.{{domain}}/grafana/"><i class="im im-edit"></i> Monitor</a>
+                                                            {% else %}
+                                                                <a class="btn btn-primary mt-1 me-1 disabled"><i class="im im-edit"></i> Monitor</a>
+                                                            {% endif %}
+                                                            <button class="btn btn-primary mt-1 me-1" type="button" id="destroy_modal_btn" data-bs-toggle="modal" data-bs-target="#psDestroyModal" data-bs-url="{% url 'org-destroy-cluster' org.id %}" data-bs-action="Destroy">Destroy</button>
+                                                            <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
+                                                        </div>
+                                                        {% if user_is_developer and debug %}
+                                                        <dt>ProvSys Stats</dt>
+                                                        <dd>loop_count:{{ org.loop_count }} npc:{{ org.num_ps_cmd }} npcs:{{ org.num_ps_cmd_successful }} ops:{{ org.num_owner_ps_cmd }} onn:{{ org.num_onn }}</dd>
+                                                    {% endif %}
+                                            </div>
+                                                </div>
+                                                <div class="my-1 mx-1">
+                                                    <div class="modal fade" id="psDestroyModal" tabindex="-1" aria-labelledby="psDestroyModalLabel" aria-hidden="true">
+                                                        <div class="modal-dialog modal-dialog-scrollable">
+                                                            <div class="modal-content">
+                                                                <div class="modal-header">
+                                                                    <h5 class="modal-title" id="psDestroyModalLabel">Destroy {{org.name}}</h5>
+                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                </div>
+                                                                <div class="modal-body">
+                                                                    <p>Are you sure you want to Destroy the {{org.name}} cluster?</p>
+                                                                    <p>This might take a minute</p><br>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-secondary mt-1 me-1" data-bs-dismiss="modal">Close</button>
+                                                                    <form method="POST" action="{% url 'org-destroy-cluster' org.id %}" class="d-inline">
+                                                                        {% csrf_token %}
+                                                                        <button type="submit" class="btn btn-primary mt-1 me-1">
+                                                                        <i class="im im-edit"></i> Destroy Cluster
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal fade" id="psRefreshModal" tabindex="-1" aria-labelledby="psRefreshModalLabel" aria-hidden="true">
+                                                        <div class="modal-dialog modal-dialog-scrollable">
+                                                            <div class="modal-content">
+                                                                <div class="modal-header">
+                                                                    <h5 class="modal-title" id="psRefreshModalLabel">Refresh {{org.name}}</h5>
+                                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                </div>
+                                                                <div class="modal-body">
+                                                                    <div card shadow>
+                                                                        <p>Are you sure you want to Refresh the {{org}} cluster?</p>
+                                                                        <p>This might take a minute</p><br>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="modal-footer">
+                                                                    <button type="button" class="btn btn-secondary mt-1 me-1" data-bs-dismiss="modal">Close</button>
+                                                                    <form method="POST" action="{% url 'org-refresh-cluster' org.id %}" class="d-inline">
+                                                                        {% csrf_token %}
+                                                                        <button type="submit" class="btn btn-primary mt-1 me-1">
+                                                                        <i class="im im-edit"></i> Refresh Cluster
+                                                                        </button>
+                                                                    </form>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>                                                    
+                                                </div>                                        
+                                            </div>
+                                            <div class="col">
+                                                <div class="card shadow mx-auto my-1 h-100">
+                                                    <h5 class="card-title mt-2">
+                                                        Current Configuration
+                                                    </h5>
+                                                    <div class="card-body d-flex flex-column">
+                                                        <dl>
+                                                            <dt>Version</dt>
+                                                            {% if cluster.is_deployed %}
+                                                                <dd>{% if not org.version == cluster.cur_version %} <span class="text-warning"> {{ org.version }} </span> {% else %} {{ org.version }} {% endif %}</dd>
+                                                            {% else %}
+                                                                <dd>{{ org.version }}</dd>
+                                                            {% endif %}
+                                                            <dt>Node Scaling Limits</dt>
+                                                            <dd>{{ org.min_node_cap }} - {{ org.max_node_cap }}</dd>
+                                                            <dt>Is Public</dt>
+                                                            <dd>
+                                                                {% if cluster.is_deployed %}
+                                                                    {% if not org.is_public == cluster.is_public %}  <span class="text-warning"> {{ org.is_public}} </span> {% else %} {{ org.is_public}} {% endif %}
+                                                                {% else %}
+                                                                    {{ org.is_public}} 
+                                                                {% endif %}
+                                                            </dd>
+                                                        </dl>
+                                                        <dl>
+                                                            <dt>Allow Auto-Deploy</dt>
+                                                            <dd>{{ org.allow_deploy_by_token }}</dd>
+                                                            <dt>Allow Auto-Destroy</dt>
+                                                            <dd>{{ org.destroy_when_no_nodes }}</dd>
+                                                            <dt>Provisioning Suspended</dt>
+                                                            {% if org.provisioning_suspended %}
+                                                                <dd class="text-danger">{{ org.provisioning_suspended }}</dd>
+                                                            {% else %}
+                                                                <dd>{{ org.provisioning_suspended }}</dd>
+                                                            {% endif %}
+                                                            {% if not cluster.provision_env_ready %}                                                
+                                                                <dt class="text-warning">Configuring</dt> 
+                                                            {% endif %}
+                                                        </dl>
+                                                        <div class="mt-auto d-flex justify-content-center ">
+                                                            <button type="button" id="config_modal_btn"  class="btn btn-primary mt-1 me-1" data-bs-toggle="modal" data-bs-target="#psConfigModal"  data-bs-url="{% url 'org-configure' org.id %}"  data-bs-action="Configure">Configure</button>
+                                                            <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
+                                                            <div class="modal fade" id="psConfigModal" tabindex="-1" aria-labelledby="psConfigModalLabel" aria-hidden="true">
+                                                                <div class="modal-dialog modal-dialog-scrollable">
+                                                                    <div class="modal-content">
+                                                                        <div class="modal-header">
+                                                                            <h5 class="modal-title" id="psConfigModalLabel">Configure {{org.name}}</h5>
+                                                                        </div>
+                                                                        <div class="modal-body">
+                                                                            <form class="form" method="post" action="{% url 'org-configure' org.id %}" id="configure-form">
+                                                                                {% csrf_token %}
+                                                                                {{ config_form|crispy }}
+                                                                                <div id="version_is_public-warning" class="alert alert-warning d-none my-2">
+                                                                                    Warning: Changing the version and/or is_public will force Destroy Cluster then ReDeploy.
+                                                                                    <button type="button" class="btn-close" aria-label="Close" id="version_is_public-warning-close"></button>
+                                                                                </div>
+                                                                                <button type="button" class="btn btn-primary mt-1 me-1" data-bs-dismiss="modal">{% trans "Close"  %}</button>
+                                                                                <button type="submit" class="btn btn-primary mt-1 me-1" data-bs-dismiss="modal">{% trans "Update" %}</button>
+                                                                            </form>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>                                            
+                                            </div>
+                                        </div>
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordian-item shadow">
+                            <h2 class="accordian-header" id="mc_ah_{{org.name}}_ps_cmd_pending">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_ps_cmd_pending" aria-controls="collapse_{{org.name}}_ps_cmd_pending">
+                                    Pending Capacity Requests
+                                </button>
+                            </h2>                                             
+                            <div id="collapse_{{org.name}}_ps_cmd_pending" class="accordion-collapse show my-1" aria-labelledby="mc_hd_{{org.name}}_ps_cmd_pending">
+                                <div class="accordion-body">
+                                    <p class="utc-time mx-1 my-1" data-utc-time="{{ now.isoformat }}">Loading...</p>
+                                    <div class="container-fluid overflow-auto">
+                                        <form method="POST" action="{% url 'org-manage-cluster' org.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            {{ add_onn_form }}
+                                            <button type="submit" class="btn btn-primary mt-1 me-1" name="form_submit" value="add_onn">
+                                              <i class="im im-edit"></i> Add
+                                            </button>
+                                        </form>                                        
+                                        <form method="POST" action="{% url 'clear-org-num-nodes-reqs' org.id %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-primary mt-1 me-1">
+                                                <i class="im im-edit"></i> Clear
+                                            </button>
+                                            <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
+                                        </form>
+                                        <table class="table">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">User</th>
+                                                    <th scope="col">Desired Num Nodes</th>
+                                                    <th scope="col">Expiration</th>
+                                                    <th scope="col"> </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for onn in onn_objs %}
+                                                    <tr class="{% if onn.id == cluster.cnnro_id  %}fw-bold{% endif %}">
+                                                        <td>{{ onn.user }}</td>
+                                                        <td>{{ onn.desired_num_nodes }}</td>
+                                                        <td class="utc-time mx-1 my-1" data-utc-time="{{ onn.expiration.isoformat }}">Loading...</td>
+                                                        <td>
+                                                            {% if onn_objs|length == 1 %}
+                                                                <form method="POST" action="{% url 'clear-active-org-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
+                                                                    {% csrf_token %}
+                                                                    <div id="destroyWarningAlert" class="alert alert-warning d-none my-2">
+                                                                    <p>Warning: Clearing the entire table when 'destroy when no nodes' is set and min node cap is 0 will bring down the cluster. This will trigger a Destroy of the cluster. Make sure "deploy by token" is selected if you wish it to automatically redeploy when a new desire num nodes request is received.</p>
+                                                                    </div>
+                                                                    <div id="backToMinWarningAlert" class="alert alert-warning d-none my-2">
+                                                                        <p>Warning: Clearing the entire table when the 'min node cap' is > 0 will cause an update of cluster to min nodes.</p>
+                                                                    </div>
+                                                                    <button type="submit" class="btn btn-primary mt-1 me-1">
+                                                                        <i class="im im-edit"></i> Clear Last
+                                                                    </button>
+                                                                </form>
+                                                            {% endif %}
+                                                        </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordian-item shadow">
+                            <h2 class="accordian-header" id="mc_ah_{{org.name}}_ps_cmd_rslts">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_ps_cmd_rslts" aria-controls="collapse_{{org.name}}_ps_cmd_rslts">
+                                    Provisioning
+                                </button>
+                            </h2>                                             
+                            <div id="collapse_{{org.name}}_ps_cmd_rslts" class="accordion-collapse {% if cluster.active_ps_cmd != '' %} show {% else %} collapse {% endif %} my-1" aria-labelledby="mc_hd_{{org.name}}_ps_cmd_rslts">
+                                <div class="accordion-body" style="max-height: 300px; overflow-y: auto;">
+                                    <div class="container-fluid">
+                                        {% if ps_cmd_rslt_objs %}
+                                            {% for ps_cmd_rslt_obj in ps_cmd_rslt_objs %}
+                                                <div class="accordian-item shadow my-4">
+                                                    <h2 class="accordian-header" id="mc_ah_{{org.name}}_{{ps_cmd_rslt_obj.id}}_tf">
+                                                        <button class="accordion-button d-flex align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_{{ps_cmd_rslt_obj.id}}_tf" aria-controls="collapse_{{org.name}}_{{ps_cmd_rslt_obj.id}}_tf">
+                                                            <p class="utc-time mx-1 my-0" data-utc-time="{{ ps_cmd_rslt_obj.creation_date.isoformat }}">Loading...</p>
+                                                            <div>
+                                                                {% if ps_cmd_rslt_obj.error == '' %}
+                                                                    <p class="mc-cluster-ps-cmd-summary mx-0 my-0">{{ps_cmd_rslt_obj.ps_cmd_summary_label}}</p>
+                                                                {% elif ps_cmd_rslt_obj.error == 'none' %}
+                                                                    <p class="mc-cluster-ps-cmd-summary mx-0 my-0">{{ps_cmd_rslt_obj.ps_cmd_summary_label}}</p>
+                                                                {% elif  ps_cmd_rslt_obj.error == 'still processing' %}
+                                                                    <p class="mc-cluster-ps-cmd-pending mx-0 my-0">{{ps_cmd_rslt_obj.ps_cmd_summary_label}}</p>
+                                                                {% else %}
+                                                                    <p class="mc-cluster-ps-cmd-failed mx-0 my-0">{{ps_cmd_rslt_obj.ps_cmd_summary_label}}</p>
+                                                                {% endif %}
+                                                            </div>
+                                                            <div>
+                                                                {% if  ps_cmd_rslt_obj.error == 'still processing' and cluster.active_ps_cmd != '' %}
+                                                                    <a class="btn btn-primary my-1 mx-1", href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
+                                                                {% endif %}
+                                                            </div>
+                                                            <div class="flex-grow-1"></div>
+                                                            {% if ps_cmd_rslt_obj.expiration %}
+                                                                <p class="utc-time mx-1 my-0" data-utc-time="{{ ps_cmd_rslt_obj.expiration.isoformat }}">Loading...</p>
+                                                            {% else %}
+                                                                <p class=" mx-1 my-0">No Expiration</p>
+                                                            {% endif %}
+                                                        </button>
+                                                    </h2> 
+                                                    <div id="collapse_{{org.name}}_{{ps_cmd_rslt_obj.id}}_tf" class="accordion-collapse  {% if ps_cmd_rslt_obj.error == 'still processing' and cluster.active_ps_cmd != '' %} show {% else %} collapse {% endif %} my-1" aria-labelledby="mc_hd_{{org.name}}_{{ps_cmd_rslt_obj.id}}_tf" data-bs-parent="#manage_cluster_accordian_{{org.name}}_{{ps_cmd_rslt_obj.id}}">
+                                                        <div class="accordion-body vh-50">
+                                                            <div class="container overflow-auto">
+                                                                <p class="provision-console-output" id="refreshed-provision-output">{{ps_cmd_rslt_obj.ps_cmd_output|safe}}</p>
+                                                                {% if ps_cmd_rslt_obj.error == '' %}
+                                                                    <p class="mc-cluster-ps-cmd-success">---- no errors reported for this cmd ----</p>
+                                                                {% elif ps_cmd_rslt_obj.error == 'none' %}
+                                                                    <p class="mc-cluster-ps-cmd-success">---- no errors reported for this cmd (none)----</p>
+                                                                {% else %}
+                                                                    <p>{{ps_cmd_rslt_obj.error|safe}}</p>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordian-item shadow">
+                            <h2 class="accordian-header" id="mc_ah_{{org.name}}_account">
+                                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_account" aria-controls="collapse_{{org.name}}_account">
+                                    Account
+                                </button>
+                            </h2>                                             
+                            <div id="collapse_{{org.name}}_account" class="accordion-collapse collapse my-1" aria-labelledby="mc_hd_{{org.name}}_account">
+                                <div class="accordion-body">
+                                    <div class="container-fluid overflow-auto">
+                                        <div class="row py-2">
+                                            <dl>
+                                                <dt>Owner</dt>
+                                                <dd>{{org.owner.first_name}} {{org.owner.last_name}}</dd>
+                                                <dt>Allowance</dt>
+                                                <dd>{{org.monthly_allowance}} / Month</dd>
+                                                <dt>Balance</dt>
+                                                <dd>{{org.balance}} - [Max:{{org.max_allowance}}]</dd>
+                                                <dt>Fiscal YTD accrued cost</dt>
+                                                <dd>{{org.fytd_accrued_cost}}</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+{% block javascript %}
+<script type="text/javascript">
+
+    let minNodeCap;
+    let convertedDestroyWhenNoNodes;
+    function handleClearSubmit(event) {
+        event.preventDefault(); // Prevent form submission initially
+        if (parseInt(minNodeCap) === 0){
+            // show if changing is_public or version when deployed or deploying
+            if (convertedDestroyWhenNoNodes) {
+                const destroyWarningAlert = document.getElementById('destroyWarningAlert');
+                destroyWarningAlert.classList.remove('d-none'); // Show the warning message by removing 'd-none' class
+                // After user acknowledges the warning, ask for confirmation
+                setTimeout(() => {
+                    destroyWarningAlert.classList.add('d-none'); // Hide the warning message by adding 'd-none' class
+                    if (confirm('Warning: Are you sure you want to proceed?')) {
+                        event.target.submit(); // Submit the form if user clicks 'OK'
+                    }
+                }, 2000); // Show the warning for 5 seconds before showing the confirmation dialog                
+            }
+        } else {
+            const backToMinWarningAlert = document.getElementById('backToMinWarningAlert');
+            backToMinWarningAlert.classList.remove('d-none'); // Show the warning message by removing 'd-none' class
+            // After user acknowledges the warning, ask for confirmation
+            setTimeout(() => {
+                backToMinWarningAlert.classList.add('d-none'); // Hide the warning message by adding 'd-none' class
+                if (confirm('Warning: Are you sure you want to proceed?')) {
+                    event.target.submit(); // Submit the form if user clicks 'OK'
+                }
+            }, 5000); // Show the warning for 5 seconds before showing the confirmation dialog                
+
+        }
+    }
+
+
+    $(document).ready(function () {
+        const versionField = document.getElementById("version");
+        const is_publicField = document.getElementById("is_public");
+        const version_is_public_Warning = document.getElementById("version_is_public-warning");
+        const versionWarningClose = document.getElementById("version_is_public-warning-close");
+        const clusterVersion = "{{ cluster.cur_version }}";
+        const clusterIsPublic = "{{ cluster.is_public }}";
+        const convertedClusterIsPublic = clusterIsPublic.toLowerCase() === "true";
+        const activePS_cmd = "{{ cluster.active_ps_cmd }}";
+        const isDeployed = "{{ cluster.is_deployed }}" === "True";
+        const destroyWhenNoNodes = "{{ org.destroy_when_no_nodes }}"
+        convertedDestroyWhenNoNodes = destroyWhenNoNodes.toLowerCase() === "true";
+        minNodeCap = "{{ org.min_node_cap }}"
+        const utcTimes = document.querySelectorAll('.utc-time');
+        utcTimes.forEach(utcTimeElement => {
+            const utcTime = new Date(utcTimeElement.dataset.utcTime);
+            utcTimeElement.textContent = utcTime.toLocaleString();
+        });
+
+        let deploying = ((activePS_cmd === 'Update') || (activePS_cmd === 'Deploy'))
+        // Note: activePS_cmd === 'Deploy' is deprecated so we need another way to tell 
+        // if coming up from scratch vs updating running cluster
+        // validVersion will be None if the cluster was previously down and now being deployed
+        let validVersion = (clusterVersion !== null && clusterVersion !== undefined && clusterVersion !== 'None')
+        let checkState = (isDeployed || (deploying && validVersion))
+        versionField.addEventListener("change", function() {
+            // show if changing is_public or version when deployed or deploying
+            selectedVersion = versionField.value
+            if (checkState) {
+                if (selectedVersion !== clusterVersion) {
+                    version_is_public_Warning.classList.remove("d-none");
+                } else {
+                    version_is_public_Warning.classList.add("d-none");
+                }
+            }
+        });
+
+        is_publicField.addEventListener("change", function() {
+            // show if changing is_public or version when deployed or deploying
+            selectedIsPublic = is_publicField.checked;
+            if (checkState) { // We cheat and use validVersion
+                if (selectedIsPublic !== convertedClusterIsPublic) {
+                    version_is_public_Warning.classList.remove("d-none");
+                } else {
+                    version_is_public_Warning.classList.add("d-none");
+                }
+            }
+        });
+
+        versionWarningClose.addEventListener("click", function() {
+            version_is_public_Warning.classList.add("d-none");
+        });
+
+    })
+
+</script>
+{% endblock javascript %}

@@ -1,0 +1,8 @@
+boto3[crt]<2
+botocore<2
+grpcio<2
+grpcio-tools<2
+requests<3
+pytz
+pyyaml
+

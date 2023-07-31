@@ -1,0 +1,354 @@
+{% extends 'main.html' %}
+
+{% load tz %}
+
+{% block nav %}
+    <div class="container text-center"> 
+        {% with forecast_page="active" %}           
+        {% include 'users/org_button_bar.html' %} 
+        {% endwith %}
+    </div>
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid text-center">
+    <div class="row py-2">
+        <div class="col py-2">
+            <h3>Account Forecast</h3>
+            <div class="container text-center shadow-lg">
+                <div class="row py-2">
+                    <div class="chart-container">
+                        <canvas id="chart"></canvas>
+                    </div>
+                </div>
+                <div class="row py-2">
+                    <div class="col-sm">
+                        <div class="form-floating">
+                            <select class="form-select" name = "granularity" id = "granularity" >
+                                <option>Monthly</option>
+                                <option>Daily</option>
+                                <option>Hourly</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-sm">
+                        <div class="form-floating">
+                            <select class="form-select" name = "type" id = "type" >
+                                <option>Line</option>
+                                <option>Bar</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row py-2">
+        <div class="col py-2">
+            <div class="row py-2">
+                <div class="accordion shadow" id="account_forecast_accordian_{{org.name}}"> 
+                    <div class="accordian-item shadow">
+                        <h2 class="accordian-header" id="af_ah_{{org.name}}_account">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_account" aria-expanded="true" aria-controls="collapse_{{org.name}}_account">
+                                Account 
+                            </button>
+                        </h2>                                             
+                        <div id="collapse_{{org.name}}_account" class="accordion-collapse collapse" aria-labelledby="af_hd_{{org.name}}_account" data-bs-parent="#account_forecast_accordion_{{org.name}}">
+                            <div class="accordion-body">
+                                <div class="container-fluid">
+                                    <div class="container-fluid overflow-auto">
+                                        <div class="row">
+                                            <table>
+                                                <tbody >
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Owner:</td>
+                                                        <td class="table-mc-data-col">{{org.owner.first_name}} {{org.owner.last_name}}</td>
+                                                    </tr> 
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Monthly Allowance:</td>
+                                                        <td class="table-mc-data-col">{{org.monthly_allowance}}</td>
+                                                    </tr> 
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Current Balance:</td>
+                                                        <td class="table-mc-data-col">{{org.balance}}</td>
+                                                    </tr>
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Max Allowance:</td>
+                                                        <td class="table-mc-data-col">{{org.max_allowance}}</td>
+                                                    </tr>
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Refreshed:</td>
+                                                        <td class="table-mc-data-col"><span id="crt-field">{% timezone "UTC" %}{{cost_refresh_time|date:"Y-m-d H:i:s T"}} {% endtimezone %}</span></td>
+                                                    </tr>
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Debited up to:</td>
+                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.most_recent_charge_time|date:"Y-m-d H:i:s T"}} {% endtimezone %} </td>
+                                                    </tr>
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Credited up to:</td>
+                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.most_recent_credit_time|date:"Y-m-d H:i:s T"}} {% endtimezone %} </td>
+                                                    </tr>
+                                                </tbody> 
+                                            </table>
+                                            <p>  </p>
+                                            <dt>Account balance depletion shutdown</dt>
+                                            <dd>
+                                                <table class="table">
+                                                    <thead>
+                                                        <tr>
+                                                          <th scope="col">Provisioning</th>
+                                                          <th scope="col">Number of Nodes</th>
+                                                          <th scope="col">Shutdown</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>                                                         
+                                                            <th scope="row">Current</th>
+                                                            <td>{{cluster.cur_nodes}}</td>
+                                                            <td>                                                                
+                                                            {% if show_cur_shutdown_date %}
+                                                                {{org.cur_ddt|date:"Y-m-d H:i:s A T"}}
+                                                            {% else %}
+                                                                No shutdown scheduled
+                                                            {% endif %}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">Minimum</th>
+                                                            <td>{{org.min_node_cap}}</td>
+                                                            <td>
+                                                            {% if show_min_shutdown_date %}
+                                                                {{org.min_ddt|date:"Y-m-d H:i:s A T"}}
+                                                            {% else %}
+                                                                No shutdown scheduled
+                                                            {% endif %}
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <th scope="row">Maximum</th>
+                                                            <td>{{org.max_node_cap}}</td>
+                                                            <td>
+                                                                {{org.max_ddt|date:"Y-m-d H:i:s A T"}}
+                                                            </td>
+                                                        </tr>                                                          
+                                                    </tbody>
+                                                </table>
+                                            </dd>
+                                    </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordian-item shadow">
+                        <h2 class="accordian-header" id="af_ah_{{org.name}}_br">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_br" aria-expanded="true" aria-controls="collapse_{{org.name}}_br">
+                                Burn Rates 
+                            </button>
+                        </h2>                                             
+                        <div id="collapse_{{org.name}}_br" class="accordion-collapse collapse" aria-labelledby="mc_hd_{{org.name}}_br" data-bs-parent="#account_forecast_accordion_{{org.name}}">
+                            <div class="accordion-body">
+                                <div class="container-fluid">
+                                    <div class="container-fluid overflow-auto">
+                                        <div class="row">
+                                            <table>
+                                                <tbody">
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Nodes:</td>
+                                                        <td class="table-mc-data-col">{{org.min_node_cap}}</td>
+                                                        <td class="table-mc-data-col">{{cluster.cur_nodes}}</td>
+                                                        <td class="table-mc-data-col">{{org.max_node_cap}}</td>
+                                                    </tr>
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Burn Rates:</td>
+                                                        <td class="table-mc-data-col">
+                                                            <span id="br-min-field">{{org.min_hrly|floatformat:"2g"}} </span>  <span id="br-min-units">units</span>
+                                                        </td>
+                                                        <td class="table-mc-data-col">
+                                                            <span id="br-cur-field">{{org.cur_hrly|floatformat:"2g"}} </span>  <span id="br-cur-units">units</span>
+                                                        </td>
+                                                        <td class="table-mc-data-col">
+                                                            <span id="br-max-field">{{org.max_hrly|floatformat:"2g"}} </span>  <span id="br-max-units">units</span>
+                                                        </td>
+                                                    </tr>
+                                                    <tr class="table_row">
+                                                        <td class="table-mc-labels-col">Auto-Shutdown:</td>
+                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.min_ddt|date:"Y-m-d H:i:s T"}} {% endtimezone %}</td>
+                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.cur_ddt|date:"Y-m-d H:i:s T"}} {% endtimezone %}</td>
+                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.max_ddt|date:"Y-m-d H:i:s T"}} {% endtimezone %}</td>
+                                                    </tr>
+                                                </tbody> 
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+{% block javascript %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-colorschemes@0.4.0"></script>
+<script src="//code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script>
+    $(document).ready(function () {
+        var chart = null;
+        const br_field = document.querySelector('#br-field');
+        var tselected = $("#type").find(":selected").text();
+        var gselected = $("#granularity").find(":selected").text();
+        var formatter = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+
+            // These options are needed to round to whole numbers if that's what you want.
+            minimumFractionDigits: 2, // (this suffices for whole numbers, but will print 2500.10 as $2,500.1)
+            maximumFractionDigits: 2  // (causes 2500.99 to be printed as $2,501)
+        });
+ 
+        $("#granularity").change(function() {
+            gselected = $(this).find(":selected").text();
+            sessionStorage.setItem('{{org.name}}'+'gselected',gselected)
+            request_data(gselected,tselected);
+        });
+        $("#type").change(function() {
+            tselected = $(this).find(":selected").text();
+            sessionStorage.setItem('{{org.name}}'+'tselected',tselected)
+            request_data(gselected,tselected);
+        });
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // Does this cookie string begin with the name we want?
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }        
+        const csrftoken = getCookie('csrftoken');
+        var uuid  = "{{ org.id }}";
+        // init page
+        request_data($("#granularity").find(":selected").text(),$("#type").find(":selected").text());
+
+        function request_data(gran,chart_type){
+            $.ajax({
+                headers: { "X-CSRFToken": csrftoken },
+                mode: 'same-origin', // Do not send CSRF token to another domain.
+                url: "{% url 'ajax-org-account-forecast' %}",
+                data: {"org_uuid":  uuid, "granularity":gran.toUpperCase()},
+                type: "GET",
+                dataType:"json",
+            })
+            .done(function (response) {
+                var ctx = document.getElementById("chart").getContext("2d");
+               //console.log(response)
+                if(response.gran == 'HOURLY'){
+                    $("#br-min-units").text("/Hour");
+                    $("#br-min-field").text(formatter.format(response.br_min))
+                    $("#br-cur-units").text("/Hour");
+                    $("#br-cur-field").text(formatter.format(response.br_cur))
+                    $("#br-max-units").text("/Hour");
+                    $("#br-max-field").text(formatter.format(response.br_max))
+                } else if (response.gran == 'DAILY'){
+                    $("#br-min-units").text("/Day");
+                    $("#br-min-field").text(formatter.format(response.br_min))
+                    $("#br-cur-units").text("/Day");
+                    $("#br-cur-field").text(formatter.format(response.br_cur))
+                    $("#br-max-units").text("/Day");
+                    $("#br-max-field").text(formatter.format(response.br_max))
+                } else if (response.gran == 'MONTHLY'){
+                    $("#br-min-units").text("/Month");
+                    $("#br-min-field").text(formatter.format(response.br_min))
+                    $("#br-cur-units").text("/Month");
+                    $("#br-cur-field").text(formatter.format(response.br_cur))
+                    $("#br-max-units").text("/Month");
+                    $("#br-max-field").text(formatter.format(response.br_max))
+                } 
+                $("#crt-field").text(response.cost_refresh_time_str)                   
+                const fc_min = JSON.parse(response.fc_min);
+                const fc_cur = JSON.parse(response.fc_cur);
+                const fc_max = JSON.parse(response.fc_max);
+                //console.log(fc)
+                const tlabel_min = " Min Rate Balance"
+                const tlabel_cur = " Cur Rate Balance"
+                const tlabel_max = " Max Rate Balance"
+                if(chart != null){
+                    chart.destroy()
+                }
+                chart = new Chart(ctx,{
+                    type: chart_type.toLowerCase(),
+                    data: {
+                        labels: fc_max.tm,
+                        datasets: [
+                            {
+                                label: tlabel_max,
+                                fill: false,
+                                data: fc_max.bal
+                            },
+                            {
+                                label: tlabel_cur,
+                                fill: false,
+                                data: fc_cur.bal
+                            },
+                            {
+                                label: tlabel_min,
+                                fill: false,
+                                data: fc_min.bal
+                            }
+                        ]
+                    },
+                    //https://nagix.github.io/chartjs-plugin-colorschemes/
+                    options: {
+                        title: {
+                            text: "Balance Forecast",
+                            display: true,
+                            fontSize: 18
+                        },
+                        plugins: {
+                            colorschemes: {
+                                scheme: 'brewer.SetOne3' 
+                            }
+                        },
+                        responsive : true,
+                        maintainAspectRatio : false,
+                        aspectRatio : 2,
+                        onResize: null,
+                        resizeDelay : 500 
+                    }
+                });
+            })
+            .fail(function(xhr,status,errorThrown){
+                if(xhr.hasOwnProperty('responseJSON')){
+                    alert("Request Failed: "+errorThrown);
+                }
+            })
+            .always(function( xhr, status ){
+                //console.log(`Done btn.value at: ${ajax_cnt}`);
+            })
+        }
+        function beforePrintHandler () {
+            for (let id in Chart.instances) {
+                Chart.instances[id].resize();
+            }
+        }
+        window.addEventListener('beforeprint', () => {
+            myChart.resize(600, 600);
+        });
+        window.addEventListener('afterprint', () => {
+            myChart.resize();
+        });
+    })
+
+    </script>
+{% endblock javascript %}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        {% load static %}
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <script type="text/javascript" src="{% static 'jquery-3.6.0.js'%}"> </script>
+        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.css' %}">
+        <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+        <link rel="stylesheet" href="{% static 'styles/app.css' %}">
+        <script type="text/javascript" src="{% static 'js/bootstrap.bundle.min.js' %}"> </script>
+        <script type="text/javascript">
+            // Initialize tooltips
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+            const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+        </script>
+       <!-- Favicon -->
+        <link rel="icon" href="{% static 'images/IceSat-2_SlideRule_logo.png' %}" type="image/x-icon" />
+    </head>
+
+    <body>
+        {% include 'navbar.html' %}
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="container-fluid p-0">
+                    <div class="alert {{ message.tags }} alert-dismissible" role="alert" >
+                        <div>{{ message }}</div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            {% endfor %}
+
+        {% endif %}
+
+        {% block nav %}
+        {% endblock nav %}
+
+        {% block content %}
+        {% endblock content %}
+
+        {% block javascript %}
+        {% endblock javascript %}
+    </body>
+    <footer class="nav nav-fill align-items-center py-3 mx-3 my-1 mt-auto border-top">
+        <span class="flex-lg-fill mb-3 mb-md-0 mx-2 text-muted">{{ PS_SITE_TITLE }} Provisioning System {{PS_BLD_ENVVER}}{% if not version_is_release %}({{GIT_VERSION}}){% endif %}</span>
+        <span class="flex-lg-fill mb-3 mb-md-0 mx-2 text-muted">&copy; 2022 Copyright: University of Washington </span>
+        <ul class="nav col-xl-4 list-unstyled d-flex">
+            <a class="btn btn-outline-dark" style="--bs-btn-padding-y: .25rem; --bs-btn-padding-x: .5rem; --bs-btn-font-size: .75rem;" href="https://github.com/ICESat2-SlideRule/sliderule-ps-web" role="button"> <i class="bi-github"></i> </a>
+        </ul>
+    </footer>
+</html>

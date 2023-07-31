@@ -1,0 +1,10 @@
+boto3[crt]
+botocore
+grpcio
+grpcio-tools
+requests
+pytz
+pytest
+moto
+pyyaml
+

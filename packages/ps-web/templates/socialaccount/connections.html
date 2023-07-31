@@ -1,0 +1,71 @@
+{% extends "socialaccount/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block head_title %}{% trans "Account Connections" %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">            
+                <div class="card shadow">
+                    <div class="card-header text-center">
+                        <h2>{{user.first_name}} {{user.last_name}} Profile</h2>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="card">
+                            <h3>{% trans "Account Connections" %}</h3>
+                            {% if form.accounts %}
+                                <div class="card-header text-center">
+                                    <p>{% blocktrans %}You can sign in to your account using any of the following third party accounts:{% endblocktrans %}</p>
+                                </div>
+                                <div class="card-body text-start">
+                                    <form method="post" action="{% url 'socialaccount_connections' %}">
+                                        {% csrf_token %}
+                                        <fieldset>
+                                            {% if form.non_field_errors %}
+                                                <div id="errorMsg">{{ form.non_field_errors }}</div>
+                                            {% endif %}
+                                            {% for base_account in form.accounts %}
+                                                {% with base_account.get_provider_account as account %}
+                                                    <div>
+                                                        <label for="id_account_{{ base_account.id }}">
+                                                            <input id="id_account_{{ base_account.id }}" type="radio" name="account" value="{{ base_account.id }}"/>
+                                                                <span class="socialaccount_provider {{ base_account.provider }} {{ account.get_brand.id }}">{{account.get_brand.name}}</span>
+                                                                {{ account }}
+                                                        </label>
+                                                    </div>
+                                                {% endwith %}
+                                            {% endfor %}
+                                            <div class="pt-1">
+                                                <button class="btn btn-outline-primary btn-sm" type="submit">{% trans 'Remove' %}</button>
+                                            </div>
+                                        </fieldset>
+                                    </form>
+                                </div>
+                            {% else %}
+                                <div class="card-header text-center">
+                                        <p>{% trans 'You currently have no social network accounts connected to this account.' %}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="card">
+                            <div class="card-header text-center">
+                                <h3>{% trans 'Add a Third Party Account' %}</h3>
+                            </div>
+                            <div class="card-body text-start">
+                                <ul class="socialaccount_providers">
+                                {% include "socialaccount/snippets/provider_list.html" with process="connect" %}
+                                </ul>
+                                {% include "socialaccount/snippets/login_extra.html" %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

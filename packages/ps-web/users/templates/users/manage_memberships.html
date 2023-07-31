@@ -1,0 +1,144 @@
+{% extends 'main.html' %}
+
+{% block nav %}
+    <div class="container text-center"> 
+        {% with members_page='active'%}           
+        {% include 'users/org_button_bar.html' %} 
+        {% endwith %}
+    </div>
+{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">            
+                <div class="card shadow">
+                    <div class="card-header">
+                        <h3>Members</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-body text-center shadow">
+                            <div class="auto-scroll-x-y">
+                                <fieldset> 
+                                    <div class="d-flex justify-content-center">
+                                        <form method="post" class="formPage my-md">
+                                            {% csrf_token %}
+
+                                            {{ formset.management_form }}
+                                            {{ formset.non_form_errors.as_ul }}
+                                            <div class="container text-center" > 
+                                                <fieldset>
+                                                    <table id="formset" class="formPage my-sm">
+                                                    {% for form in formset.forms %}
+                                                    {% if forloop.first %}
+                                                    <thead><tr>
+                                                        {% for field in form.visible_fields %}
+                                                        <th>{{ field.label|capfirst }}</th>
+                                                        {% endfor %}
+                                                    </tr></thead>
+                                                    {% endif %}
+                                                    <tr class="{% cycle row1 row2 %}">
+                                                    {% for field in form.visible_fields %}
+                                                        <td>
+                                                        {# Include the hidden fields in the form #}
+                                                        {% if forloop.first %}
+                                                        {% for hidden in form.hidden_fields %}
+                                                        {{ hidden }}
+                                                        {% endfor %}
+                                                        {% endif %}
+                                                        {{ field.errors.as_ul }}
+                                                        {{ field }}
+                                                        </td>
+                                                    {% endfor %}
+                                                    </tr>
+                                                    {% endfor %}
+                                                    </table>
+                                                </fieldset>
+                                            </div>
+                                            <div class="btn-group">
+                                                <input type="button" value="Activate All" id='activateall' class="btn btn-outline-secondary">  
+                                                <input type="button" value="Delete All" id='deleteall' class="btn btn-outline-secondary">  
+                                                <input type="button" value="Restore" id='restore' class="btn btn-outline-secondary">  
+                                            </div>
+                                            <div class="btn-group">
+                                                <input type="submit" value="Submit" class="btn btn-outline-primary">
+                                            </div>
+                                        </form>
+                                    </div>
+                                </fieldset>
+                                <table class="table-manage-members">
+                                    <tbody>
+                                        <tr class="table_row">
+                                            <td class="table-mm-labels-col">Owner</td>
+                                            <td class="table-mm-data-col">{{user.first_name}} {{user.last_name}} ({{org.owner.username}})</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block javascript %}
+<script>
+    $(document).ready(function () {
+        const activate_button = document.querySelector('#activateall');
+        activate_button.addEventListener('click', updateActivateButton);
+
+        const delete_button = document.querySelector('#deleteall');
+        delete_button.addEventListener('click', updateDeleteButton);
+
+        const restore_button = document.querySelector('#restore');
+        restore_button.addEventListener('click', restoreButton);
+
+        function updateActivateButton() {
+            var checkboxes = document.querySelectorAll('input[type=checkbox]');
+            if (activate_button.value === 'Activate All') {
+                for (var checkbox of checkboxes){
+                    if (checkbox.id.includes('active')){
+                        checkbox.checked = true
+                    }
+                }
+                activate_button.value = 'DeActivate All';
+            } else {
+                for (var checkbox of checkboxes){
+                    if (checkbox.id.includes('active')){
+                        checkbox.checked = false
+                    }
+                }
+                activate_button.value = 'Activate All';
+            }
+        }
+
+        function updateDeleteButton() {
+            var checkboxes = document.querySelectorAll('input[type=checkbox]');
+            if (delete_button.value === 'Delete All') {
+                for (var checkbox of checkboxes){
+                    if (checkbox.id.includes('delete')){
+                        checkbox.checked = true
+                    }
+                }
+                delete_button.value = 'UnDelete All';
+            } else {
+                for (var checkbox of checkboxes){
+                    if (checkbox.id.includes('delete')){
+                        checkbox.checked = false
+                    }
+                }
+                delete_button.value = 'Delete All';
+            }
+        }
+
+        function restoreButton() {
+            location.reload();
+        }
+    })
+</script>
+{% endblock javascript %}

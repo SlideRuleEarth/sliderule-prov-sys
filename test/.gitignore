@@ -1,0 +1,9 @@
+prov-sys/db_backups/sliderule-postgres-backup-*-DEV-latest*
+prov-sys/db_backups/sliderule-postgres-backup-test-*
+prov-sys/db_backups_SAVE
+volume
+
+# Unit test / coverage reports
+htmlcov/
+html_combined/
+.pytest_cache/

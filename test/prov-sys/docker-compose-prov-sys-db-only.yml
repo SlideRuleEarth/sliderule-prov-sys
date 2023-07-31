@@ -1,0 +1,13 @@
+version: '3.9'
+services:
+  ps-db:
+    image: postgres:13
+    container_name: ps-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+volumes:
+  postgres_data:

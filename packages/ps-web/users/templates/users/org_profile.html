@@ -1,0 +1,38 @@
+{% extends 'main.html' %}
+{% load crispy_forms_tags %}
+
+{% load i18n %}
+
+{% block nav %}
+    <div class="container text-center">
+        {% with org_profile_page="active" %}  
+        {% include 'users/org_button_bar.html' %} 
+        {% endwith %}
+    </div>
+{% endblock %}
+
+{% block content %}
+
+<div class="auth text-center">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">            
+                <div class="card shadow">
+                    <div class="card-header text-center">
+                        <h4>{% trans "Organization Profile" %}</h4>                  
+                    </div>
+                    <div class="card-body">
+                        <div class="auto-scroll-x-y">
+                            <form class="form" action="" method="post">
+                                {% csrf_token %}
+                                {{ form|crispy }}
+                                <button type="submit" class="btn btn-outline-primary my-1">Submit</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>               
+</div>
+{% endblock content %}

@@ -1,0 +1,35 @@
+{% extends "openid/base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+
+{% block head_title %}OpenID Sign In{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">
+                <div class="auth__header text-center ps-img-center">
+                    <a href="/">
+                        <img src="{% static 'images/IceSat-2_SlideRule_logo.png' %}" alt="icon"style="width:5em; height:5em;" />
+                    </a>
+                    <h2>{% trans 'OpenID Log In' %}</h2>
+                </div>
+                <div class="col py-2">
+                    <div class="card shadow">
+                        <form id="openid_login_form" class="openid_login" method="post" action="{% url 'openid_login' %}">
+                            {% csrf_token %}
+                            {{ form|crispy }}
+                            <div class="container py-2">
+                                <button type="submit">Log In</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+###################################################################
+# Bootstrap Targets to create a django ps project from scratch
+###################################################################
+help: ## That's me!
+	@printf "\033[37m%-30s\033[0m %s\n" "#-----------------------------------------------------------------------------------------"
+	@printf "\033[37m%-30s\033[0m %s\n" "# Makefile Help       "
+	@printf "\033[37m%-30s\033[0m %s\n" "#-----------------------------------------------------------------------------------------"
+	@printf "\033[37m%-30s\033[0m %s\n" "#----target--------------------description------------------------------------------------"
+	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+# step one: create the django ps project
+# run docker-compose (using the docker-compose file above) with an image called ps-web in a container called ps-web and execute the Django admin program called django-admin with a startproject command calling the new project ps_web. This will generate the Django framework code for our ps_web project
+step-1-create-container: ## step 1: create/build the container and create the PS Django project
+	sudo docker-compose run --rm --name ps-web ps-web django-admin startproject ps_web .
+
+# step two: start django ps services
+step-2-start-container: ## step 2: run the ps container 
+	docker-compose up
+
+# step three: create a django app called users
+step-3-create-django-app: ## step 3: create a django app called ps_user_mgr 
+	docker exec -it ps-web python manage.py startapp users
+
+# step four: run django migrate command
+step-4-django-migrate: ## step 4: run django migrate command to create initial database
+	docker exec -it ps-web python manage.py migrate

@@ -1,0 +1,36 @@
+{% extends "account/base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+{% block head_title %}{% trans "Signup" %}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">
+                <div class="auth__header text-center ps-img-center">
+                    <a href="/">
+                        <img src="{% static 'images/IceSat-2_SlideRule_logo.png' %}" alt="icon"style="width:5em; height:5em;" />
+                    </a>
+                    <h2>{% trans "Sign Up" %}</h2>
+                    <h6>{% blocktrans %}Already have an account? Then please <a href="{{ login_url }}">Log In</a>.{% endblocktrans %}</h6>
+                </div>
+                <div class="col py-2">
+                    <div class="card shadow">
+                        <form class="signup" id="signup_form" method="post" action="{% url 'account_signup' %}">
+                            {% csrf_token %}
+                            {{ form|crispy }}
+                            {% if redirect_field_value %}
+                            <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+                            {% endif %}
+                            <div class="container py-2">
+                                <button class="btn btn-outline-primary" type="submit">{% trans "Sign Up" %}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

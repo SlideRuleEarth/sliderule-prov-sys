@@ -1,0 +1,207 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<!-- Main Section -->
+<div class="container-sm">
+    <div class="row py-2">
+        <div class="col"> 
+            <div class="container text-center">    
+                <h2>{{ PS_SITE_TITLE }}</h2>
+                {% if PROVISIONING_DISABLED  %}
+                    <p class="text-danger font-weight-bold fs-1">Provisioning Disabled!</p>
+                {% endif %}         
+            </div>
+        </div>
+    </div> 
+    <div class="container text-center">
+        <h3>Organizations</h3>
+        <div class="row py-2">
+            <div class="col py-2">
+                <div class="container text-center">            
+                    <div class="container">
+                        <div class="container">
+                            <div class="btn-group">
+                                {% if  not request.user.is_superuser  %}
+                                    {% if user_is_developer %}
+                                        <a class="tag btn btn-outline-primary"  href="{% url 'create-org-account'%}">Add New Organization Account</a>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container">
+            <div class="row py-2">
+                {% if any_ownerships %}
+                <div class="col py-2">
+                    <div class="card">
+                        <div class="card-header" >
+                            Ownerships
+                        </div>
+                        <div class="card-body">                                     
+                            <!---------  First display Ownerships -------->
+                            <div class="container-lg text-center">            
+                                <div class="accordion" id="ownership_accordian"> 
+                                    <div class="container text-center">            
+                                        {% for org in org_accounts %}
+                                            {% if is_member_of_org|get_item:org.name %}
+                                                {% if user_is_owner|get_item:org.name %}
+                                                    {% with membership=org_member|get_item:org.name user_is_owner=user_is_owner|get_item:org.name org_is_public=org_is_public|get_item:org.name this_active_ps_cmd=org_cluster_active_ps_cmd|get_item:org.name this_is_deployed=org_cluster_is_deployed|get_item:org.name  this_deployed_state=org_cluster_deployed_state|get_item:org.name cur_nodes=org_cluster_cur_nodes|get_item:org.name cur_version=org_cluster_cur_version|get_item:org.name this_connection_status=org_cluster_connection_status|get_item:org.name %}
+                                                        {% include 'users/member_card.html' %}
+                                                    {% endwith %}
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% if any_memberships %}
+                <div class="col py-2">
+                    <div class="card">
+                        <div class="card-header" >
+                            Memberships
+                        </div>
+                        <div class="card-body">                                     
+                            <!---------  Then display memberships --------> 
+                            <div class="container-lg text-center">
+                                <div class="accordion" id="membership_accordian"> 
+                                    {% for org in org_accounts %}
+                                        {% if is_member_of_org|get_item:org.name %}
+                                            {% if not user_is_owner|get_item:org.name and not org_is_public|get_item:org.name %}
+                                                {% with membership=org_member|get_item:org.name user_is_owner=user_is_owner|get_item:org.name org_is_public=org_is_public|get_item:org.name this_active_ps_cmd=org_cluster_active_ps_cmd|get_item:org.name this_is_deployed=org_cluster_is_deployed|get_item:org.name  this_deployed_state=org_cluster_deployed_state|get_item:org.name cur_nodes=org_cluster_cur_nodes|get_item:org.name cur_version=org_cluster_cur_version|get_item:org.name this_connection_status=org_cluster_connection_status|get_item:org.name %}
+                                                    {% include 'users/member_card.html' %}
+                                                {% endwith %}
+                                            {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% if any_unaffiliated %}
+                <div class="col py-2">
+                    <div class="card">
+                        <div class="card-header" >
+                            Unaffiliated
+                        </div>
+                        <div class="card-body">                                     
+                            <!---------  Then display orgs where user is not a member --------> 
+                            {% if any_unaffiliated %}
+                            <div class="container-lg text-center">
+                                <div class="accordion" id="org_accordian">
+                                    <div class="container text-center">
+                                        {% for org in org_accounts %}
+                                            {% if not org.is_public %}
+                                                {% if not is_member_of_org|get_item:org.name %}
+                                                    <div class="accordian-item shadow">
+                                                        <h2 class="accordian-header" id="hd_{{org.name}}">
+                                                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_u" aria-expanded="true" aria-controls="collapse_{{org.name}}_u">
+                                                                {{org.name}}
+                                                            </button>
+                                                        </h2>
+                                                        <div id="collapse_{{org.name}}_u" class="accordion-collapse collapse" aria-labelledby="hd_{{org.name}}" data-bs-parent="#org_accordion">
+                                                            <div class="accordion-body">
+                                                                <div class="container-fluid">
+                                                                    <div class="card text-center mb-2 border-0">
+                                                                        <dl>  
+                                                                            {% if not request.user.is_superuser  %}
+                                                                                <div class="mm-btn-group my-4 mx-4">
+                                                                                    <a class="btn btn-outline-primary"  href="{% url 'req-new-membership-account' org.id %}">Request Membership</a>
+                                                                                </div>
+                                                                            {% endif %}
+                                                                            <dt>Owner</dt>
+                                                                            <dd>{{org.owner.first_name}} {{org.owner.last_name}}</dd>
+                                                                            <dt>Owner Email</dt>
+                                                                            <dd>{{org.owner.email}}</dd>
+                                                                        </dl>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col py-2">
+                    <div class="card">
+                        <div class="card-header" >
+                            <div class="card-title">
+                                Public
+                            </div>
+                            <div class="card-subtitle">
+                                (No membership required)
+                            </div>
+                        </div>
+                        <div class="card-body">                                     
+                            <!---------  Then display orgs where user is not a member --------> 
+                            <div class="container-lg text-center">
+                                <div class="accordion" id="org_accordian">
+                                    <div class="container text-center">
+                                        {% if user_is_developer %}
+                                            {% for org in org_accounts %}
+                                                {% if org_is_public|get_item:org.name %}
+                                                    {% if is_member_of_org|get_item:org.name %}
+                                                        {% with membership=org_member|get_item:org.name user_is_owner=user_is_owner|get_item:org.name org_is_public=org_is_public|get_item:org.name this_active_ps_cmd=org_cluster_active_ps_cmd|get_item:org.name this_is_deployed=org_cluster_is_deployed|get_item:org.name  this_deployed_state=org_cluster_deployed_state|get_item:org.name cur_nodes=org_cluster_cur_nodes|get_item:org.name cur_version=org_cluster_cur_version|get_item:org.name this_connection_status=org_cluster_connection_status|get_item:org.name %}
+                                                            {% include 'users/member_card.html' %}
+                                                        {% endwith %}
+                                                    {% endif %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            {% for org in org_accounts %}
+                                                {% if org_is_public|get_item:org.name %}
+                                                    <div class="accordian-item shadow">
+                                                        <h2 class="accordian-header" id="hd_{{org.name}}">
+                                                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_p" aria-expanded="true" aria-controls="collapse_{{org.name}}_p">
+                                                                {{org.name}}
+                                                            </button>
+                                                        </h2>
+                                                        <div id="collapse_{{org.name}}_p" class="accordion-collapse collapse" aria-labelledby="hd_{{org.name}}" data-bs-parent="#org_accordion">
+                                                            <div class="accordion-body">
+                                                                <div class="container-fluid">
+                                                                    <div class="card text-center mb-2 border-0">
+                                                                        <dl>  
+                                                                            <dt>Owner</dt>
+                                                                            <dd>{{org.owner.first_name}} {{org.owner.last_name}}</dd>
+                                                                            <dt>Owner Email</dt>
+                                                                            <dd>{{org.owner.email}}</dd>
+                                                                        </dl>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+{% block javascript %}
+
+{% endblock javascript %}

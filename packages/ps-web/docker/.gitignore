@@ -1,0 +1,9 @@
+*.py
+*.css
+*.html
+*.ico
+*.png
+staging/
+stage/
+ps-nginx.conf
+

@@ -1,0 +1,14 @@
+[run]
+relative_files = True
+source = 
+    users 
+    api
+omit = 
+    */tests.py
+    */conftest.py
+    */api/conftest.py
+    */tests/*
+    */test_aws/*
+    */migrations/*
+    */test_*/*
+

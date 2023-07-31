@@ -1,0 +1,22 @@
+{% extends "account/base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
+{% block head_title %}{% trans "Sign Up Closed" %}{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col py-2">
+            <div class="container text-center">
+                <div class="auth__header text-center ps-img-center">
+                    <a href="/" data-bs-toggle="tooltip" data-bs-title="{% trans 'Please login with one of your existing third party social accounts. OR Login with a local account' %}">
+                    <img src="{% static 'images/IceSat-2_SlideRule_logo.png' %}" alt="icon"style="width:5em; height:5em;" />
+                    </a>
+                    <h1>{% trans "Sign Up Closed" %}</h1>
+                    <p>{% trans "We are sorry, but the sign up is currently closed." %}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

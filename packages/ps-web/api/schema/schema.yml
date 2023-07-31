@@ -1,0 +1,583 @@
+openapi: 3.0.3
+info:
+  title: SlideRule Provisioning API
+  version: 0.0.0
+  description: |-
+    User interface for SlideRule Provisioning API.
+    NOTE: This interface is encapsulated by the SlideRule Library and is not typically used directly by users.
+  contact:
+    name: developer
+    email: support@mail.slideruleearth.io
+  license:
+    name: BSD-3-Clause
+    url: https://github.com/ICESat2-SlideRule/sliderule-ps-web/blob/main/LICENSE
+paths:
+  /api/desired_org_num_nodes/{org_name}/{desired_num_nodes}/:
+    put:
+      operationId: desired_org_num_nodes_update
+      description: |-
+        Takes an org_name and desired_num_nodes and creates an OrgNumNode request for the org.
+        This will go into the pool of requests for the org.
+        This request will expire when the token expires (one hour).
+        The msg field of the JSON response will contain the this expiration date/time.
+        The current highest number of nodes in the pool of all the requests that are not expired will be deployed to the org.
+        Expired entries are immediately removed from the pool and the number of nodes are adjusted if needed.
+      parameters:
+      - in: path
+        name: desired_num_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - desired_org_num_nodes
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: desired_org_num_nodes_partial_update
+      description: |-
+        Takes an org_name and desired_num_nodes and creates an OrgNumNode request for the org.
+        This will go into the pool of requests for the org.
+        This request will expire when the token expires (one hour).
+        The msg field of the JSON response will contain the this expiration date/time.
+        The current highest number of nodes in the pool of all the requests that are not expired will be deployed to the org.
+        Expired entries are immediately removed from the pool and the number of nodes are adjusted if needed.
+      parameters:
+      - in: path
+        name: desired_num_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - desired_org_num_nodes
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/desired_org_num_nodes_ttl/{org_name}/{desired_num_nodes}/{ttl}/:
+    post:
+      operationId: desired_org_num_nodes_ttl_create
+      description: |-
+        Takes an org_name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
+        NOTE: If the ttl is not provided, the time to live will be set the the minimum (15 minutes). The maximum ttl is 720 minutes (i.e. 12 hours).
+        This request will go into the pool of requests for the org.
+        The msg field of the JSON response will contain the this expiration date/time.
+        The current highest number of nodes in the pool of all the requests that are not expired will be deployed to the org.
+        Expired entries are immediately removed from the pool and the number of nodes are adjusted if needed.
+      parameters:
+      - in: path
+        name: desired_num_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: ttl
+        schema:
+          type: integer
+        required: true
+      tags:
+      - desired_org_num_nodes_ttl
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          description: No response body
+  /api/membership_status/{org_name}/:
+    get:
+      operationId: membership_status_retrieve
+      description: |-
+        Takes an org_name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
+        Users membership is controlled by the organization's admins.
+        NOTE: the org_name passed as a parameter must match the organization of the claim in the token that is used for authorization.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - membership_status
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/org_config/{org_name}/{min_nodes}/{max_nodes}/:
+    put:
+      operationId: org_config_update
+      description: |-
+        Takes an org_name min_nodes and max_nodes and updates the Organization's min and max nodes.
+        These are the limits that regular users can request.
+        NOTE: Must be a developer or owner of the org to update the config.
+      parameters:
+      - in: path
+        name: max_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: min_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - org_config
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: org_config_partial_update
+      description: |-
+        Takes an org_name min_nodes and max_nodes and updates the Organization's min and max nodes.
+        These are the limits that regular users can request.
+        NOTE: Must be a developer or owner of the org to update the config.
+      parameters:
+      - in: path
+        name: max_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: min_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - org_config
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/org_ip_adr/{org_name}/:
+    get:
+      operationId: org_ip_adr_retrieve
+      description: Takes an org_name and returns the IP address of the cluster manager
+        for the org.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - org_ip_adr
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/org_num_nodes/{org_name}/:
+    get:
+      operationId: org_num_nodes_retrieve
+      description: Takes an org_name and returns the min-current-max number of nodes
+        and the version from the cluster for the org.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - org_num_nodes
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/org_token/:
+    post:
+      operationId: org_token_create
+      description: |-
+        Takes a set of user credentials along with an organization and returns an access and refresh JSON web if the user is an active member of that organization.
+        The Access token will contain the organization name and the user name in the claims and expire in 1 hour.
+        The Refresh token will expire in 1 day. A Refresh token can be used with the /org_token/refresh/ endpoint to obtain a new Access token.
+      tags:
+      - org_token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgTokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrgTokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrgTokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgTokenObtainPair'
+          description: ''
+  /api/org_token/refresh/:
+    post:
+      operationId: org_token_refresh_create
+      description: Takes a refresh type JSON web token and returns a new access type
+        JSON web token if the refresh token is valid.
+      tags:
+      - org_token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgTokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrgTokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrgTokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgTokenRefresh'
+          description: ''
+  /api/remove_all_org_num_nodes_reqs/{org_name}/:
+    put:
+      operationId: remove_all_org_num_nodes_reqs_update
+      description: Removes all OrgNumNode requests for the org from the active pool
+        of requests.  Must be a developer or owner of the org to remove ALL the requests.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - remove_all_org_num_nodes_reqs
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: remove_all_org_num_nodes_reqs_partial_update
+      description: Removes all OrgNumNode requests for the org from the active pool
+        of requests.  Must be a developer or owner of the org to remove ALL the requests.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - remove_all_org_num_nodes_reqs
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/remove_user_org_num_nodes_reqs/{org_name}/:
+    put:
+      operationId: remove_user_org_num_nodes_reqs_update
+      description: Removes all OrgNumNode requests for the org from this user from
+        the active pool of requests.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - remove_user_org_num_nodes_reqs
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: remove_user_org_num_nodes_reqs_partial_update
+      description: Removes all OrgNumNode requests for the org from this user from
+        the active pool of requests.
+      parameters:
+      - in: path
+        name: org_name
+        schema:
+          type: string
+        required: true
+      tags:
+      - remove_user_org_num_nodes_reqs
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/token/blacklist/:
+    post:
+      operationId: token_blacklist_create
+      description: |-
+        Takes a token and blacklists it. Must be used with the
+        `rest_framework_simplejwt.token_blacklist` app installed.
+      tags:
+      - token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenBlacklist'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenBlacklist'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenBlacklist'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenBlacklist'
+          description: ''
+components:
+  schemas:
+    OrgTokenObtainPair:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+        org_name:
+          type: string
+      required:
+      - org_name
+      - password
+      - username
+    OrgTokenRefresh:
+      type: object
+      properties:
+        refresh:
+          type: string
+        access:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenBlacklist:
+      type: object
+      properties:
+        refresh:
+          type: string
+      required:
+      - refresh
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+externalDocs:
+  description: SlideRule User Documentation
+  url: https://slideruleearth.io/web/rtd/

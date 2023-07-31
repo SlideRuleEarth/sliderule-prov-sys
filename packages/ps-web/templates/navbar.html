@@ -1,0 +1,64 @@
+{% load static %}
+
+<!-- Header Section -->
+<header class="navbar sticky-top navbar-expand-sm navbar-light bg-light shadow p-0">
+    <nav class="container-xxl bd-gutter flex-wrap flex-lg-nowrap">
+        <div class="bd-navbar-toggle">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+        </div>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav flex-row me-md-auto p-1">
+                <li class="nav-item dropdown m-0 p-0">
+                    <a class="nav-link dropdown-toggle p-0" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="{% static 'images/favicon.ico' %}" alt="sliderule logo" width="30" height="30"/>
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="http://{{domain}}">{{domain}}</a></li>
+                        <li><a class="dropdown-item" href="http://{{domain}}/rtd">SlideRule Documentation</a></li>
+                        {% if domain == "localhost" %}
+                        <li><a class="dropdown-item" href="http://{{domain}}/api/schema/redoc/">Prov-Sys API Documentation</a></li>
+                        <li><a class="dropdown-item" href="http://{{domain}}/api/schema/swagger-ui">Swagger-UI sandbox</a></li>
+                        {% else %}
+                        <li><a class="dropdown-item" href="http://ps.{{domain}}/api/schema/redoc/">Prov-Sys API Documentation</a></li>
+                        <li><a class="dropdown-item" href="http://ps.{{domain}}/api/schema/swagger-ui">Swagger-UI sandbox</a></li>
+                        {% endif %}
+                        <li><a class="dropdown-item text-danger" href="{% url 'prov-sys-admin' %}">Prov-Sys Administration</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item ms-1 p-0">
+                    <a href="{% url 'browse' %}"  class="btn btn-outline-primary"> <span><i class="bi-collection"></i> Organization</span> </a>
+                    {% if org.name and org.name.strip %}
+                        <span class= "text-primary fs-5 ms-0 fw-bold align-middle">::{{org.name}}</span>
+                    {% endif %}
+                </li>
+            </ul>
+            <ul class="navbar-nav flex-row ms-md-auto p-1">
+                {% if request.user.is_authenticated %}
+                    <li class="nav-item dropdown ms-1 p-0">
+                        <a class="btn btn-outline-primary dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span><i class="bi-person-badge"></i> {{active_user.first_name}} {{active_user.last_name}} </span> 
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% if not active_user.is_superuser %}
+                                <li><a class="dropdown-item" href="{% url 'user-profile' %}"> <span><i class="bi-person-badge"></i> {{active_user.first_name}} {{active_user.last_name}} </span> </a>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{% url 'account_email' %}">Change E-mail</a></li>
+                            <li><a class="dropdown-item" href="{% url 'account_change_password' %}">Change Password</a></li>
+                            <li><a class="dropdown-item" href="{% url 'socialaccount_connections' %}">Social Accounts</a></li>
+                            <li><a class="dropdown-item" href="{% url 'account_logout' %}">Log Out</a></li>
+                        </ul>
+                    </li>
+                {% endif %}
+                <li class="nav-item ms-1 p-0">
+                    {% if request.user.is_authenticated %}
+                        <a href="{% url 'account_logout' %}" class="btn btn-outline-primary">Logout</a>
+                    {% else %}
+                        <a href="{% url 'account_login' %}" class="btn btn-outline-primary">Login/Sign Up</a>
+                    {% endif %}
+                </li>
+            </ul>
+        </div>
+    </nav>
+</header>

@@ -1,0 +1,49 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<!-- Main Section -->
+<div class="container-sm">
+    <div class="row py-2">
+        <div class="col"> 
+            <div class="container text-center">    
+                <h2>{{ PS_SITE_TITLE }} Administration</h2>
+                {% if PROVISIONING_DISABLED  %}
+                    <p class="text-danger font-weight-bold fs-1">Provisioning Disabled!</p>
+                {% endif %}         
+            <li><button class="btn btn-primary mx-2 my-2" type="button" id="disable_modal_btn" data-bs-toggle="modal" data-bs-target="#psDisableModal" data-bs-url="{% url 'disable-provisioning' %}" data-bs-action="Disable">Disable Provisioning</button></li>
+            </div>
+        </div>
+    </div> 
+</div>
+<div class="my-1 mx-1">
+    <div class="modal fade" id="psDisableModal" tabindex="-1" aria-labelledby="psDisableModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="psDisableModalLabel">Disable ALL Provisioning</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to Disable All Provisioning?</p><br>
+                    <p>Once you do this you must re-deploy to re-enable any provisioning.</p><br>
+                    <p>All running commands will continue to process to completion.</p><br>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary mt-1 me-1" data-bs-dismiss="modal">Close</button>
+                    <form method="POST" action="{% url 'disable-provisioning' %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary mt-1 me-1">
+                        <i class="im im-edit"></i> Disable Provisioning
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>                                        
+
+{% endblock content %}
+{% block javascript %}
+
+{% endblock javascript %}

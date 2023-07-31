@@ -1,0 +1,23 @@
+{% if is_deployed %}
+    <span id = "mc-cluster-state" class="mc-cluster-state-running">{{org.name}} {{cluster.cur_version}} is {{ deployed_state }} with {{cur_nodes}} {% if cur_nodes == 1 %}node{% else %}nodes{% endif %} 
+        {% if active_ps_cmd != '' %}
+            {% if active_ps_cmd == 'SetUp' %}
+                - Processing Configure</span> 
+            {% else %}
+                - Processing {{ active_ps_cmd }}</span>
+            {% endif %}
+        {% else %}
+            </span>
+        {% endif %}
+{% else %}
+    <span id = "mc-cluster-state" class="mc-cluster-state-not-running">{{org.name}} is {{ deployed_state }}
+    {% if active_ps_cmd != '' %}
+            {% if active_ps_cmd == 'SetUp' %}
+                - Processing Configure</span> 
+            {% else %}
+                - Processing {{ active_ps_cmd }} cmd</span>
+            {% endif %}
+    {% else %}
+        </span>
+    {% endif %}
+{% endif %}

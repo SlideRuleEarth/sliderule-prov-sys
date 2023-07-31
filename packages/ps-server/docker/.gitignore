@@ -1,0 +1,8 @@
+*.py
+*.css
+*.html
+*.js
+*.ico
+*.png
+staging/
+stage/

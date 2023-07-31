@@ -1,0 +1,29 @@
+{% extends 'main.html' %}
+
+{% block content %}
+
+<!-- Main Section -->
+<main class="profile my-md">
+    <div class="container">
+        <div class="layout">
+            <div class="column column--1of3">
+                <div class="card text-center">
+                    <div class="card__body">
+                        <p class="dev__name">{{user.first_name}} {{user.last_name}} ({{user.username}})</p>
+                        <b>
+                            {% if first_time == True %}
+                                A request for a new {{account_type}} account to {{m.org.name}} has been sent to the owner {{m.org.owner.first_name}} {{m.org.owner.last_name}} at the email:{{m.org.owner.email}}.
+                                Check your email ({{user.email}}) for confirmation.
+                            {% else %}
+                                Another request for a new {{account_type}} account to {{m.org.name}} has been sent to {{m.org.owner.lastname}} using {{m.org.owner.email}}.
+                                Check your email ({{user.email}}) for confirmation.
+                            {% endif %}
+                        </b>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+{% endblock content %}
