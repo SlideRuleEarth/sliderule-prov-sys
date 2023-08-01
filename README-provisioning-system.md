@@ -123,7 +123,7 @@ Look for something like this
 
 Open a browser and enter this url:
 
-[http://127.0.0.1/](http://127.0.0.1/)
+[http://localhost/](http://localhost/)
 
 
 ### To stop either PS service. In it's directory run:
@@ -217,7 +217,7 @@ The following must be done when creating a new database or resetting/clearing a 
 -- OR --  from a shell in the container like this:<pre>
 python manage.py createsuperuser --username admin --email [your admin email address]</pre>
 
-2. In a browser go to admin site (i.e. http://127.0.0.1/admin) and sign in a the admin superuser. Create a group for permissions using the Django admin site signed in as the superuser. Call it "PS_Developer". give it the privileges by selecting them to highlight those that are to be added, click the arrow to add the highlighted privileges. Select these: 
+2. In a browser go to admin site (i.e. http://localhost/admin) and sign in a the admin superuser. Create a group for permissions using the Django admin site signed in as the superuser. Call it "PS_Developer". give it the privileges by selecting them to highlight those that are to be added, click the arrow to add the highlighted privileges. Select these: 
     * all the users: entries (except ones begining with users | user)
     * all token_blacklist
     * all django_* (i.e. all that begin with django_)
@@ -227,9 +227,9 @@ python manage.py createsuperuser --username admin --email [your admin email addr
 
 You can go back and add or delete privileges as needed.
 
-3. in a browser go to [http://127.0.0.1/register](http://127.0.0.1/register) for the developement system or [https:{domain}/register]() for the deployed system and sign up a new developer (i.e. have the developer create their basic user account)
+3. in a browser go to [http://localhost/register](http://localhost/register) for the developement system or [https:{domain}/register]() for the deployed system and sign up a new developer (i.e. have the developer create their basic user account)
 
-4. in a browser go to [http://127.0.0.1/admin](http://127.0.0.1/admin) or the deployed equivalent and login as the admin user to be able to add privileges for the developer by giving the new developer user created in the previous step PS_Developer group privileges as follows:
+4. in a browser go to [http://localhost/admin](http://localhost/admin) or the deployed equivalent and login as the admin user to be able to add privileges for the developer by giving the new developer user created in the previous step PS_Developer group privileges as follows:
 
 - select "Users". Then for each developer that should have access to the admin site, select that user then click 'Staff status' (NOTE: NOT superuser!)
 - select "Users". Then for each developer that should have PS_Developer elevated privileges, select that user. Then for Groups select 'Staff status' to highlight it. Then hit the save button
