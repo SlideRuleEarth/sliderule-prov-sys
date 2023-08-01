@@ -578,7 +578,7 @@ def orgAccountCreate(request):
                 if emsg != '':
                     messages.error(request,emsg)
             else:
-                form = OrgAccountCfgForm(available_versions=get_versions().versions)
+                form = OrgAccountCfgForm(available_versions=get_versions())
                 return render(request, 'users/org_create.html', {'form': form})
         else:
             messages.warning(request, 'Insufficient privileges')
