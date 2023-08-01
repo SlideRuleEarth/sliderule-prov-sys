@@ -571,14 +571,15 @@ def orgAccountCreate(request):
         # User must be in the PS_Developer group or the owner to modify the profile
         if request.user.groups.filter(name='PS_Developer').exists():
             if request.method == 'POST':
-                form = OrgAccountCfgForm(request.POST,available_versions=get_versions())
+                form = OrgAccountForm(request.POST)
                 new_org,msg,emsg,p = add_org_cluster_orgcost(form,True)
                 if msg != '':
                     messages.info(request,msg)
                 if emsg != '':
                     messages.error(request,emsg)
+                return redirect('browse')
             else:
-                form = OrgAccountCfgForm(available_versions=get_versions())
+                form = OrgAccountForm()
                 return render(request, 'users/org_create.html', {'form': form})
         else:
             messages.warning(request, 'Insufficient privileges')
@@ -788,33 +789,36 @@ def add_org_cluster_orgcost(f,start_main_loop=False):
     try:
         start_main_loop = start_main_loop or False
         init_accounting_tm = datetime.now(timezone.utc)-timedelta(days=366) # force update
-        new_org = f.save(commit=False)
-        new_org.most_recent_charge_time=init_accounting_tm
-        new_org.most_recent_credit_time=init_accounting_tm
-        new_org.save()
-        #LOG.info(new_org.most_recent_charge_time)
-        cluster = Cluster.objects.create(org=new_org)
-        cluster.save()
-        granObjHr = getGranChoice(granularity="HOURLY")
-        orgCostHr = OrgCost.objects.create(org=new_org, gran=granObjHr, tm=init_accounting_tm, cost_refresh_time=init_accounting_tm)
-        #LOG.info(orgCostHr.tm)
-        orgCostHr.save()
-        granObjDay = getGranChoice(granularity="DAILY")
-        orgCostDay = OrgCost.objects.create(org=new_org, gran=granObjDay, tm=init_accounting_tm, cost_refresh_time=init_accounting_tm)
-        orgCostDay.save()
-        granObjMonth = getGranChoice(granularity="MONTHLY")
-        orgCostMonth = OrgCost.objects.create(org=new_org, gran=granObjMonth, tm=init_accounting_tm, cost_refresh_time=init_accounting_tm)
-        orgCostMonth.save()
-        LOG.info(f"added org:{new_org.name}")
-        msg = init_new_org_memberships(new_org)
-        # always add this to the OAUTH app (only one exists anyway)
-        for app in Application.objects.all():
-            domain = os.environ.get("DOMAIN")
-            app.redirect_uris += '\n{}'.format(f"https://{new_org.name}.{domain}/redirect_uri/")
-            app.save()
-        p = create_org_queue(new_org)
-        if start_main_loop:
-            forever_loop_main_task.apply_async((new_org.name,),queue=get_org_queue_name(new_org))
+        if f.is_valid():
+            new_org = f.save(commit=False)
+            new_org.most_recent_charge_time=init_accounting_tm
+            new_org.most_recent_credit_time=init_accounting_tm
+            new_org.save()
+            #LOG.info(new_org.most_recent_charge_time)
+            cluster = Cluster.objects.create(org=new_org)
+            cluster.save()
+            granObjHr = getGranChoice(granularity="HOURLY")
+            orgCostHr = OrgCost.objects.create(org=new_org, gran=granObjHr, tm=init_accounting_tm, cost_refresh_time=init_accounting_tm)
+            #LOG.info(orgCostHr.tm)
+            orgCostHr.save()
+            granObjDay = getGranChoice(granularity="DAILY")
+            orgCostDay = OrgCost.objects.create(org=new_org, gran=granObjDay, tm=init_accounting_tm, cost_refresh_time=init_accounting_tm)
+            orgCostDay.save()
+            granObjMonth = getGranChoice(granularity="MONTHLY")
+            orgCostMonth = OrgCost.objects.create(org=new_org, gran=granObjMonth, tm=init_accounting_tm, cost_refresh_time=init_accounting_tm)
+            orgCostMonth.save()
+            LOG.info(f"added org:{new_org.name}")
+            msg = init_new_org_memberships(new_org)
+            # always add this to the OAUTH app (only one exists anyway)
+            for app in Application.objects.all():
+                domain = os.environ.get("DOMAIN")
+                app.redirect_uris += '\n{}'.format(f"https://{new_org.name}.{domain}/redirect_uri/")
+                app.save()
+            p = create_org_queue(new_org)
+            if start_main_loop:
+                forever_loop_main_task.apply_async((new_org.name,0),queue=get_org_queue_name(new_org))
+        else:
+            emsg = f"Input Errors:{f.errors.as_text}"
     except Exception as e:
         LOG.exception("caught exception:")
         emsg = "Caught exception:"+repr(e)
