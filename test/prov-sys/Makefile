@@ -139,7 +139,7 @@ unit-tests-ps-server-only:   ## run the ps_server unit tests  then exit
 system-tests:  ## (incurs $$) run the web_server django unit tests against a running dev system then exit
 	pytest -m "system" $(PYTEST_ARGS)
 
-unit-tests:
+unit-tests: ## run all unit-tests
 	make unit-tests-ps-web-only && \
 	make unit-tests-ps-server-only && \
 	make unit-tests-local-stack 
