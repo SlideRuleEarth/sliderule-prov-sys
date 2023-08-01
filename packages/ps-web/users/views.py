@@ -571,7 +571,7 @@ def orgAccountCreate(request):
         # User must be in the PS_Developer group or the owner to modify the profile
         if request.user.groups.filter(name='PS_Developer').exists():
             if request.method == 'POST':
-                form = OrgAccountCfgForm(request.POST,available_versions=get_versions().versions)
+                form = OrgAccountCfgForm(request.POST,available_versions=get_versions())
                 new_org,msg,emsg,p = add_org_cluster_orgcost(form,True)
                 if msg != '':
                     messages.info(request,msg)
