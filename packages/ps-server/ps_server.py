@@ -48,6 +48,8 @@ from botocore.exceptions import NoCredentialsError
 
 import pytz
 from datetime import datetime, timezone, timedelta
+import re
+import stat
 
 import json
 import pprint
@@ -158,6 +160,9 @@ def get_workspace_list(name):
     #       so [] idicates an error occurred
     return workspaces
 
+def skip_this_file(rel_path):
+    return ('/.terraform/' in rel_path or 'terraform.tfstate.d' in rel_path or '.terraform.lock.hcl' in rel_path)
+
 def upload_folder_to_s3(s3_client, bucket_name, local_directory, s3_folder):
     """
     Uploads the contents of a local directory to an S3 bucket
@@ -176,10 +181,13 @@ def upload_folder_to_s3(s3_client, bucket_name, local_directory, s3_folder):
                 relative_path = os.path.relpath(local_file, local_directory)
                 s3_file = os.path.join(s3_folder, relative_path)
                 try:
-                    s3_client.upload_file(local_file, bucket_name, s3_file)
-                    cnt += 1
-                    uploaded = True
-                    LOG.info(f"Uploaded {local_file} to {s3_file} in bucket {bucket_name}")
+                    if skip_this_file(relative_path):
+                        LOG.info(f"Skipping {relative_path} ")
+                    else:
+                        s3_client.upload_file(local_file, bucket_name, s3_file)
+                        cnt += 1
+                        uploaded = True
+                        LOG.info(f"Uploaded {local_file} to {s3_file} in bucket {bucket_name}")
                 except NoCredentialsError:
                     LOG.error("No AWS credentials found")
                     uploaded = False
@@ -308,14 +316,19 @@ def download_s3_folder(s3_client, bucket_name, s3_folder, local_dir=None):
         for obj in page.get('Contents', []):
             target = obj['Key'] if local_dir is None \
                 else os.path.join(local_dir, os.path.relpath(obj['Key'], s3_folder))
-            if not os.path.exists(os.path.dirname(target)):
-                os.makedirs(os.path.dirname(target))
+            dir = os.path.dirname(target)
+            if not os.path.exists(dir):
+                if not skip_this_file(dir):
+                    os.makedirs(dir)
             if obj['Key'][-1] == '/':
                 continue
-            LOG.info(f"Downloading {obj['Key']} to {target}")
-            s3_client.download_file(bucket_name, obj['Key'], target)
-            count += 1
-            downloaded = True
+            if not skip_this_file(target):
+                LOG.info(f"Downloading {obj['Key']} to {target}")
+                s3_client.download_file(bucket_name, obj['Key'], target)
+                count += 1
+                downloaded = True
+            else:
+                LOG.info(f"Skipping {obj['Key']} ") 
     if downloaded:
         LOG.info(f"Successfully downloaded {count} files from {s3_folder} into {local_dir}")
     else:
@@ -1650,11 +1663,11 @@ def main():
             s3_client = get_s3_client()
             LOG.info(f"terraform versions found in S3:{get_versions(s3_client)}")
             s3_folder = "prov-sys/current_cluster_tf_by_org"
-            local_dir = "/ps_server"
+            local_dir = get_root_dir()
             if download_s3_folder(s3_client=s3_client, 
                                     bucket_name=S3_BUCKET,
                                     s3_folder=s3_folder,
-                                    local_dir="/ps_server"):
+                                    local_dir=local_dir):
                 LOG.info(f"downloaded s3 bucket:{S3_BUCKET} folder:{s3_folder} into local_dir:{local_dir}")
             else:
                 emsg = f"FAILED! error in download of s3 bucket:{S3_BUCKET} folder:{s3_folder} into local_dir:{local_dir}"

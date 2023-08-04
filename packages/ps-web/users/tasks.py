@@ -1556,7 +1556,8 @@ def forever_loop_main_task(self,org_name,loop_count):
     #run again if  we have a redis connection and not disabled
     if redis_interface is not None and redis_interface.server_is_up():
         if get_PROVISIONING_DISABLED(redis_interface) == False: 
-            LOG.error(f"forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception because get_PROVISIONING_DISABLED is False!")
+            sleep(5)
+            LOG.error(f"slept 5... forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception because get_PROVISIONING_DISABLED is False!")
             forever_loop_main_task.apply_async((orgAccountObj.name,orgAccountObj.loop_count),queue=get_org_queue_name(orgAccountObj))
         else:
             LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because PROVISIONING_DISABLED is True!")
