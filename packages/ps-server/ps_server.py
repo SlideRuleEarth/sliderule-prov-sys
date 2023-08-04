@@ -287,8 +287,14 @@ def upload_current_tf_files_to_s3(s3_client,org_name):
     This uploads the entire org dir with subdir of terraform and it's files
     The root dir is the org name and it contains the terraform subdir and the file with  setup info, i.e. SETUP_JSON_FILE 
     '''
-    LOG.info(f"uploading tf files for org_name:{org_name}",)
     s3_folder = os.path.join('prov-sys','current_cluster_tf_by_org',org_name)
+    if s3_folder_exists(s3_client=s3_client,bucket_name=S3_BUCKET,s3_folder=s3_folder):
+        LOG.info(f"deleting s3_folder:{s3_folder} from s3 for org_name:{org_name}")
+        if not delete_folder_from_s3(s3_client=s3_client,
+                                    bucket=S3_BUCKET,
+                                    s3_folder=s3_folder):
+            LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for org_name:{org_name}")
+    LOG.info(f"uploading tf files for org_name:{org_name}",)
     return upload_folder_to_s3(s3_client=s3_client,
                                 bucket_name=S3_BUCKET, 
                                 local_directory=get_org_root_dir(org_name), 
@@ -1276,6 +1282,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 yield from self.execute_terraform_cmd(org_name=org_name, ps_cmd='SetUp',  cmd_args=["workspace", "new", ws_name])
             else:
                 yield from self.execute_terraform_cmd(org_name=org_name, ps_cmd='SetUp',  cmd_args=["workspace", "select", ws_name])
+
+            if not upload_current_tf_files_to_s3(s3_client=s3_client,org_name=org_name):
+                emsg = f"FAILED! to upload_current_tf_files_to_s3()"
+                LOG.error(emsg)
+                raise PS_InternalError(emsg)
+
         except Exception as e:
             emsg = (f" Processing SetUp {org_name} cluster caught this exception: ")
             LOG.exception(emsg)
@@ -1410,13 +1422,6 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     emsg = f"FAILED! {str(e)} for Update {request.org_name}"
                     LOG.error(emsg)
                     raise PS_InternalError(emsg)
-                finally: # ALWAYS upload the files to s3 on any attempt to apply even if it failed if it was not uploaded before
-                    s3_folder = os.path.join('prov-sys','current_cluster_tf_by_org',request.org_name)
-                    if not s3_folder_exists(s3_client=s3_client,bucket_name=S3_BUCKET,s3_folder=s3_folder): # if the folder did not exist before we need to upload the files to s3
-                        if not upload_current_tf_files_to_s3(s3_client=s3_client,org_name=request.org_name):
-                            emsg = f"FAILED! to upload_current_tf_files_to_s3() for ps_cmd:{'Update'}"
-                            LOG.error(emsg)
-                            raise PS_InternalError(emsg)
             else:
                 emsg = f"valid_deploy_args FAILED for Update {request.org_name} INVALID deploy args (unmentioned fields are ZERO!) {str(request)}"
                 LOG.error(emsg)

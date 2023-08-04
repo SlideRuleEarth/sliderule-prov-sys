@@ -176,13 +176,14 @@ def test_download_dir_when_unit_test_org_deployed(setup_logging, s3, get_S3_BUCK
     # must leave terraform env as we found it so other tests don't fail because of this test
     assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, org_name=test_org_name, logger=setup_logging)
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.parametrize("version", ['v3', 'latest'])
 def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_org_name, control_instance, version):
     s3_client = s3
     s3_bucket = get_S3_BUCKET
     logger = setup_logging
-    assert bucket_exists(s3_client, s3_bucket)
+    assert bucket_exists(s3_client, s3_bucket)  
+    assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/current_cluster_tf_by_org/{test_org_name}') 
     
     cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.setup_terraform_env(s3_client, test_org_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z") ),test_org_name,'SetUp',logger)
     logger.info(f'done with setup_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
@@ -207,9 +208,6 @@ def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_org
             in_output = True
     assert in_output
     assert os.path.isdir(get_org_root_dir(test_org_name))
-    # for setup_terraform_env we do NOT upload the terraform files to S3 current_cluster_tf_by_org
-    # we only do that when we do a terraform apply, that is when the state changes and we need to retain the terraform files    
-    assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/current_cluster_tf_by_org/{test_org_name}') 
 
     cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.teardown_terraform_env(s3_client, test_org_name),test_org_name,'TearDown',logger)
     logger.info(f'done with teardown_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
