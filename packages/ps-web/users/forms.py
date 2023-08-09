@@ -58,6 +58,7 @@ class UserProfileForm(forms.ModelForm):
         fields = ['username', 'first_name',
                   'last_name', 'email']
         field_classes = {'username': UsernameField}
+        required = ['username']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
