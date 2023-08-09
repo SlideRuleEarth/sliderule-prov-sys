@@ -284,10 +284,6 @@ ecs-ps-web-get-db-schema-from-testsliderule: # cat the schema from testsliderule
 		--interactive \
 		--command "cat db-schema.sql" > db.testsliderule-schema-$(shell date +"%Y-%m-%d-%H-%M-%S").sql
 
-sync-aws-init-with-ps-server:   ## grab latest init_aws_localstack.py from server github repo branch specified as PS_BRANCH=
-	echo "PS_BRANCH=$(PS_BRANCH)"
-	mkdir -p stage_aws_init/; cd stage_aws_init; git clone https://github.com/ICESat2-SlideRule/sliderule-ps-server.git; cd sliderule-ps-server; git checkout $(PS_BRANCH); cp init_aws_localstack.py ../../; cd ../../; rm -rf stage_aws_init
-
 db-run: 
 	docker compose -f docker-compose-prov-sys-db-only.yml up --detach
 

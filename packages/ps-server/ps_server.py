@@ -287,7 +287,7 @@ def upload_current_tf_files_to_s3(s3_client,org_name):
     This uploads the entire org dir with subdir of terraform and it's files
     The root dir is the org name and it contains the terraform subdir and the file with  setup info, i.e. SETUP_JSON_FILE 
     '''
-    s3_folder = os.path.join('prov-sys','current_cluster_tf_by_org',org_name)
+    s3_folder = os.path.join('prov-sys',f'{get_domain_env()}','current_cluster_tf_by_org',org_name)
     if s3_folder_exists(s3_client=s3_client,bucket_name=S3_BUCKET,s3_folder=s3_folder):
         LOG.info(f"deleting s3_folder:{s3_folder} from s3 for org_name:{org_name}")
         if not delete_folder_from_s3(s3_client=s3_client,
@@ -1333,7 +1333,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                         LOG.info(f'clean_workspace: deleting workspace ws:{ws} for org:{org_name}')
                         yield from self.delete_workspace_for_org(org_name)
             LOG.info(f"Removing tf files from s3 for org_name:{org_name}")
-            s3_folder = os.path.join('prov-sys','current_cluster_tf_by_org',org_name)
+            s3_folder = os.path.join('prov-sys',f'{get_domain_env()}','current_cluster_tf_by_org',org_name)
             if s3_folder_exists(s3_client,S3_BUCKET,s3_folder):
                 LOG.info(f"Removing s3_folder:{s3_folder} from s3 for org_name:{org_name}")
                 if not delete_folder_from_s3(s3_client=s3_client,
@@ -1667,7 +1667,7 @@ def main():
                 poll_for_localstack_status(LOG)
             s3_client = get_s3_client()
             LOG.info(f"terraform versions found in S3:{get_versions(s3_client)}")
-            s3_folder = "prov-sys/current_cluster_tf_by_org"
+            s3_folder = f"prov-sys/{get_domain_env()}/current_cluster_tf_by_org"
             local_dir = get_root_dir()
             if download_s3_folder(s3_client=s3_client, 
                                     bucket_name=S3_BUCKET,

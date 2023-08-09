@@ -34,7 +34,7 @@ def test_upload_current_tf_files_to_s3(s3, get_S3_BUCKET, terraform_env, root_di
     # test the function that uploads the test org cluster's current tf files to s3
     assert upload_current_tf_files_to_s3(s3_client,test_org_name)
 
-    s3_folder = f'prov-sys/current_cluster_tf_by_org/{test_org_name}/'
+    s3_folder = f'prov-sys/localhost/current_cluster_tf_by_org/{test_org_name}/'
     assert s3_folder_exist(logger, s3_client, s3_bucket, s3_folder)
 
 
@@ -42,7 +42,7 @@ def test_upload_current_tf_files_to_s3(s3, get_S3_BUCKET, terraform_env, root_di
     run_subprocess_command(['rm', '-rf', tf_dir],logger)
     assert not os.path.exists(tf_dir)
 
-    s3_folder = os.path.join('prov-sys','current_cluster_tf_by_org',test_org_name)
+    s3_folder = os.path.join('prov-sys','localhost','current_cluster_tf_by_org',test_org_name)
 
     test_download_dir = os.path.join(tf_dir,'test_download_dir')
     assert download_s3_folder(s3_client, s3_bucket, s3_folder, test_download_dir)
@@ -67,7 +67,7 @@ def test_delete_folder_from_s3(s3, get_S3_BUCKET, terraform_env, root_dir, test_
     # test the function that uploads the test org cluster's current tf files to s3
     assert upload_current_tf_files_to_s3(s3_client,test_org_name)
 
-    s3_folder = f'prov-sys/current_cluster_tf_by_org/{test_org_name}/'
+    s3_folder = f'prov-sys/localhost/current_cluster_tf_by_org/{test_org_name}/'
 
     assert s3_folder_exist(logger, s3_client, s3_bucket, s3_folder)
 
@@ -111,10 +111,10 @@ def test_process_Update_cmd(s3, test_org_name, setup_logging, root_dir, get_S3_B
     assert done
     assert cnt==5 # this is the number of times the next function should be called for the 'Update' command
     # when we do an apply the s3 state file gets updated and then we need to upload the current terraform files to s3
-    assert s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/current_cluster_tf_by_org/{test_org_name}') 
+    assert s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{test_org_name}') 
 
 #@pytest.mark.dev
-def test_get_versions(setup_logging, s3, test_org_name, root_dir, get_S3_BUCKET):
+def test_get_versions(setup_logging, s3, test_org_name, root_dir, get_S3_BUCKET,localstack_setup):
     '''
         This tests the get_versions function in the ps_server module
     '''
@@ -122,10 +122,6 @@ def test_get_versions(setup_logging, s3, test_org_name, root_dir, get_S3_BUCKET)
     s3_client = s3
     logger = setup_logging
     s3_bucket = get_S3_BUCKET
-    # verify that the bucket exists and that the "install" terraform folder exists for this version
-    #assert bucket_exists(s3_client, s3_bucket)
-    #assert s3_folder_exist(logger, s3_client, s3_bucket, 'prov-sys/')
-    #assert s3_folder_exist(logger, s3_client, s3_bucket, 'prov-sys/cluster_tf_versions/')
 
     s3_folder = f'prov-sys/cluster_tf_versions/latest'
     assert s3_folder_exist(logger, s3_client, s3_bucket, s3_folder)
@@ -144,7 +140,7 @@ def test_download_dir_when_empty(setup_logging, s3, get_S3_BUCKET):
     logger = setup_logging
     s3_bucket = get_S3_BUCKET
     assert bucket_exists(s3_client, s3_bucket)
-    assert download_s3_folder(s3_folder="prov-sys/current_cluster_tf_by_org",
+    assert download_s3_folder(s3_folder="prov-sys/localhost/current_cluster_tf_by_org",
                 local_dir="/ps_server/",
                 bucket_name=s3_bucket,
                 s3_client=s3_client)
@@ -166,7 +162,7 @@ def test_download_dir_when_unit_test_org_deployed(setup_logging, s3, get_S3_BUCK
     init_s3_current_cluster_tf_by_org = init_s3_current_cluster_tf_by_org_factory # grab the factory function for the version
     assert init_s3_current_cluster_tf_by_org(logger,test_org_name,version=version) # execute the factory function
     assert init_s3_current_cluster_tf_by_org(logger,test_public_org_name,version=version) # execute the factory function
-    assert download_s3_folder(s3_folder="prov-sys/current_cluster_tf_by_org",
+    assert download_s3_folder(s3_folder="prov-sys/localhost/current_cluster_tf_by_org",
                 local_dir="/ps_server/",
                 bucket_name=s3_bucket,
                 s3_client=s3_client)
@@ -176,14 +172,14 @@ def test_download_dir_when_unit_test_org_deployed(setup_logging, s3, get_S3_BUCK
     # must leave terraform env as we found it so other tests don't fail because of this test
     assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, org_name=test_org_name, logger=setup_logging)
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.parametrize("version", ['v3', 'latest'])
 def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_org_name, control_instance, version):
     s3_client = s3
     s3_bucket = get_S3_BUCKET
     logger = setup_logging
     assert bucket_exists(s3_client, s3_bucket)  
-    assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/current_cluster_tf_by_org/{test_org_name}') 
+    assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{test_org_name}') 
     
     cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.setup_terraform_env(s3_client, test_org_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z") ),test_org_name,'SetUp',logger)
     logger.info(f'done with setup_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')

@@ -94,7 +94,7 @@ def main():
     # Now upload files to mimic the currently running cluster called devtest
     #
     logger.info(f"Now upload files to mimic the currently running cluster called devtest")
-    bucket_folder = f'prov-sys/current_cluster_tf_by_org/devtest/terraform'
+    bucket_folder = f'prov-sys/localhost/current_cluster_tf_by_org/devtest/terraform'
     base_directory = os.getenv('S3_TEST_FILES') # these are by version
     local_directory = os.path.join(base_directory, 'latest')
     if local_directory is None or local_directory == "":
