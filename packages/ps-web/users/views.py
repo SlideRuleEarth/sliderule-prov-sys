@@ -868,7 +868,7 @@ def reqNewMembership(request, pk):
 def provSysAdmin(request):
 
     if request.user.groups.filter(name='PS_Developer').exists():
-        return render(request, 'prov_sys_admin.html')
+        return render(request, 'prov_sys_admin.html', {'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface)})
     else:
         messages.error(request, 'You Do NOT have privileges to access this page')
         return redirect('browse')
@@ -879,8 +879,7 @@ def disableProvisioning(request):
     if request.user.groups.filter(name='PS_Developer').exists():
         set_PROVISIONING_DISABLED(redis_interface,'True')
         messages.warning(request, 'You have disabled provisioning!')
-        return render(request, 'prov_sys_admin.html',{'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface)})
     else:
         LOG.warning(f"User {request.user.username} attempted to disable provisioning")
         messages.error(request, 'You are not a PS_Developer')
-        return redirect('browse')
+    return redirect('browse')
