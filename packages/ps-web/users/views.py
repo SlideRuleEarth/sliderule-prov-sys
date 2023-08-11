@@ -303,10 +303,12 @@ def orgDestroyCluster(request, pk):
                     else:
                         messages.error(request,jrsp['error_msg'])           
                     clusterObj = Cluster.objects.get(org=orgAccountObj)
-                    active_onn = OrgNumNode.objects.filter(id=clusterObj.cnnro_id)
-                    if active_onn is not None:
-                        active_onn.delete()
-                        messages.info(request,"Successfully deleted active Org Num Node request")
+                    active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
+
+                    if active_onns is not None:
+                        for active_onn in active_onns:
+                            active_onn.delete()
+                        messages.info(request,"Successfully deleted active Org Num Node requests")
                     owner_ps_cmd = OwnerPSCmd.objects.create(user=request.user, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
                     owner_ps_cmd.save()
                     msg = f"Destroy {orgAccountObj.name} queued for processing"
@@ -357,10 +359,11 @@ def clearActiveOrgNumNodeReq(request, pk):
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':
-            active_onn = OrgNumNode.objects.filter(id=clusterObj.cnnro_id)
-            if active_onn is not None:
-                active_onn.delete()
-                messages.info(request,"Successfully deleted active Org Num Node request")
+            active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
+            if active_onns is not None:
+                for active_onn in active_onns:
+                    active_onn.delete()
+                messages.info(request,"Successfully deleted active Org Num Node requests")
             else:
                 messages.info(request,"No active Org Num Node request to delete")
         return redirect('org-manage-cluster',pk=orgAccountObj.id)

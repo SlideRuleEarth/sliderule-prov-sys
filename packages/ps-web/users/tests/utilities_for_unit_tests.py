@@ -14,7 +14,8 @@ from users.views import add_org_cluster_orgcost
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
-from users.tasks import init_new_org_memberships,loop_iter,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public
+
+from users.tasks import init_new_org_memberships,loop_iter,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user
 from django.core import serializers
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -247,7 +248,7 @@ def init_test_environ(  org_name=None,
     most_recent_recon_time = most_recent_recon_time or datetime.now(timezone.utc)
     min_node_cap = min_node_cap or 0
     max_node_cap = max_node_cap or 10
-    desired_num_nodes = desired_num_nodes or 1
+    desired_num_nodes = desired_num_nodes or 0
     version = version or 'version_notset'
     max_allowance = max_allowance or 100
     is_public = is_public or False
@@ -359,7 +360,6 @@ def get_org_dict(org_name):
         logger.info(f"org_name:<{org_name}> orgs:{OrgAccount.objects.values_list('name', flat=True)}")
         logger.exception("Caught:")
     return model_org_d,model_org_json
-
 def dump_org_account(org_name,banner=None,level=None):
     org_dict,org_json = get_org_dict(org_name)
     fake_now = datetime.now(timezone.utc)
@@ -392,20 +392,17 @@ def process_onn_api(client,
                     loop_count,
                     num_iters,
                     expected_change_ps_cmd,
-                    expected_status):
+                    expected_status,
+                    expected_change_onn=None):
+
+    # backwards compatibility
+    expected_change_onn = expected_change_onn or expected_change_ps_cmd
+
+
     logger.info(f"url_args:{url_args}")
     url = reverse(view_name,args=url_args)
     logger.info(f"using url:{url}")
     onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
-    expected_onn_change = expected_change_ps_cmd
-    if onnTop is not None:
-        if need_destroy_for_changed_version_or_is_public(orgAccountObj,onnTop):
-            expected_onn_change = 0 # Destroy is processed inline
-    else:
-        if not(orgAccountObj.destroy_when_no_nodes and (orgAccountObj.min_node_cap == 0)):
-            if orgAccountObj.min_node_cap == orgAccountObj.desired_num_nodes:
-                expected_onn_change = 0 # under these conditions no onn is processed
-
     assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT') 
     if expected_status=='QUEUED': 
         EXPECTED_QUEUED_CHANGE=1
@@ -429,6 +426,7 @@ def process_onn_api(client,
     s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
     logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
     with time_machine.travel(new_time,tick=True):
+        desired_num_nodes = orgAccountObj.desired_num_nodes
         if access_token is not None:
             if 'put' in view_name:
                 response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
@@ -438,7 +436,7 @@ def process_onn_api(client,
             json_data = json.loads(response.content)
             assert(json_data['status'] == expected_status)   
             assert(json_data['msg']!='')   
-            assert(json_data['error_msg']=='') 
+            assert(json_data['error_msg']=='')
         else:
             if data is not None:
                 logger.info(f"url:{url} data:{data}")
@@ -461,15 +459,19 @@ def process_onn_api(client,
             if not idle:
                 task_idle = False
         assert(num==num_iters)
+        clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
-        assert(orgAccountObj.num_ps_cmd == (s_orgAccountObj_num_ps_cmd + EXPECTED_PROCESSED_CHANGE)) # processed an update ps_cmd
+        assert(orgAccountObj.num_ps_cmd == (s_orgAccountObj_num_ps_cmd + expected_change_ps_cmd)) # processed an update ps_cmd
         assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
         if num_iters==0:
             assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
             assert(loop_count == s_loop_count)
             assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
         else:
-#            assert(orgAccountObj.num_onn==(s_orgAccountObj_num_onn + expected_onn_change))
+            onn_ids = []
+            logger.info(f"expected_change_onn:{expected_change_onn} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+            assert(orgAccountObj.num_onn==(s_orgAccountObj_num_onn + expected_change_onn))
             assert(loop_count == (s_loop_count + num_iters))
     return loop_count
 
@@ -526,13 +528,14 @@ def process_org_configure(client,
                             url_args,
                             data,
                             loop_count,
-                            num_iters):
+                            num_iters,
+                            expected_change_ps_cmd):
     url = reverse(view_name,args=url_args)
     logger.info(f"using url:{url}")
     s_loop_count = loop_count
     EXPECTED_PS_CMD_PROCESSED = 0
     if num_iters > 0:
-        EXPECTED_PS_CMD_PROCESSED = 2 # SetUp and Refresh
+        EXPECTED_PS_CMD_PROCESSED = expected_change_ps_cmd # SetUp and Refresh/Update
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
     s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)

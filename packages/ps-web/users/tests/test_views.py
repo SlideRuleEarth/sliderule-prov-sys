@@ -309,7 +309,9 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
                                         url_args=[org_account_id],
                                         data=form_data,
                                         loop_count=0,
-                                        num_iters=3)
+                                        num_iters=3,
+                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
+                                        )
 
     # assert the form was successful
     # refresh the OrgAccount object
@@ -332,7 +334,7 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
 
 
     form_data = {
@@ -348,17 +350,17 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
                                 access_token=None,
                                 data=form_data,
                                 loop_count=loop_count,
-                                num_iters=3, #because we insert a destroy, refresh
+                                num_iters=3, 
                                 expected_change_ps_cmd=1,
                                 expected_status='QUEUED')
 
-    assert PsCmdResult.objects.count() == 3 # SetUp - Refresh - Update
+    assert PsCmdResult.objects.count() == 3 # SetUp - Update - Update
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
     assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}") # update to 3
     assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
 
     # setup necessary form data
@@ -378,7 +380,9 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
                                         url_args=[org_account_id],
                                         data=form_data,
                                         loop_count=loop_count,
-                                        num_iters=3) 
+                                        num_iters=3,
+                                        expected_change_ps_cmd=2 # SetUp - Refresh 
+                                        ) 
 
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert(orgAccountObj.is_public == initial_is_public) 
@@ -394,7 +398,7 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     assert orgAccountObj.destroy_when_no_nodes == True
 
 
-    assert PsCmdResult.objects.count() == 5 # SetUp - Refresh - Update - SetUp - Refresh
+    assert PsCmdResult.objects.count() == 5 # SetUp - Refresh - Update - SetUp - Refresh 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -425,9 +429,8 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
                                 expected_status='QUEUED')
 
     assert orgAccountObj.num_onn == 2
-
     assert orgAccountObj.desired_num_nodes == 3 # no change
-    assert PsCmdResult.objects.count() == 5 # NO CHANGE - SetUp - Refresh - Update - SetUp - Refresh - Destroy - Update
+    assert PsCmdResult.objects.count() == 5 # NO CHANGE - SetUp - Update - Update - SetUp - Destroy - Update
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -454,11 +457,11 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
                                 data=form_data,
                                 loop_count=loop_count,
                                 num_iters=3, 
-                                expected_change_ps_cmd=2, # different desired_num_nodes Destroy then Update
+                                expected_change_ps_cmd=2, # different desired_num_nodes Destroy Update
+                                expected_change_onn=1, # Destroy is inline with the Update
                                 expected_status='QUEUED')
     assert orgAccountObj.num_onn == 3
-
-    assert PsCmdResult.objects.count() == 7 # SetUp - Refresh - Update - SetUp - Refresh - Destroy - Update
+    assert PsCmdResult.objects.count() == 7 # SetUp - Refresh - Update - SetUp - Destroy - Update - Update
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -484,6 +487,7 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     org_account_id = get_test_org().id
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
+    assert(clusterObj.is_deployed == False)
     assert(orgAccountObj.version == clusterObj.cur_version) # ensure initialization is correct 
     initial_version = orgAccountObj.version
     new_version = initial_version
@@ -524,7 +528,9 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
                                         url_args=[org_account_id],
                                         data=form_data,
                                         loop_count=0,
-                                        num_iters=3)
+                                        num_iters=3,
+                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
+                                        )
 
     # assert the form was successful
     # refresh the OrgAccount object
@@ -542,7 +548,7 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     assert orgAccountObj.destroy_when_no_nodes == True
 
 
-    assert PsCmdResult.objects.count() == 2 # SetUp - Refresh 
+    assert PsCmdResult.objects.count() == 2 # SetUp - Update (min_node_cap is 1)
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -563,11 +569,11 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
                                 access_token=None,
                                 data=form_data,
                                 loop_count=loop_count,
-                                num_iters=3, #because we insert a destroy, refresh
-                                expected_change_ps_cmd=1,
+                                num_iters=3, 
+                                expected_change_ps_cmd=1, # Update (to 3)
                                 expected_status='QUEUED')
 
-    assert PsCmdResult.objects.count() == 3 # SetUp - Refresh - Update
+    assert PsCmdResult.objects.count() == 3 # SetUp - Update (to 1) - Update (to 3)
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -593,7 +599,9 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
                                         url_args=[org_account_id],
                                         data=form_data,
                                         loop_count=loop_count,
-                                        num_iters=3) 
+                                        num_iters=3,
+                                        expected_change_ps_cmd=2 # SetUp - Refresh
+                                        ) 
 
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert(orgAccountObj.is_public == new_is_public) 
@@ -609,7 +617,7 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     assert orgAccountObj.destroy_when_no_nodes == True
 
 
-    assert PsCmdResult.objects.count() == 5 # SetUp - Refresh - Update - SetUp - Refresh
+    assert PsCmdResult.objects.count() == 5 # SetUp - Refresh - Destroy - Update (to 3) - SetUp - Refresh 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -642,7 +650,8 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     assert orgAccountObj.num_onn == 2
 
     assert orgAccountObj.desired_num_nodes == 3 # no change
-    assert PsCmdResult.objects.count() == 5 # NO CHANGE - SetUp - Refresh - Update - SetUp - Refresh - Destroy - Update
+    assert PsCmdResult.objects.count() == 5
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
@@ -669,12 +678,13 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
                                 data=form_data,
                                 loop_count=loop_count,
                                 num_iters=3, 
-                                expected_change_ps_cmd=2, # different desired_num_nodes Destroy then Update
-                                expected_status='QUEUED')
+                                expected_change_ps_cmd=2, # different Destroy Update
+                                expected_status='QUEUED',
+                                expected_change_onn=1) # Destroy is inline so only 1
     assert orgAccountObj.num_onn == 3
-
-    assert PsCmdResult.objects.count() == 7 # SetUp - Refresh - Update - SetUp - Refresh - Destroy - Update
+    assert PsCmdResult.objects.count() == 7 # + Destroy Update (new desired_num_nodes)
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
@@ -689,3 +699,5 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     assert 'Destroy' in psCmdResultObjs[5].ps_cmd_summary_label
     logger.info(f"[6]:{psCmdResultObjs[6].ps_cmd_summary_label}")
     assert 'Update' in psCmdResultObjs[6].ps_cmd_summary_label
+
+    assert orgAccountObj.desired_num_nodes == 4    

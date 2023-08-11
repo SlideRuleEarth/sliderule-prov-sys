@@ -14,7 +14,7 @@ from django.urls import reverse
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,init_mock_ps_server
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
-from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn
+from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
 from time import sleep
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -343,9 +343,6 @@ def test_org_ONN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert(json_data['msg']!='')   
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
-    
-    
-
 
     url_ttl = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
@@ -605,38 +602,48 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                     assert(onn.expiration >= prev.expiration)
         prev = onn 
 
-def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_onn_id):
-    logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_onn_id: {new_onn_id}")
+def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_onn_id):
+    logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
 
     orgAccountObj = get_test_org()
     orgAccountObj.desired_num_nodes=1
     orgAccountObj.is_public = True
     orgAccountObj.version = 'v2'
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    orgAccountObj.desired_num_nodes = sum_of_all_users_dnn # quiencent state
     orgAccountObj.save()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = is_deployed
     clusterObj.cur_version = orgAccountObj.version+'a' if version_changes else orgAccountObj.version
     clusterObj.is_public = not orgAccountObj.is_public if is_public_changes else orgAccountObj.is_public
     clusterObj.save()
-    new_desired_num_nodes = orgAccountObj.desired_num_nodes
+
+    expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) 
+    onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=orgAccountObj.desired_num_nodes,expiration=expire_date)
+    logger.info(f"created BASE onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
+    clusterObj.cnnro_ids = []
+    clusterObj.cnnro_ids.append(str(onn.id))
+    clusterObj.save() # same as orgAccount BASE
+
     expire_date = datetime.now(timezone.utc)+timedelta(hours=1)
-    onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
-    clusterObj.cnnro_id = onn.id
-    clusterObj.save()
-    if new_onn_id:
+    onn = None
+    if new_highest_onn_id:
+        # this simulates a new call to the api
+        onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+        new_desired_num_nodes = onnTop.desired_num_nodes+1 # new highest
         expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) # before the one above!
         onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
-        clusterObj.save()
-
-    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj,onn)
+        logger.info(f"created new onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn)
     if not is_deployed:
         assert not need_to_destroy
     else:
-        if (is_public_changes or version_changes) and new_onn_id:
-            logger.info(f"** is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_onn_id: {new_onn_id}")
-            logger.info(f"** cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
-            logger.info(f"**     org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
-            logger.info(f"** onnTop.id:{onn.id} != clusterObj.cnnro_id:{clusterObj.cnnro_id} ?")
+        logger.info(f" ** is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
+        if (is_public_changes or version_changes) and new_highest_onn_id:
+            logger.info(f" ** cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
+            logger.info(f" ** org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
+            logger.info(f" ** cnnro_ids:{cnnro_ids} not same as clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
             assert need_to_destroy    
         else:
             assert not need_to_destroy
@@ -649,7 +656,7 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
     '''
         This procedure will test logic for forced Destroy if all combinations of these are met
     Changes to:
-    | is_deployed | is_public | version |  new_onn_id  | Need to destroy?
+    | is_deployed | is_public | version |  new_highest_onn_id  | Need to destroy?
     |-------------|-----------|---------|--------------|
     | 0           | 0         | 0       | 0            |
     | 0           | 0         | 0       | 1            |
@@ -674,8 +681,8 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
     for is_deployed in variables:
         for is_public in variables:
             for version in variables:
-                for new_onn_id in variables:
-                    just_ONE_CASE(is_deployed, is_public, version, new_onn_id)
+                for new_highest_onn_id in variables:
+                    just_ONE_CASE(is_deployed, is_public, version, new_highest_onn_id)
 
 
 
