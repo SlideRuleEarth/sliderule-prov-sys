@@ -696,8 +696,34 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
         This procedure will test logic for sum_of_highest_nodes_for_each_user
     '''
     caplog.set_level(logging.DEBUG)
-    
     orgAccountObj = get_test_org()
+
+
+#   First configure the org
+    url = reverse('org-token-obtain-pair')
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 200)   
+    json_data = json.loads(response.content)
+    logger.info(f"rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0')   
+
+    headers = {
+        'Authorization': f"Bearer {json_data['access']}",
+        'Accept': 'application/json'  # Specify JSON response
+    }
+
+    url = reverse('org-cfg',args=[get_test_org().name,0,orgAccountObj.admin_max_node_cap])
+    response = client.put(url,headers=headers)
+    logger.info(f"status:{response.status_code} response:{response.json()}")
+    orgAccountObj.refresh_from_db()
+    assert(response.status_code == 200)   
+    assert(orgAccountObj.min_node_cap == 0)
+    assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
+
+
+    # now verify different users can make different requests
     assert verify_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_OWNER_USER(),
@@ -839,6 +865,6 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     for node in OrgNumNode.objects.filter(id__in=uuid_objects):
         logger.info(f"cnnro_ids - {node.user.username} {node.desired_num_nodes} {node.expiration}")
 
-    assert(sum_of_all_users_dnn==10)
+    assert(sum_of_all_users_dnn==9)
     assert(len(cnnro_ids)==3)
 
