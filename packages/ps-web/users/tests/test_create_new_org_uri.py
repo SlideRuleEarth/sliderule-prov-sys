@@ -5,7 +5,7 @@ import os
 import pathlib
 from importlib import import_module
 from decimal import *
-from users.tests.utilities_for_unit_tests import owner_test_user,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD
+from users.tests.utilities_for_unit_tests import OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,create_test_user
 from users.forms import OrgAccountForm
 from users.views import add_org_cluster_orgcost
 from django.contrib import messages
@@ -48,15 +48,10 @@ def teardown_module(tasks_module):
 @pytest.mark.ps_server_stubbed
 def test_org_form_create_uri(tasks_module):
     '''
-        This procedure will test 
+        This procedure will test form for creating a new org
     '''
 
-    owner = get_user_model().objects.create_user(
-                            username=OWNER_USER+'test_create',
-                            first_name='Owner_test_create',
-                            last_name='TestUser_test_create',
-                            email=OWNER_EMAIL,
-                            password=OWNER_PASSWORD)
+    owner = create_test_user(first_name='Owner_test_create', last_name="User_test_create", username=OWNER_USER+'test_create', email=OWNER_EMAIL, password=OWNER_PASSWORD)
     app = Application.objects.create(client_id='1492',user=owner,client_secret='1492',name='test_app')
 
     form = OrgAccountForm(data={

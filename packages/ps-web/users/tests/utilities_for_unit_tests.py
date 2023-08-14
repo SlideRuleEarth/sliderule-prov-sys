@@ -70,22 +70,37 @@ def mock_django_email_backend(mocker):
 def the_TEST_USER():
     return get_user_model().objects.get(username=TEST_USER)
 
+def the_OWNER_USER():
+    return get_user_model().objects.get(username=OWNER_USER)
+
+def the_DEV_TEST_USER():
+    return get_user_model().objects.get(username=DEV_TEST_USER)
+
+def create_test_user(first_name,last_name, email, username, password, verify=None):
+    new_user = get_user_model().objects.create_user(username=username,
+                                                    first_name=first_name,
+                                                    last_name=last_name,
+                                                    email=email,
+                                                    password=password)
+    verify = verify or False
+    if verify:
+        assert verify_user(new_user)
+    return new_user
+
+def create_active_membership(the_org,the_user):
+    m = Membership()
+    m.user = the_user
+    m.org = the_org
+    m.active = True
+    m.save()
+    logger.info(f"created active membership for user:{the_user.username} org:{the_org.name}")
+    return m
 
 def random_test_user():
-    return get_user_model().objects.create_user(
-                            username=TEST_USER+random_choice(),
-                            first_name='testname',
-                            last_name=random_choice(),
-                            email=TEST_EMAIL,
-                            password=TEST_PASSWORD)
+    return create_test_user(first_name="Test", last_name="User", username=TEST_USER+random_choice(), email=TEST_EMAIL, password=TEST_PASSWORD)
 
-def owner_test_user():
-    return get_user_model().objects.create_user(
-                            username=OWNER_USER,
-                            first_name='Owner',
-                            last_name='TestUser',
-                            email=OWNER_EMAIL,
-                            password=OWNER_PASSWORD)
+def create_owner_user():
+    return create_test_user(first_name="Owner", last_name="TestUser", username=OWNER_USER, email=OWNER_EMAIL, password=OWNER_PASSWORD) 
 
 def verify_user(the_user):
     logger.info(f"verify username:{the_user.username} email:{the_user.email}")
@@ -132,6 +147,29 @@ def verify_user(the_user):
 
     return the_user
 
+def verify_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num_nodes,ttl_minutes,expected_change_ps_cmd):
+    '''
+    This routine tests the org-num-nodes-ttl api with a testuser with assumed password TEST_PASSWORD
+    '''
+    logged_in = client.login(username=user.username, password=password)
+    assert logged_in
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':user.username,'password':password, 'org_name':orgAccountObj.name})
+    assert(response.status_code == 200)   
+    json_data = json.loads(response.content)
+    access_token = json_data['access']   
+    loop_count = process_onn_api(client,
+                                orgAccountObj,
+                                datetime.now(timezone.utc),
+                                view_name='post-org-num-nodes-ttl',
+                                url_args=[orgAccountObj.name,desired_num_nodes,ttl_minutes],
+                                access_token=access_token,
+                                data=None,
+                                loop_count=0,
+                                num_iters=3,
+                                expected_change_ps_cmd=expected_change_ps_cmd,
+                                expected_status='QUEUED')
+    client.logout()
+    return True
 
 def is_celery_working():
     result = app.control.broadcast('ping', reply=True, limit=1)
@@ -238,7 +276,7 @@ def init_test_environ(  org_name=None,
     
     this_logger = the_logger or logger
     org_name = org_name or 'test_org'
-    org_owner = org_owner or verify_user(owner_test_user())
+    org_owner = org_owner or verify_user(create_owner_user())
     this_logger.info(f"--------- org:{org_name} owner:{org_owner} ---------")
     monthly_allowance = monthly_allowance or 1000
     balance = balance or 2000
