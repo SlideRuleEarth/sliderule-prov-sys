@@ -184,7 +184,6 @@ class Cluster(models.Model):
                                       editable=True)
 
     version_query_log = models.TextField(editable=False, default="")
-    cqro_id = models.UUIDField(null=True, blank=True) # cmd Q result obj id
     cnnro_ids = JSONField(null=True, blank=True)  # This will store a list of UUIDs
     org_num_node_req_pending = models.BooleanField(default=False)
     cur_nodes = models.IntegerField(default=0,editable=False)  # actual value seen from boto3
