@@ -107,6 +107,7 @@ def simple_test_onn_api(client,
     assert(response.status_code == expected_status) 
     return json_data
 
+#@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_apis_simple_case(caplog,client,verified_TEST_USER,mock_email_backend,initialize_test_environ):
@@ -121,12 +122,14 @@ def test_apis_simple_case(caplog,client,verified_TEST_USER,mock_email_backend,in
     access_token = json_data['access']   
 
     # validate a success first!
-    simple_test_onn_api(client,
-                        orgAccountObj=orgAccountObj,
-                        view_name='post-org-num-nodes-ttl',
-                        url_args=[orgAccountObj.name,3,15],
-                        access_token=access_token,
-                        expected_status=200)
+    json_data = simple_test_onn_api(client,
+                                    orgAccountObj=orgAccountObj,
+                                    view_name='post-org-num-nodes-ttl',
+                                    url_args=[orgAccountObj.name,3,15],
+                                    access_token=access_token,
+                                    expected_status=200)
+    assert('created and queued capacity request' in json_data['msg'])
+
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
@@ -163,21 +166,21 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
                                     expected_status=403)
     assert(json_data['messages'][0]['message'] == 'Token is invalid or expired') 
 
-    # test invalid num_nodes
+    # test invalid num_nodes gets clamped
     json_data = simple_test_onn_api(client,
                                     orgAccountObj=orgAccountObj,
                                     view_name='post-org-num-nodes-ttl',
                                     url_args=[orgAccountObj.name,300,15],
                                     access_token=access_token,
-                                    expected_status=400)
+                                    expected_status=200)
 
-    # test invalid num_nodes
+    # test invalid num_nodes gets clamped
     json_data = simple_test_onn_api(client,
                                     orgAccountObj=orgAccountObj,
                                     view_name='put-org-num-nodes',
                                     url_args=[orgAccountObj.name,300],
                                     access_token=access_token,
-                                    expected_status=400)
+                                    expected_status=200)
 
     # test 0 num_nodes (with org accepting 0)
     json_data = simple_test_onn_api(client,
@@ -187,7 +190,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
                                     access_token=access_token,
                                     expected_status=200)
 
-    # test num_nodes less than min 
+    # test num_nodes less than min gets clamped
     orgAccountObj.min_node_cap = 2
     orgAccountObj.save()
     json_data = simple_test_onn_api(client,
@@ -195,7 +198,20 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
                                     view_name='put-org-num-nodes',
                                     url_args=[orgAccountObj.name,1],
                                     access_token=access_token,
-                                    expected_status=400)
+                                    expected_status=200)
+    assert (f"Clamped desired_num_nodes to min_node_cap:{orgAccountObj.min_node_cap} from 1" in json_data['msg'])
+    assert((f'Deploying {orgAccountObj.name} cluster' in json_data['msg']) or (f'Updating {orgAccountObj.name} cluster' in json_data['msg']))
+
+    # test num_nodes greater than max gets clamped
+    orgAccountObj.save()
+    json_data = simple_test_onn_api(client,
+                                    orgAccountObj=orgAccountObj,
+                                    view_name='put-org-num-nodes',
+                                    url_args=[orgAccountObj.name,15],
+                                    access_token=access_token,
+                                    expected_status=200)
+    assert (f"Clamped desired_num_nodes to max_node_cap:{orgAccountObj.max_node_cap} from 15" in json_data['msg'])
+    assert((f'Updating {orgAccountObj.name} cluster' in json_data['msg']) or (f'Deploying {orgAccountObj.name} cluster' in json_data['msg']))
 
 
 #@pytest.mark.dev
@@ -217,7 +233,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         json_data = json.loads(response.content)
         access_token = json_data['access'] 
         current_fake_tm = datetime.now(timezone.utc)  
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -229,7 +245,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_change_ps_cmd=0,
                                     expected_status='QUEUED')
 
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -242,7 +258,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_status='REDUNDANT')
         assert(loop_count==6)
         current_fake_tm = datetime.now(timezone.utc)+timedelta(seconds=3) # 6 iters above is 3 seconds
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='put-org-num-nodes',
@@ -254,7 +270,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_change_ps_cmd=0, # because no iters
                                     expected_status='QUEUED')
 
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -266,7 +282,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_change_ps_cmd=0, # because highest num nodes is still 3
                                     expected_status='QUEUED')
 
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -278,7 +294,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_change_ps_cmd=0,
                                     expected_status='QUEUED')
 
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -290,7 +306,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_change_ps_cmd=0,
                                     expected_status='QUEUED')
 
-        loop_count = process_onn_api(client,
+        loop_count,response = process_onn_api(client,
                                     orgAccountObj,
                                     current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -331,7 +347,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         loop_count=0
         current_fake_tm = datetime.now(timezone.utc)  
 
-        loop_count = process_onn_api(client=client,
+        loop_count,response = process_onn_api(client=client,
                                     orgAccountObj=orgAccountObj,
                                     new_time=current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -346,7 +362,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         #
         # This tests when multiple calls to api are processed between a loop_iter
         #
-        loop_count = process_onn_api(client=client,
+        loop_count,response = process_onn_api(client=client,
                                     orgAccountObj=orgAccountObj,
                                     new_time=current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -358,7 +374,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_change_ps_cmd=0,
                                     expected_status='QUEUED')
 
-        loop_count = process_onn_api(client=client,
+        loop_count,response = process_onn_api(client=client,
                                     orgAccountObj=orgAccountObj,
                                     new_time=current_fake_tm,
                                     view_name='post-org-num-nodes-ttl',
@@ -535,7 +551,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         loop_count=0
 #         current_fake_tm = datetime.now(timezone.utc)  
 
-#         loop_count = process_onn_api(client,
+#         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
 #                                     current_fake_tm,
 #                                     'post-org-num-nodes-ttl',
@@ -551,7 +567,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         #
 #         # This tests when multiple calls to api are processed between a loop_iter
 #         #
-#         loop_count = process_onn_api(client,
+#         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
 #                                     current_fake_tm,
 #                                     'post-org-num-nodes-ttl',
@@ -562,7 +578,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #                                     expected_change_ps_cmd=0,
 #                                     expected_status='QUEUED')
 
-#         loop_count = process_onn_api(client,
+#         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
 #                                     current_fake_tm,
 #                                     'post-org-num-nodes-ttl',

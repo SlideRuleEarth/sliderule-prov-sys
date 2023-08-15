@@ -2,6 +2,7 @@ from django.db import models
 import uuid
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import JSONField
 from phonenumber_field.modelfields import PhoneNumberField
 import django.utils.timezone
 from datetime import datetime
@@ -183,8 +184,7 @@ class Cluster(models.Model):
                                       editable=True)
 
     version_query_log = models.TextField(editable=False, default="")
-    cqro_id = models.UUIDField(null=True, blank=True) # cmd Q result obj id
-    cnnro_id = models.UUIDField(null=True, blank=True) # current num nodes request obj id
+    cnnro_ids = JSONField(null=True, blank=True)  # This will store a list of UUIDs
     org_num_node_req_pending = models.BooleanField(default=False)
     cur_nodes = models.IntegerField(default=0,editable=False)  # actual value seen from boto3
     cur_min_node_cap = models.IntegerField( editable=True,   # this field is actual cluster state

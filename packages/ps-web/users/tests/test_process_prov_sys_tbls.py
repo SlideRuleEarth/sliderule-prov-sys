@@ -10,15 +10,17 @@ import pprint
 from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
-from django.urls import reverse
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,init_mock_ps_server
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
-from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn
+from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
 from time import sleep
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from allauth.account.decorators import verified_email_required
+from django.contrib.auth.models import User
+from django.urls import reverse
+
 
 # Import the fixtures
 from users.tests.utilities_for_unit_tests import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME
@@ -343,9 +345,6 @@ def test_org_ONN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert(json_data['msg']!='')   
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
-    
-    
-
 
     url_ttl = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
@@ -508,7 +507,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -520,7 +519,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -532,7 +531,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -544,7 +543,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
     
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -556,7 +555,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -568,7 +567,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -580,7 +579,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -605,38 +604,48 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                     assert(onn.expiration >= prev.expiration)
         prev = onn 
 
-def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_onn_id):
-    logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_onn_id: {new_onn_id}")
+def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_onn_id):
+    logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
 
     orgAccountObj = get_test_org()
     orgAccountObj.desired_num_nodes=1
     orgAccountObj.is_public = True
     orgAccountObj.version = 'v2'
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    orgAccountObj.desired_num_nodes = sum_of_all_users_dnn # quiencent state
     orgAccountObj.save()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = is_deployed
     clusterObj.cur_version = orgAccountObj.version+'a' if version_changes else orgAccountObj.version
     clusterObj.is_public = not orgAccountObj.is_public if is_public_changes else orgAccountObj.is_public
     clusterObj.save()
-    new_desired_num_nodes = orgAccountObj.desired_num_nodes
+
+    expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) 
+    onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=orgAccountObj.desired_num_nodes,expiration=expire_date)
+    logger.info(f"created BASE onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
+    clusterObj.cnnro_ids = []
+    clusterObj.cnnro_ids.append(str(onn.id))
+    clusterObj.save() # same as orgAccount BASE
+
     expire_date = datetime.now(timezone.utc)+timedelta(hours=1)
-    onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
-    clusterObj.cnnro_id = onn.id
-    clusterObj.save()
-    if new_onn_id:
+    onn = None
+    if new_highest_onn_id:
+        # this simulates a new call to the api
+        onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+        new_desired_num_nodes = onnTop.desired_num_nodes+1 # new highest
         expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) # before the one above!
         onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
-        clusterObj.save()
-
-    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj,onn)
+        logger.info(f"created new onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn)
     if not is_deployed:
         assert not need_to_destroy
     else:
-        if (is_public_changes or version_changes) and new_onn_id:
-            logger.info(f"** is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_onn_id: {new_onn_id}")
-            logger.info(f"** cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
-            logger.info(f"**     org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
-            logger.info(f"** onnTop.id:{onn.id} != clusterObj.cnnro_id:{clusterObj.cnnro_id} ?")
+        logger.info(f" ** is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
+        if (is_public_changes or version_changes) and new_highest_onn_id:
+            logger.info(f" ** cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
+            logger.info(f" ** org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
+            logger.info(f" ** cnnro_ids:{cnnro_ids} not same as clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
             assert need_to_destroy    
         else:
             assert not need_to_destroy
@@ -649,7 +658,7 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
     '''
         This procedure will test logic for forced Destroy if all combinations of these are met
     Changes to:
-    | is_deployed | is_public | version |  new_onn_id  | Need to destroy?
+    | is_deployed | is_public | version |  new_highest_onn_id  | Need to destroy?
     |-------------|-----------|---------|--------------|
     | 0           | 0         | 0       | 0            |
     | 0           | 0         | 0       | 1            |
@@ -674,8 +683,188 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
     for is_deployed in variables:
         for is_public in variables:
             for version in variables:
-                for new_onn_id in variables:
-                    just_ONE_CASE(is_deployed, is_public, version, new_onn_id)
+                for new_highest_onn_id in variables:
+                    just_ONE_CASE(is_deployed, is_public, version, new_highest_onn_id)
 
 
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
+    '''
+        This procedure will test logic for sum_of_highest_nodes_for_each_user
+    '''
+    caplog.set_level(logging.DEBUG)
+    orgAccountObj = get_test_org()
+
+
+#   First configure the org
+    url = reverse('org-token-obtain-pair')
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 200)   
+    json_data = json.loads(response.content)
+    logger.info(f"rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0')   
+
+    headers = {
+        'Authorization': f"Bearer {json_data['access']}",
+        'Accept': 'application/json'  # Specify JSON response
+    }
+
+    url = reverse('org-cfg',args=[get_test_org().name,0,orgAccountObj.admin_max_node_cap])
+    response = client.put(url,headers=headers)
+    logger.info(f"status:{response.status_code} response:{response.json()}")
+    orgAccountObj.refresh_from_db()
+    assert(response.status_code == 200)   
+    assert(orgAccountObj.min_node_cap == 0)
+    assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
+
+
+    # now verify different users can make different requests
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_OWNER_USER(),
+                                    password=OWNER_PASSWORD,
+                                    desired_num_nodes=2,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+    m = create_active_membership(orgAccountObj,the_DEV_TEST_USER())
+    m.refresh_from_db()
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_DEV_TEST_USER(),
+                                    password=DEV_TEST_PASSWORD,
+                                    desired_num_nodes=3,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+    
+    rtu = random_test_user()
+    m = create_active_membership(orgAccountObj,rtu)
+    m.refresh_from_db()
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=rtu,
+                                    password=TEST_PASSWORD,
+                                    desired_num_nodes=1,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==6)
+    assert(len(cnnro_ids)==3)
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_DEV_TEST_USER(),
+                                    password=DEV_TEST_PASSWORD,
+                                    desired_num_nodes=2, # not highest
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=0)  # no change
+
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==6) # still 6
+    assert(len(cnnro_ids)==3)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_DEV_TEST_USER(),
+                                    password=DEV_TEST_PASSWORD,
+                                    desired_num_nodes=2, # same as before
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=0) # no change
+
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==6) # still 6
+    assert(len(cnnro_ids)==3)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_OWNER_USER(),
+                                    password=OWNER_PASSWORD,
+                                    desired_num_nodes=1,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=0) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==6) # still 6
+    assert(len(cnnro_ids)==3)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=rtu,
+                                    password=TEST_PASSWORD,
+                                    desired_num_nodes=1,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=0) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==6) # still 6
+    for node in OrgNumNode.objects.all():
+        logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
+
+    uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
+    for node in OrgNumNode.objects.filter(id__in=uuid_objects):
+        logger.info(f"cnnro_ids - {node.user.username} {node.desired_num_nodes} {node.expiration}")
+
+    assert(len(uuid_objects)==4)
+    assert(len(cnnro_ids)==4)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=rtu,
+                                    password=TEST_PASSWORD,
+                                    desired_num_nodes=2,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==7)
+    assert(len(cnnro_ids)==3)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_OWNER_USER(),
+                                    password=OWNER_PASSWORD,
+                                    desired_num_nodes=3,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    assert(sum_of_all_users_dnn==8)
+    assert(len(cnnro_ids)==3)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_DEV_TEST_USER(),
+                                    password=DEV_TEST_PASSWORD,
+                                    desired_num_nodes=3,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=0) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+
+    for node in OrgNumNode.objects.all():
+        logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
+
+    uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
+    for node in OrgNumNode.objects.filter(id__in=uuid_objects):
+        logger.info(f"cnnro_ids - {node.user.username} {node.desired_num_nodes} {node.expiration}")
+
+    assert(sum_of_all_users_dnn==8)
+    assert(len(cnnro_ids)==4)
+
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_DEV_TEST_USER(),
+                                    password=DEV_TEST_PASSWORD,
+                                    desired_num_nodes=4,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+
+    for node in OrgNumNode.objects.all():
+        logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
+
+    uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
+    for node in OrgNumNode.objects.filter(id__in=uuid_objects):
+        logger.info(f"cnnro_ids - {node.user.username} {node.desired_num_nodes} {node.expiration}")
+
+    assert(sum_of_all_users_dnn==9)
+    assert(len(cnnro_ids)==3)
 

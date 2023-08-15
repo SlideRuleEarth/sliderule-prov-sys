@@ -299,7 +299,7 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,cr
 def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,create_TEST_USER,initialize_test_environ):
     '''
         This procedure will test the 'process_org_num_node_table' routine
-        for the case when the ONN table entry processed changes the version
+        for the case when the ONN table is not empty and  the is_public flag changes
         and generates a Destroy cmd
     '''
 
@@ -308,7 +308,7 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,
     clusterObj.is_deployed = True
     clusterObj.cur_version = 'v3'
     clusterObj.is_public = True
-    clusterObj.save()
+    clusterObj.provision_env_ready = True
     orgAccountObj.destroy_when_no_nodes = False
     orgAccountObj.min_node_cap = 2
     orgAccountObj.desired_num_nodes = 2
@@ -317,6 +317,10 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,
     orgAccountObj.save()
     expire_date = datetime.now(timezone.utc)+timedelta(hours=1)
     OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=orgAccountObj.desired_num_nodes+1,expiration=expire_date)
+    clusterObj.cnnro_ids = []
+    clusterObj.cnnro_ids.append(str(OrgNumNode.objects.first().id))
+    logger.info(f"clusterObj.cnnro_ids:{clusterObj.cnnro_ids}")
+    clusterObj.save()
 
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 2
@@ -381,7 +385,7 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TES
     assert OrgNumNode.objects.count() == 1 # until it expires
     onn = OrgNumNode.objects.first()
     clusterObj.refresh_from_db()
-    assert onn.id == clusterObj.cnnro_id
+    assert str(onn.id) in clusterObj.cnnro_ids
 
 
 
@@ -566,7 +570,7 @@ def verify_after_process_org_num_node_table_after_exception(orgAccountObj,ONN_IS
     logger.info(f"orgAccountObj.max_ddt:{orgAccountObj.max_ddt}")
     logger.info(f"timedelta(hours=MIN_HRS_TO_LIVE_TO_START):{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
     assert OrgNumNode.objects.count() == 0 # on exception we remove the entry
-    assert clusterObj.cnnro_id == None # cleaned up on exception
+    assert clusterObj.cnnro_ids == None # cleaned up on exception
     psCmdResultObj = PsCmdResult.objects.first()
     called_process_Update_cmd = True
     if ONN_IS_EMPTY:

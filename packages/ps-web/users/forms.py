@@ -58,19 +58,20 @@ class UserProfileForm(forms.ModelForm):
         fields = ['username', 'first_name',
                   'last_name', 'email']
         field_classes = {'username': UsernameField}
+        required = ['username']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-def desired_num_nodes_validator(min_nodes,max_nodes):
-    def _desired_num_nodes_validator(value):
-        if min_nodes == 0:
-            min = 1
-        else:
-            min = min_nodes
-        if value < min or value > max_nodes:
-            raise ValidationError(f'desired_num_nodes must be between {min} and {max_nodes}')
-    return _desired_num_nodes_validator
+# def desired_num_nodes_validator(min_nodes,max_nodes):
+#     def _desired_num_nodes_validator(value):
+#         if min_nodes == 0:
+#             min = 1
+#         else:
+#             min = min_nodes
+#         if value < min or value > max_nodes:
+#             raise ValidationError(f'desired_num_nodes must be between {min} and {max_nodes}')
+#     return _desired_num_nodes_validator
 
 class OrgNumNodeForm(forms.ModelForm):
     ttl_minutes = forms.IntegerField(required=True, min_value=0, label='TTL minutes')
@@ -83,7 +84,7 @@ class OrgNumNodeForm(forms.ModelForm):
         self.min_nodes = kwargs.pop('min_nodes', None)
         self.max_nodes = kwargs.pop('max_nodes', None)
         super().__init__(*args, **kwargs)
-        self.fields['desired_num_nodes'].validators.append(desired_num_nodes_validator(self.min_nodes, self.max_nodes))
+        # self.fields['desired_num_nodes'].validators.append(desired_num_nodes_validator(self.min_nodes, self.max_nodes))
         if self.min_nodes == 0:
             self.fields['desired_num_nodes'].initial = 1
         else:
@@ -92,15 +93,18 @@ class OrgNumNodeForm(forms.ModelForm):
 
     def clean_ttl_minutes(self):
         ttl_minutes = self.cleaned_data['ttl_minutes']
-        if ttl_minutes < MIN_TTL or ttl_minutes > MAX_TTL:
-            max_ttl_hrs = MAX_TTL / 60
-            raise forms.ValidationError(f"TTL mins must be greater than {MIN_TTL} and less than {MAX_TTL} (i.e. {max_ttl_hrs} hrs)")       
+        if ttl_minutes < MIN_TTL:
+            ttl_minutes = MIN_TTL
+        if ttl_minutes > MAX_TTL:
+            ttl_minutes = MAX_TTL
         return ttl_minutes
 
     def clean_desired_num_nodes(self):
         desired_num_nodes = self.cleaned_data['desired_num_nodes']
-        if desired_num_nodes < self.min_nodes or desired_num_nodes > self.max_nodes:
-            raise forms.ValidationError(f"desired num nodes must be >= {self.min_nodes} and <= {self.max_nodes}")       
+        if desired_num_nodes < self.min_nodes:
+                desired_num_nodes = self.min_nodes
+        if desired_num_nodes > self.max_nodes:
+                desired_num_nodes = self.max_nodes
         return desired_num_nodes
 
 class MembershipForm(forms.Form):

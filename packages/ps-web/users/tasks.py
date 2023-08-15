@@ -2,6 +2,7 @@ from celery import shared_task,Task, app
 from users.models import PsCmdResult,OwnerPSCmd
 from django_celery_results.models import TaskResult
 from users.models import OrgAccount,PsCmdResult, Cluster, GranChoice, OrgAccount, OrgCost, User, OrgNumNode, PsCmdResult, Membership
+from django.core.exceptions import ValidationError
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import grpc
 import pytz
@@ -19,10 +20,12 @@ from ansi2html import Ansi2HTMLConverter
 import subprocess
 from users.ps_errors import *
 import calendar
+from django.db.models import Max, Sum
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
 from decimal import *
 from celery.schedules import crontab
+from uuid import UUID
 from time import sleep
 from users.global_constants import *
 import redis
@@ -104,6 +107,29 @@ def format_num_nodes_tbl(org):
 def sort_ONN_by_nn_exp(orgAccountObj):
     return OrgNumNode.objects.filter(org=orgAccountObj).order_by('-desired_num_nodes','expiration')
 
+def sum_of_highest_nodes_for_each_user():
+    '''
+        This routine is used to determine the number of nodes to use for the cluster.
+        First, fetch the maximum desired_num_nodes for each user using annotate.
+        Then, filter the OrgNumNode table again to get the entries that match these maximum values for each user.
+        Finally, calculate the total and gather the list of IDs.
+    
+    '''
+    # Get the highest desired_num_nodes for each user
+    highest_nodes_per_user = OrgNumNode.objects.values('user').annotate(max_nodes=Max('desired_num_nodes'))
+
+    # Filter the OrgNumNode table to get the entries that match these maximum values for each user
+    ids_list = []
+    for entry in highest_nodes_per_user:
+        ids = OrgNumNode.objects.filter(user_id=entry['user'], desired_num_nodes=entry['max_nodes']).values_list('id', flat=True)
+        string_ids = [str(id) for id in ids]  # Convert each UUID to string
+        ids_list.extend(string_ids)
+
+    # Sum up the highest nodes for all users
+    total = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
+
+    return total, ids_list
+
 def cull_expired_entries(org,tm):
     LOG.debug(f"started with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
     for onn in OrgNumNode.objects.filter(org=org).order_by('expiration'):
@@ -117,7 +143,7 @@ def cull_expired_entries(org,tm):
     LOG.debug(f"ended with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
 
 
-def need_destroy_for_changed_version_or_is_public(orgAccountObj,onnTop):
+def need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     # LOG.debug(f"cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
     # LOG.debug(f"    org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
@@ -127,21 +153,30 @@ def need_destroy_for_changed_version_or_is_public(orgAccountObj,onnTop):
         #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
         if changed_version or changed_is_public:
             #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-            #LOG.debug(f"onnTop.id:{onnTop.id} != clusterObj.cnnro_id:{clusterObj.cnnro_id} ?")
-            if onnTop.id != clusterObj.cnnro_id: # we (changed version or is_public) and we are processing a new onnTop item (new deployment request)
+            #LOG.debug(f"onnTop.id:{onnTop.id} != clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
+            if sum_of_all_users_dnn != orgAccountObj.desired_num_nodes: # we (changed version or is_public) and we are processing a new set of top items (new deployment request)
+                LOG.info(f"sum_of_all_users_dnn:{sum_of_all_users_dnn} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes} need_destroy_for_changed_version_or_is_public: True")
                 return True
     return False
 
-def clean_up_ONN_cnnro_id(orgAccountObj,suspend_provisioning):
+def clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    if clusterObj.cnnro_id is not None:
-        onn = OrgNumNode.objects.get(id=clusterObj.cnnro_id)
-        deleted = onn.id
-        onn.delete()
+    if clusterObj.cnnro_ids is not None:
+
+        # Get the list of string UUIDs from the JSONField
+        string_uuids = clusterObj.cnnro_ids
+
+        # Convert each string UUID to a UUID object
+        uuids_list = [UUID(id) for id in string_uuids]
+
+        # Fetch the OrgNumNode instances
+        onns = OrgNumNode.objects.filter(id__in=uuids_list)
+        LOG.info(f"REMOVING OrgNumNode clusterObj.cnnro_ids: {onns}")
+        for onn in onns:
+            onn.delete()
         cnt = OrgNumNode.objects.filter(org=orgAccountObj).count()
-        LOG.info(f"REMOVING OrgNumNode clusterObj.cnnro_id == {deleted} cnt:{cnt}")
-        clusterObj.cnnro_id = None
-        clusterObj.save(update_fields=['cnnro_id'])
+        clusterObj.cnnro_ids = None
+        clusterObj.save(update_fields=['cnnro_ids'])
     if suspend_provisioning:
         orgAccountObj.provisioning_suspended = True
         orgAccountObj.save(update_fields=['provisioning_suspended'])
@@ -282,33 +317,34 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
             start_num_ps_cmds = orgAccountObj.num_ps_cmd
             if env_ready:
                 cull_expired_entries(orgAccountObj,datetime.now(timezone.utc))
+                sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
                 onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
                 expire_time = None
-                if onnTop is not None:
-                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,onnTop):
+                if sum_of_all_users_dnn > 0:
+                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn):
                         try:
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             LOG.info(f"TRIGGERED Destroy --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
                             process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
                         except Exception as e:
                             LOG.exception("ERROR processing Destroy when version or is_public changes in ONN: caught exception:")
-                            clean_up_ONN_cnnro_id(orgAccountObj,suspend_provisioning=True)
+                            clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=True)
                             LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                             sleep(COOLOFF_SECS)
                     else:
                         user = onnTop.user
                         expire_time = onnTop.expiration
-                        if onnTop.desired_num_nodes != orgAccountObj.desired_num_nodes: 
-                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': onnTop.desired_num_nodes, 'max_node_cap': orgAccountObj.max_node_cap,'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                        if sum_of_all_users_dnn != orgAccountObj.desired_num_nodes: 
+                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': sum_of_all_users_dnn , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
-                            clusterObj.cnnro_id = onnTop.id
-                            clusterObj.save(update_fields=['cnnro_id'])
-                            LOG.info(f"Using top entry sorted by num/exp_tm with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} onnTop.id:{onnTop.id} clusterObj.cnnro_id:{clusterObj.cnnro_id}")
+                            clusterObj.cnnro_ids = cnnro_ids
+                            clusterObj.save(update_fields=['cnnro_ids'])
+                            LOG.info(f"Using top entry sorted by num/exp_tm with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} onnTop.id:{onnTop.id} clusterObj.cnnro_ids:{clusterObj.cnnro_ids}")
                             try:
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                             except Exception as e:
                                 LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} Update {orgAccountObj.name} {user.username} {deploy_values} Exception:")
-                                clean_up_ONN_cnnro_id(orgAccountObj,suspend_provisioning=False)
+                                clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=False)
                                 LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
                             orgAccountObj.num_onn += 1
@@ -411,47 +447,52 @@ def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_own
     '''
     try:
         jstatus = ''
+        LOG.info(f"process_org_num_nodes_api({org_name},{user},{desired_num_nodes},{expire_time})")
+        if int(desired_num_nodes) < 0:
+            msg = f"desired_num_nodes:{desired_num_nodes} must be >= 0"
+            raise ValidationError(msg)
         orgAccountObj = OrgAccount.objects.get(name=org_name)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if (not clusterObj.is_deployed) and (not orgAccountObj.allow_deploy_by_token):
             msg = f"Org {orgAccountObj.name} is not configured to allow deploy by token"
             raise ClusterDeployAuthError(msg)
         if(not clusterObj.is_deployed):
-            msg = f"deploying {orgAccountObj.name} cluster"
+            msg = f"Deploying {orgAccountObj.name} cluster"
         else:
-            msg = f"updating {orgAccountObj.name} cluster"
+            msg = f"Updating {orgAccountObj.name} cluster"
         # check against 'users' limits. Admin limits are checked later
-        if (int(desired_num_nodes) >= orgAccountObj.min_node_cap):
-            if(int(desired_num_nodes) <= orgAccountObj.max_node_cap):
-                orgNumNode,redundant,msg = get_or_create_OrgNumNodes(user=user,
-                                                                    org=orgAccountObj,
-                                                                    desired_num_nodes=desired_num_nodes,
-                                                                    expire_date=expire_time)
-                if orgNumNode:
-                    if redundant:
-                        msg = f"using identical queued capacity request for {orgNumNode.org.name} from {orgNumNode.user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
-                        jstatus = 'REDUNDANT'
-                    else:
-                        msg = f"created and queued capacity request for {orgNumNode.org.name} from {user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
-                        jstatus = 'QUEUED'
-                    jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
-                    status = 200
-                else:
-                    emsg = f"FAILED to process request for {org_name} {user} {desired_num_nodes} {expire_time} - Server Error"
-                    jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
-                    status = 500
+        if (int(desired_num_nodes) < orgAccountObj.min_node_cap):
+            msg += f" Clamped desired_num_nodes to min_node_cap:{orgAccountObj.min_node_cap} from {desired_num_nodes}"
+            desired_num_nodes = orgAccountObj.min_node_cap
+        if(int(desired_num_nodes) > orgAccountObj.max_node_cap):
+            msg += f" Clamped desired_num_nodes to max_node_cap:{orgAccountObj.max_node_cap} from {desired_num_nodes}"
+            desired_num_nodes = orgAccountObj.max_node_cap
+        orgNumNode,redundant,onn_msg = get_or_create_OrgNumNodes(user=user,
+                                                            org=orgAccountObj,
+                                                            desired_num_nodes=desired_num_nodes,
+                                                            expire_date=expire_time)
+        msg += f" {onn_msg}"
+        if orgNumNode:
+            if redundant:
+                msg += f" using identical queued capacity request for {orgNumNode.org.name} from {orgNumNode.user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
+                jstatus = 'REDUNDANT'
             else:
-                msg = f"FAILED to process request for org:{org_name} user:{user} desired:{desired_num_nodes} expires:{expire_time} - desired_num_nodes:{desired_num_nodes} greater than max:{orgAccountObj.max_node_cap}"
-                jrsp = {'status': "FAILED",'msg':'',"error_msg":msg}
-                status = 400
+                msg += f" created and queued capacity request for {orgNumNode.org.name} from {user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
+                jstatus = 'QUEUED'
+            jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
+            status = 200
         else:
-            msg = f"FAILED to process request for org:{org_name} user:{user} desired:{desired_num_nodes} expires:{expire_time} - desired_num_nodes:{desired_num_nodes} less than min:{orgAccountObj.min_node_cap}"
-            jrsp = {'status': "FAILED",'msg':'',"error_msg":msg}
-            status=400        
+            emsg = f"FAILED to process request for {org_name} {user} {desired_num_nodes} {expire_time} - Server Error"
+            jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
+            status = 500
     except ClusterDeployAuthError as e:
         LOG.exception("caught exception:")
         jrsp = {'status': "FAILED",'msg':msg,"error_msg":""}
         status = 503
+    except ValidationError as e:
+        LOG.exception("caught exception:")
+        jrsp = {'status': "FAILED",'msg':msg,"error_msg":e.message}
+        status = 400
     except Exception as e:
         LOG.exception("caught exception:")
         jrsp = {'status': "FAILED",'msg':'',"error_msg":"Server Error"}
@@ -1059,7 +1100,7 @@ def getConsoleHtml(orgAccountObj, rrsp):
 def remove_org_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
     try:
         only_owned_by_user = only_owned_by_user or False
-        LOG.info(f"{user.username} cleaning up OrgNumNode for {orgAccountObj.name} {'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
+        LOG.info(f"{user.username} cleaning up OrgNumNode for {orgAccountObj.name} {f'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
         if only_owned_by_user:
             onns = OrgNumNode.objects.filter(org=orgAccountObj,user=user)
         else:
@@ -1067,8 +1108,11 @@ def remove_org_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         for onn in onns:
             LOG.info(f"{onn.user.username} deleting OrgNumNode {onn.org.name}")
-            if clusterObj.cnnro_id == onn.id:
-                LOG.info(f"Skipping active OrgNumNode.id:{onn.id}")
+            if clusterObj.cnnro_ids is not None:
+                if str(onn.id) in clusterObj.cnnro_ids:
+                    LOG.info(f"Skipping active OrgNumNode.id:{onn.id}")
+                else:
+                    onn.delete()
             else:
                 onn.delete()
         jrsp = {'status': "SUCCESS","msg":f"{user.username} cleaned all PENDING org node reqs for {orgAccountObj.name} "}
@@ -1298,8 +1342,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
             psCmdResultObj.save()
             raise ProvisionCmdError(f"An error occurred during command processing. {error_msg}")
     finally:
-        onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
-        long_str=f"{org_cmd_str} org.dnn:{orgAccountObj.desired_num_nodes} onnTop.dnn:{onnTop.desired_num_nodes if onnTop is not None else 'None'}"
+        long_str=f"{org_cmd_str} org.dnn:{orgAccountObj.desired_num_nodes} {deploy_values if deploy_values is not None else 'no deploy values'} {expire_time.strftime(FMT) if expire_time is not None else 'no expire tm'} "
         ps_cmd_cleanup(orgAccountObj,st,long_str)
         for handler in LOG.handlers:
             handler.flush()

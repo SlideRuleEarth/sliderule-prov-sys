@@ -21,7 +21,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env
-from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_org_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface
+from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_org_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_org_num_nodes_api
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -192,19 +192,26 @@ def orgManageCluster(request, pk):
             form_submit_value = request.POST.get('form_submit')
             LOG.info(f"form_submit_value:{form_submit_value}")
             if form_submit_value == 'add_onn':
-                add_onn_form = OrgNumNodeForm(request.POST,min_nodes=orgAccountObj.min_node_cap,max_nodes=orgAccountObj.admin_max_node_cap, prefix = 'add_onn')
-                if add_onn_form.is_valid():
-                    org_num_node = add_onn_form.save(commit=False)
-                    org_num_node.user = request.user  # set the user
-                    org_num_node.org = orgAccountObj  # set the org
+                add_onn_form = OrgNumNodeForm(request.POST,min_nodes=orgAccountObj.min_node_cap,max_nodes=orgAccountObj.max_node_cap, prefix = 'add_onn')
+                msg = ''
+                if (add_onn_form.is_valid() and (int(add_onn_form.data['add_onn-desired_num_nodes']) >= 0)):
+                    desired_num_nodes = add_onn_form.cleaned_data['desired_num_nodes']
+                    LOG.info(f"desired_num_nodes:{desired_num_nodes}")
+                    if desired_num_nodes != int(add_onn_form.data['add_onn-desired_num_nodes']):
+                        msg = f"Clamped desired_num_nodes! - "
                     ttl_minutes = add_onn_form.cleaned_data['ttl_minutes']
-                    if ttl_minutes >= 0:
-                        org_num_node.expiration = datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes)
-                    org_num_node.save(force_update=True)
-                    LOG.info(f"OrgNumNodeForm saved {add_onn_form.min_nodes}-{add_onn_form.max_nodes}")
+                    if ttl_minutes != int(add_onn_form.data['add_onn-ttl_minutes']):
+                        msg = f"Clamped ttl_minutes! - "
+                    expire_time = datetime.now(timezone.utc)+timedelta(minutes=ttl_minutes)
+                    jrsp,status = process_org_num_nodes_api(org_name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
+                    if status == 200:
+                        msg += jrsp['msg']
+                        messages.success(request,msg)
+                    else:
+                        messages.error(request,jrsp['error_msg'])
                 else:
                     emsg = f"Input Errors:{add_onn_form.errors.as_text}"
-                    messages.warning(request, emsg)
+                    messages.error(request, emsg)
                     LOG.info(f"Did not create ONN for {orgAccountObj.name} {emsg}")
             else:
                 add_onn_form = OrgNumNodeForm(min_nodes=orgAccountObj.min_node_cap,max_nodes=OrgAccount.admin_max_node_cap,prefix = 'add_onn')
@@ -238,7 +245,7 @@ def orgManageCluster(request, pk):
                 'pending_destroy':pending_destroy,
                 }
         
-        LOG.info(f"{request.user.username} orgAccountObj:{request.method} {orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} pending_refresh:{pending_refresh} pending_destroy:{pending_destroy}")
+        LOG.info(f"{request.user.username} {request.method} {orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} pending_refresh:{pending_refresh} pending_destroy:{pending_destroy}")
         #LOG.info("rendering users/org_manage_cluster.html")
         return render(request, 'users/org_manage_cluster.html', context)
     else:
@@ -303,10 +310,12 @@ def orgDestroyCluster(request, pk):
                     else:
                         messages.error(request,jrsp['error_msg'])           
                     clusterObj = Cluster.objects.get(org=orgAccountObj)
-                    active_onn = OrgNumNode.objects.filter(id=clusterObj.cnnro_id)
-                    if active_onn is not None:
-                        active_onn.delete()
-                        messages.info(request,"Successfully deleted active Org Num Node request")
+                    active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
+
+                    if active_onns is not None:
+                        for active_onn in active_onns:
+                            active_onn.delete()
+                        messages.info(request,"Successfully deleted active Org Num Node requests")
                     owner_ps_cmd = OwnerPSCmd.objects.create(user=request.user, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
                     owner_ps_cmd.save()
                     msg = f"Destroy {orgAccountObj.name} queued for processing"
@@ -357,10 +366,11 @@ def clearActiveOrgNumNodeReq(request, pk):
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':
-            active_onn = OrgNumNode.objects.filter(id=clusterObj.cnnro_id)
-            if active_onn is not None:
-                active_onn.delete()
-                messages.info(request,"Successfully deleted active Org Num Node request")
+            active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
+            if active_onns is not None:
+                for active_onn in active_onns:
+                    active_onn.delete()
+                messages.info(request,"Successfully deleted active Org Num Node requests")
             else:
                 messages.info(request,"No active Org Num Node request to delete")
         return redirect('org-manage-cluster',pk=orgAccountObj.id)
@@ -868,7 +878,7 @@ def reqNewMembership(request, pk):
 def provSysAdmin(request):
 
     if request.user.groups.filter(name='PS_Developer').exists():
-        return render(request, 'prov_sys_admin.html')
+        return render(request, 'prov_sys_admin.html', {'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface)})
     else:
         messages.error(request, 'You Do NOT have privileges to access this page')
         return redirect('browse')
@@ -879,8 +889,7 @@ def disableProvisioning(request):
     if request.user.groups.filter(name='PS_Developer').exists():
         set_PROVISIONING_DISABLED(redis_interface,'True')
         messages.warning(request, 'You have disabled provisioning!')
-        return render(request, 'prov_sys_admin.html',{'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface)})
     else:
         LOG.warning(f"User {request.user.username} attempted to disable provisioning")
         messages.error(request, 'You are not a PS_Developer')
-        return redirect('browse')
+    return redirect('browse')

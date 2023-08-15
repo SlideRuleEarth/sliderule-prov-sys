@@ -264,7 +264,7 @@
                                             </thead>
                                             <tbody>
                                                 {% for onn in onn_objs %}
-                                                    <tr class="{% if onn.id == cluster.cnnro_id  %}fw-bold{% endif %}">
+                                                    <tr class="{% if onn.id in cluster.cnnro_ids %}fw-bold{% endif %}">
                                                         <td>{{ onn.user }}</td>
                                                         <td>{{ onn.desired_num_nodes }}</td>
                                                         <td class="utc-time mx-1 my-1" data-utc-time="{{ onn.expiration.isoformat }}">Loading...</td>
