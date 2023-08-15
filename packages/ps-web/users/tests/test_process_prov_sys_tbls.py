@@ -611,7 +611,7 @@ def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_o
     orgAccountObj.desired_num_nodes=1
     orgAccountObj.is_public = True
     orgAccountObj.version = 'v2'
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     orgAccountObj.desired_num_nodes = sum_of_all_users_dnn # quiencent state
     orgAccountObj.save()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
@@ -636,7 +636,7 @@ def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_o
         expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) # before the one above!
         onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
         logger.info(f"created new onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn)
     if not is_deployed:
         assert not need_to_destroy
@@ -751,7 +751,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=1,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6)
     assert(len(cnnro_ids)==3)
     assert verify_api_user_makes_onn_ttl( client=client,
@@ -762,7 +762,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0)  # no change
 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
 
@@ -774,7 +774,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0) # no change
 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
 
@@ -785,7 +785,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=1,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
 
@@ -796,7 +796,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=1,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
     for node in OrgNumNode.objects.all():
         logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
@@ -815,7 +815,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=2,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==7)
     assert(len(cnnro_ids)==3)
 
@@ -826,7 +826,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=3,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==8)
     assert(len(cnnro_ids)==3)
 
@@ -837,7 +837,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=3,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
 
     for node in OrgNumNode.objects.all():
         logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
@@ -856,7 +856,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     desired_num_nodes=4,
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1) 
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
 
     for node in OrgNumNode.objects.all():
         logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
