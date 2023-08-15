@@ -10,7 +10,7 @@ import pprint
 from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_user_makes_onn_ttl,create_active_membership
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
 from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
@@ -507,7 +507,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -519,7 +519,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -531,7 +531,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -543,7 +543,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
     
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -555,7 +555,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -567,7 +567,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -579,7 +579,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -688,7 +688,7 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
 
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
@@ -724,7 +724,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
 
 
     # now verify different users can make different requests
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_OWNER_USER(),
                                     password=OWNER_PASSWORD,
@@ -733,7 +733,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     expected_change_ps_cmd=1) 
     m = create_active_membership(orgAccountObj,the_DEV_TEST_USER())
     m.refresh_from_db()
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_DEV_TEST_USER(),
                                     password=DEV_TEST_PASSWORD,
@@ -744,7 +744,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     rtu = random_test_user()
     m = create_active_membership(orgAccountObj,rtu)
     m.refresh_from_db()
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=rtu,
                                     password=TEST_PASSWORD,
@@ -754,7 +754,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
     assert(sum_of_all_users_dnn==6)
     assert(len(cnnro_ids)==3)
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_DEV_TEST_USER(),
                                     password=DEV_TEST_PASSWORD,
@@ -766,7 +766,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_DEV_TEST_USER(),
                                     password=DEV_TEST_PASSWORD,
@@ -778,7 +778,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_OWNER_USER(),
                                     password=OWNER_PASSWORD,
@@ -789,7 +789,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=rtu,
                                     password=TEST_PASSWORD,
@@ -808,7 +808,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(len(uuid_objects)==4)
     assert(len(cnnro_ids)==4)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=rtu,
                                     password=TEST_PASSWORD,
@@ -819,7 +819,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==7)
     assert(len(cnnro_ids)==3)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_OWNER_USER(),
                                     password=OWNER_PASSWORD,
@@ -830,7 +830,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==8)
     assert(len(cnnro_ids)==3)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_DEV_TEST_USER(),
                                     password=DEV_TEST_PASSWORD,
@@ -849,7 +849,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==8)
     assert(len(cnnro_ids)==4)
 
-    assert verify_user_makes_onn_ttl( client=client,
+    assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_DEV_TEST_USER(),
                                     password=DEV_TEST_PASSWORD,

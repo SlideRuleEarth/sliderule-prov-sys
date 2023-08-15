@@ -2,6 +2,7 @@ from celery import shared_task,Task, app
 from users.models import PsCmdResult,OwnerPSCmd
 from django_celery_results.models import TaskResult
 from users.models import OrgAccount,PsCmdResult, Cluster, GranChoice, OrgAccount, OrgCost, User, OrgNumNode, PsCmdResult, Membership
+from django.core.exceptions import ValidationError
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import grpc
 import pytz
@@ -446,47 +447,52 @@ def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_own
     '''
     try:
         jstatus = ''
+        LOG.info(f"process_org_num_nodes_api({org_name},{user},{desired_num_nodes},{expire_time})")
+        if int(desired_num_nodes) < 0:
+            msg = f"desired_num_nodes:{desired_num_nodes} must be >= 0"
+            raise ValidationError(msg)
         orgAccountObj = OrgAccount.objects.get(name=org_name)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if (not clusterObj.is_deployed) and (not orgAccountObj.allow_deploy_by_token):
             msg = f"Org {orgAccountObj.name} is not configured to allow deploy by token"
             raise ClusterDeployAuthError(msg)
         if(not clusterObj.is_deployed):
-            msg = f"deploying {orgAccountObj.name} cluster"
+            msg = f"Deploying {orgAccountObj.name} cluster"
         else:
-            msg = f"updating {orgAccountObj.name} cluster"
+            msg = f"Updating {orgAccountObj.name} cluster"
         # check against 'users' limits. Admin limits are checked later
-        if (int(desired_num_nodes) >= orgAccountObj.min_node_cap):
-            if(int(desired_num_nodes) <= orgAccountObj.max_node_cap):
-                orgNumNode,redundant,msg = get_or_create_OrgNumNodes(user=user,
-                                                                    org=orgAccountObj,
-                                                                    desired_num_nodes=desired_num_nodes,
-                                                                    expire_date=expire_time)
-                if orgNumNode:
-                    if redundant:
-                        msg = f"using identical queued capacity request for {orgNumNode.org.name} from {orgNumNode.user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
-                        jstatus = 'REDUNDANT'
-                    else:
-                        msg = f"created and queued capacity request for {orgNumNode.org.name} from {user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
-                        jstatus = 'QUEUED'
-                    jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
-                    status = 200
-                else:
-                    emsg = f"FAILED to process request for {org_name} {user} {desired_num_nodes} {expire_time} - Server Error"
-                    jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
-                    status = 500
+        if (int(desired_num_nodes) < orgAccountObj.min_node_cap):
+            msg += f" Clamped desired_num_nodes to min_node_cap:{orgAccountObj.min_node_cap} from {desired_num_nodes}"
+            desired_num_nodes = orgAccountObj.min_node_cap
+        if(int(desired_num_nodes) > orgAccountObj.max_node_cap):
+            msg += f" Clamped desired_num_nodes to max_node_cap:{orgAccountObj.max_node_cap} from {desired_num_nodes}"
+            desired_num_nodes = orgAccountObj.max_node_cap
+        orgNumNode,redundant,onn_msg = get_or_create_OrgNumNodes(user=user,
+                                                            org=orgAccountObj,
+                                                            desired_num_nodes=desired_num_nodes,
+                                                            expire_date=expire_time)
+        msg += f" {onn_msg}"
+        if orgNumNode:
+            if redundant:
+                msg += f" using identical queued capacity request for {orgNumNode.org.name} from {orgNumNode.user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
+                jstatus = 'REDUNDANT'
             else:
-                msg = f"FAILED to process request for org:{org_name} user:{user} desired:{desired_num_nodes} expires:{expire_time} - desired_num_nodes:{desired_num_nodes} greater than max:{orgAccountObj.max_node_cap}"
-                jrsp = {'status': "FAILED",'msg':'',"error_msg":msg}
-                status = 400
+                msg += f" created and queued capacity request for {orgNumNode.org.name} from {user.username} with {desired_num_nodes} nodes to expire:{expire_time.strftime(FMT) if expire_time is not None else 'exp_tm:None'}"
+                jstatus = 'QUEUED'
+            jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
+            status = 200
         else:
-            msg = f"FAILED to process request for org:{org_name} user:{user} desired:{desired_num_nodes} expires:{expire_time} - desired_num_nodes:{desired_num_nodes} less than min:{orgAccountObj.min_node_cap}"
-            jrsp = {'status': "FAILED",'msg':'',"error_msg":msg}
-            status=400        
+            emsg = f"FAILED to process request for {org_name} {user} {desired_num_nodes} {expire_time} - Server Error"
+            jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
+            status = 500
     except ClusterDeployAuthError as e:
         LOG.exception("caught exception:")
         jrsp = {'status': "FAILED",'msg':msg,"error_msg":""}
         status = 503
+    except ValidationError as e:
+        LOG.exception("caught exception:")
+        jrsp = {'status': "FAILED",'msg':msg,"error_msg":e.message}
+        status = 400
     except Exception as e:
         LOG.exception("caught exception:")
         jrsp = {'status': "FAILED",'msg':'',"error_msg":"Server Error"}

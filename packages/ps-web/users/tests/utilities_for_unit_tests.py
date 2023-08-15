@@ -147,7 +147,7 @@ def verify_user(the_user):
 
     return the_user
 
-def verify_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num_nodes,ttl_minutes,expected_change_ps_cmd):
+def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num_nodes,ttl_minutes,expected_change_ps_cmd):
     '''
     This routine tests the org-num-nodes-ttl api with a testuser with assumed password TEST_PASSWORD
     '''
@@ -157,7 +157,7 @@ def verify_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num_nod
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
-    loop_count = process_onn_api(client,
+    loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
                                 view_name='post-org-num-nodes-ttl',
@@ -431,61 +431,48 @@ def process_onn_api(client,
                     num_iters,
                     expected_change_ps_cmd,
                     expected_status,
-                    expected_change_onn=None):
-
+                    expected_org_account_num_onn_change=None,
+                    expected_html_status=None):
+    logger.info(f"process_onn_api view_name:{view_name} url_args:{url_args} access_token:{access_token} data:{data} loop_count:{loop_count} num_iters:{num_iters} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_org_account_num_onn_change:{expected_org_account_num_onn_change} expected_html_status:{expected_html_status}")
+    expected_num_onn_change = 0
     # backwards compatibility
-    expected_change_onn = expected_change_onn or expected_change_ps_cmd
-
-
+    expected_org_account_num_onn_change = expected_org_account_num_onn_change or expected_change_ps_cmd
+    expected_html_status = expected_html_status or 200
     logger.info(f"url_args:{url_args}")
     url = reverse(view_name,args=url_args)
     logger.info(f"using url:{url}")
-    onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
-    assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT') 
-    if expected_status=='QUEUED': 
-        EXPECTED_QUEUED_CHANGE=1
-        if num_iters > 0: 
-            EXPECTED_PROCESSED_CHANGE=expected_change_ps_cmd
-        else:
-            EXPECTED_PROCESSED_CHANGE=0
-    else:
-        EXPECTED_QUEUED_CHANGE=0
-        if num_iters > 0 and OrgNumNode.objects.count()>0: 
-            EXPECTED_PROCESSED_CHANGE=expected_change_ps_cmd
-        else:
-            EXPECTED_PROCESSED_CHANGE=0
-
     s_loop_count = loop_count
-
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
-
-
+    s_OwnerPSCmd_cnt = OwnerPSCmd.objects.count()
+    s_OrgNumNode_cnt = OrgNumNode.objects.count()
     s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
+    logger.info(f"using s_OrgNumNode_cnt:{s_OrgNumNode_cnt} s_OwnerPSCmd_cnt:{s_OwnerPSCmd_cnt} s_orgAccountObj_num_onn:{s_orgAccountObj_num_onn} s_orgAccountObj_num_owner_ps_cmd:{s_orgAccountObj_num_owner_ps_cmd} s_orgAccountObj_num_ps_cmd:{s_orgAccountObj_num_ps_cmd} s_orgAccountObj_num_setup_cmd:{s_orgAccountObj_num_setup_cmd} s_orgAccountObj_num_ps_cmd_successful:{s_orgAccountObj_num_ps_cmd_successful} s_orgAccountObj_num_setup_cmd_successful:{s_orgAccountObj_num_setup_cmd_successful}")
     logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
     with time_machine.travel(new_time,tick=True):
-        desired_num_nodes = orgAccountObj.desired_num_nodes
         if access_token is not None:
+            assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT' or expected_status == 'FAILED') 
             if 'put' in view_name:
                 response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
             else:
                 response = client.post(url,headers={'Authorization': f"Bearer {access_token}"})
-            assert(response.status_code == 200) 
+            assert(response.status_code == expected_html_status) 
             json_data = json.loads(response.content)
             assert(json_data['status'] == expected_status)   
             assert(json_data['msg']!='')   
             assert(json_data['error_msg']=='')
+            if json_data['status'] == 'QUEUED':
+                expected_num_onn_change = 1
         else:
             if data is not None:
                 logger.info(f"url:{url} data:{data}")
                 response = client.post(url,data=data, HTTP_ACCEPT='application/json')
-                assert((response.status_code == 200) or (response.status_code == 302)) 
-
+                assert((response.status_code == expected_html_status) or (response.status_code == 302)) 
+                if expected_status != 'FAILED':
+                    expected_num_onn_change = 1 # if we get here we expect a change
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
-        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
-        
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this       
         assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) # url was an onn api not an owner ps cmd, so no change
-        assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt + EXPECTED_QUEUED_CHANGE))
+        assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt + expected_num_onn_change))
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # no change just queued
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
         assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change just queued
@@ -507,11 +494,10 @@ def process_onn_api(client,
             assert(loop_count == s_loop_count)
             assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
         else:
-            onn_ids = []
-            logger.info(f"expected_change_onn:{expected_change_onn} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
-            assert(orgAccountObj.num_onn==(s_orgAccountObj_num_onn + expected_change_onn))
+            logger.info(f"expected_org_account_num_onn_change:{expected_org_account_num_onn_change} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+            assert(orgAccountObj.num_onn==(s_orgAccountObj_num_onn + expected_org_account_num_onn_change))
             assert(loop_count == (s_loop_count + num_iters))
-    return loop_count
+    return loop_count,response
 
 def process_owner_ps_cmd(client,
                         orgAccountObj,
