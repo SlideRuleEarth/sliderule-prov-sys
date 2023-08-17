@@ -197,8 +197,6 @@ def orgManageCluster(request, pk):
                 if (add_onn_form.is_valid() and (int(add_onn_form.data['add_onn-desired_num_nodes']) >= 0)):
                     desired_num_nodes = add_onn_form.cleaned_data['desired_num_nodes']
                     LOG.info(f"desired_num_nodes:{desired_num_nodes}")
-                    if desired_num_nodes != int(add_onn_form.data['add_onn-desired_num_nodes']):
-                        msg = f"Clamped desired_num_nodes! - "
                     ttl_minutes = add_onn_form.cleaned_data['ttl_minutes']
                     if ttl_minutes != int(add_onn_form.data['add_onn-ttl_minutes']):
                         msg = f"Clamped ttl_minutes! - "

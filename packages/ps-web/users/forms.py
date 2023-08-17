@@ -99,13 +99,6 @@ class OrgNumNodeForm(forms.ModelForm):
             ttl_minutes = MAX_TTL
         return ttl_minutes
 
-    def clean_desired_num_nodes(self):
-        desired_num_nodes = self.cleaned_data['desired_num_nodes']
-        if desired_num_nodes < self.min_nodes:
-                desired_num_nodes = self.min_nodes
-        if desired_num_nodes > self.max_nodes:
-                desired_num_nodes = self.max_nodes
-        return desired_num_nodes
 
 class MembershipForm(forms.Form):
     username = forms.CharField(disabled=True)

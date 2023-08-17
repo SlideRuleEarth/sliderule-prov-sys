@@ -148,7 +148,7 @@ def cull_expired_entries(org,tm):
     LOG.debug(f"ended with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
 
 
-def need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn):
+def need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     # LOG.debug(f"cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
     # LOG.debug(f"    org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
@@ -158,9 +158,8 @@ def need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users
         #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
         if changed_version or changed_is_public:
             #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-            #LOG.debug(f"onnTop.id:{onnTop.id} != clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
-            if sum_of_all_users_dnn != orgAccountObj.desired_num_nodes: # we (changed version or is_public) and we are processing a new set of top items (new deployment request)
-                LOG.info(f"sum_of_all_users_dnn:{sum_of_all_users_dnn} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes} need_destroy_for_changed_version_or_is_public: True")
+            if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: # we (changed version or is_public) and we are processing a new set of top items (new deployment request)
+                LOG.info(f"num_nodes_to_deploy:{num_nodes_to_deploy} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes} need_destroy_for_changed_version_or_is_public: True")
                 return True
     return False
 
@@ -322,11 +321,18 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
             start_num_ps_cmds = orgAccountObj.num_ps_cmd
             if env_ready:
                 cull_expired_entries(orgAccountObj,datetime.now(timezone.utc))
-                sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
-                onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+                num_nodes_to_deploy,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
+                if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
+                    LOG.info(f"Clamped num_nodes_to_deploy to min_node_cap:{orgAccountObj.min_node_cap} from {num_nodes_to_deploy}")
+                    num_nodes_to_deploy = orgAccountObj.min_node_cap
+                if(int(num_nodes_to_deploy) > orgAccountObj.max_node_cap):
+                    LOG.info(f"Clamped num_nodes_to_deploy to max_node_cap:{orgAccountObj.max_node_cap} from {num_nodes_to_deploy}")
+                    num_nodes_to_deploy = orgAccountObj.max_node_cap
+
                 expire_time = None
-                if sum_of_all_users_dnn > 0:
-                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn):
+                onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+                if onnTop is not None:
+                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
                         try:
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
@@ -339,8 +345,8 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
                     else:
                         user = onnTop.user
                         expire_time = onnTop.expiration
-                        if sum_of_all_users_dnn != orgAccountObj.desired_num_nodes: 
-                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': sum_of_all_users_dnn , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                        if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
+                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             clusterObj.cnnro_ids = cnnro_ids
                             clusterObj.save(update_fields=['cnnro_ids'])
@@ -465,13 +471,7 @@ def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_own
             msg = f"Deploying {orgAccountObj.name} cluster"
         else:
             msg = f"Updating {orgAccountObj.name} cluster"
-        # check against 'users' limits. Admin limits are checked later
-        if (int(desired_num_nodes) < orgAccountObj.min_node_cap):
-            msg += f" Clamped desired_num_nodes to min_node_cap:{orgAccountObj.min_node_cap} from {desired_num_nodes}"
-            desired_num_nodes = orgAccountObj.min_node_cap
-        if(int(desired_num_nodes) > orgAccountObj.max_node_cap):
-            msg += f" Clamped desired_num_nodes to max_node_cap:{orgAccountObj.max_node_cap} from {desired_num_nodes}"
-            desired_num_nodes = orgAccountObj.max_node_cap
+
         orgNumNode,redundant,onn_msg = get_or_create_OrgNumNodes(user=user,
                                                             org=orgAccountObj,
                                                             desired_num_nodes=desired_num_nodes,

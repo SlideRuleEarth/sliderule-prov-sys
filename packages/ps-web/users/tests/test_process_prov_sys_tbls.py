@@ -10,16 +10,18 @@ import pprint
 from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership,initialize_test_org,log_ONN,fake_sync_clusterObj_to_orgAccountObj,call_SetUp
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
 from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
+from users.views import add_org_cluster_orgcost
 from time import sleep
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from allauth.account.decorators import verified_email_required
 from django.contrib.auth.models import User
 from django.urls import reverse
+from oauth2_provider.models import Application
 
 
 # Import the fixtures
@@ -686,42 +688,7 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
                 for new_highest_onn_id in variables:
                     just_ONE_CASE(is_deployed, is_public, version, new_highest_onn_id)
 
-
-
-#@pytest.mark.dev
-@pytest.mark.django_db
-@pytest.mark.ps_server_stubbed
-def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
-    '''
-        This procedure will test logic for sum_of_highest_nodes_for_each_user
-    '''
-    caplog.set_level(logging.DEBUG)
-    orgAccountObj = get_test_org()
-
-
-#   First configure the org
-    url = reverse('org-token-obtain-pair')
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
-    logger.info(f"status:{response.status_code}")
-    assert (response.status_code == 200)   
-    json_data = json.loads(response.content)
-    logger.info(f"rsp:{json_data}")
-    assert(json_data['access_lifetime']=='3600.0')   
-    assert(json_data['refresh_lifetime']=='86400.0')   
-
-    headers = {
-        'Authorization': f"Bearer {json_data['access']}",
-        'Accept': 'application/json'  # Specify JSON response
-    }
-
-    url = reverse('org-cfg',args=[get_test_org().name,0,orgAccountObj.admin_max_node_cap])
-    response = client.put(url,headers=headers)
-    logger.info(f"status:{response.status_code} response:{response.json()}")
-    orgAccountObj.refresh_from_db()
-    assert(response.status_code == 200)   
-    assert(orgAccountObj.min_node_cap == 0)
-    assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
-
+def verify_new_entries_in_ONN(orgAccountObj,client):
 
     # now verify different users can make different requests
     assert verify_api_user_makes_onn_ttl( client=client,
@@ -798,8 +765,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     expected_change_ps_cmd=0) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
-    for node in OrgNumNode.objects.all():
-        logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
+    log_ONN()
 
     uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
     for node in OrgNumNode.objects.filter(id__in=uuid_objects):
@@ -838,10 +804,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
-
-    for node in OrgNumNode.objects.all():
-        logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
-
+    log_ONN()
     uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
     for node in OrgNumNode.objects.filter(id__in=uuid_objects):
         logger.info(f"cnnro_ids - {node.user.username} {node.desired_num_nodes} {node.expiration}")
@@ -858,8 +821,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
                                     expected_change_ps_cmd=1) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
 
-    for node in OrgNumNode.objects.all():
-        logger.info(f"{node.user.username} {node.desired_num_nodes} {node.expiration}")
+    log_ONN()
 
     uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
     for node in OrgNumNode.objects.filter(id__in=uuid_objects):
@@ -868,3 +830,78 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==9)
     assert(len(cnnro_ids)==3)
 
+
+
+def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,client):
+
+    #   First configure the default test org
+    url = reverse('org-token-obtain-pair')
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 200)   
+    json_data = json.loads(response.content)
+    logger.info(f"rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0')   
+
+    headers = {
+        'Authorization': f"Bearer {json_data['access']}",
+        'Accept': 'application/json'  # Specify JSON response
+    }
+
+    url = reverse('org-cfg',args=[orgAccountObj.name,0,orgAccountObj.admin_max_node_cap])
+    response = client.put(url,headers=headers)
+    logger.info(f"status:{response.status_code} response:{response.json()}")
+    orgAccountObj.refresh_from_db()
+    assert(response.status_code == 200)   
+    assert(orgAccountObj.min_node_cap == 0)
+    assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
+
+    verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client)
+
+
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
+    '''
+        This procedure will test logic for sum_of_highest_nodes_for_each_user for two different orgs
+    '''
+
+    verify_sum_of_highest_nodes_for_each_user_default_test_org(get_test_org(),client)
+
+    # create a new org and initialize like init_test_environ and then mix it up 
+    form = OrgAccountForm(data={
+                        'name': 'test_create',
+                        'owner': the_OWNER_USER(), # use same as sliderule org
+                        'point_of_contact_name': 'test point of contact here',
+                        'email': OWNER_EMAIL, 
+                        'max_allowance':5000,
+                        'monthly_allowance':1000,
+                        'balance':500,
+                        'admin_max_node_cap':10})
+    valid = form.is_valid() 
+    logger.info(f"form_errors:{form.errors.as_data()}")
+    assert(valid)
+    for app in Application.objects.all():
+        logger.info(f"name:{app.name} uris:{app.redirect_uris}")      
+    assert Application.objects.count() == 1 
+    orgAccountObj,msg,emsg,p = add_org_cluster_orgcost(form)
+    logger.info(f"msg:{msg} emsg:{emsg} ")
+    assert(emsg=='')
+    assert('Owner TestUser (ownertestuser) now owns new org/cluster:test_create' in msg)
+    assert(call_SetUp(orgAccountObj))
+    assert(fake_sync_clusterObj_to_orgAccountObj(orgAccountObj))
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    logger.info(f"org:{orgAccountObj.name} provision_env_ready:{clusterObj.provision_env_ready} clusterObj.cur_version:{clusterObj.cur_version} orgAccountObj.version:{orgAccountObj.version} ")       
+    assert clusterObj.cur_version == orgAccountObj.version
+    log_ONN()
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
+    assert(sum_of_all_users_dnn==0) # for new org
+    
+    verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client)
+    onn = log_ONN()
+    assert len(onn) == 22
+    assert onn[0].desired_num_nodes == 4
+    assert onn[11].desired_num_nodes == 4
