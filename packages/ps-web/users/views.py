@@ -357,7 +357,7 @@ def clearOrgNumNodesReqs(request, pk):
 
 @login_required(login_url='account_login')
 @verified_email_required
-def clearActiveOrgNumNodeReq(request, pk):
+def clearActiveNumNodeReq(request, pk):
     orgAccountObj = OrgAccount.objects.get(id=pk)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     LOG.info(f"{request.user.username} {request.method} {orgAccountObj.name} <owner:{orgAccountObj.owner.username}>")

@@ -270,7 +270,7 @@
                                                         <td class="utc-time mx-1 my-1" data-utc-time="{{ onn.expiration.isoformat }}">Loading...</td>
                                                         <td>
                                                             {% if onn_objs|length == 1 %}
-                                                                <form method="POST" action="{% url 'clear-active-org-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
+                                                                <form method="POST" action="{% url 'clear-active-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
                                                                     {% csrf_token %}
                                                                     <div id="destroyWarningAlert" class="alert alert-warning d-none my-2">
                                                                     <p>Warning: Clearing the entire table when 'destroy when no nodes' is set and min node cap is 0 will bring down the cluster. This will trigger a Destroy of the cluster. Make sure "deploy by token" is selected if you wish it to automatically redeploy when a new desire num nodes request is received.</p>
