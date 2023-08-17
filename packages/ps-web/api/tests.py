@@ -53,7 +53,7 @@ def test_no_token(caplog,client,mock_email_backend,initialize_test_environ):
     caplog.set_level(logging.DEBUG)
     
     orgAccountObj = get_test_org()
-    url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])
+    url = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,3,15])
     response = client.post(url)
     assert (response.status_code == 400)   # no token was provided
 
@@ -112,7 +112,7 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
 
 
     
-    url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])    
+    url = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,3,15])    
     response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)
@@ -183,7 +183,7 @@ def test_org_ONN(caplog,client,mock_email_backend,initialize_test_environ):
     orgAccountObj.num_onn=0
     orgAccountObj.save()
 
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 

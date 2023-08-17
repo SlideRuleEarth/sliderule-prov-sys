@@ -246,7 +246,7 @@
                                               <i class="im im-edit"></i> Add
                                             </button>
                                         </form>                                        
-                                        <form method="POST" action="{% url 'clear-org-num-nodes-reqs' org.id %}" class="d-inline">
+                                        <form method="POST" action="{% url 'clear-num-nodes-reqs' org.id %}" class="d-inline">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-primary mt-1 me-1">
                                                 <i class="im im-edit"></i> Clear

@@ -43,6 +43,69 @@ info:
     name: BSD-3-Clause
     url: https://github.com/ICESat2-SlideRule/sliderule-ps-web/blob/main/LICENSE
 paths:
+  /api/cluster_config/{name}/{min_nodes}/{max_nodes}/:
+    put:
+      operationId: cluster_config_update
+      description: |-
+        Takes an name min_nodes and max_nodes and updates the cluster's min and max nodes.
+        These are the limits that regular users can request.
+        NOTE: Must be a developer or owner of the org to update the config.
+      parameters:
+      - in: path
+        name: max_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: min_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: name
+        schema:
+          type: string
+        required: true
+      tags:
+      - cluster_config
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: cluster_config_partial_update
+      description: |-
+        Takes an name min_nodes and max_nodes and updates the cluster's min and max nodes.
+        These are the limits that regular users can request.
+        NOTE: Must be a developer or owner of the org to update the config.
+      parameters:
+      - in: path
+        name: max_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: min_nodes
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: name
+        schema:
+          type: string
+        required: true
+      tags:
+      - cluster_config
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/desired_num_nodes/{name}/{desired_num_nodes}/:
     put:
       operationId: desired_num_nodes_update
@@ -172,69 +235,6 @@ paths:
         required: true
       tags:
       - num_nodes
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/org_config/{name}/{min_nodes}/{max_nodes}/:
-    put:
-      operationId: org_config_update
-      description: |-
-        Takes an name min_nodes and max_nodes and updates the Organization's min and max nodes.
-        These are the limits that regular users can request.
-        NOTE: Must be a developer or owner of the org to update the config.
-      parameters:
-      - in: path
-        name: max_nodes
-        schema:
-          type: integer
-        required: true
-      - in: path
-        name: min_nodes
-        schema:
-          type: integer
-        required: true
-      - in: path
-        name: name
-        schema:
-          type: string
-        required: true
-      tags:
-      - org_config
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: org_config_partial_update
-      description: |-
-        Takes an name min_nodes and max_nodes and updates the Organization's min and max nodes.
-        These are the limits that regular users can request.
-        NOTE: Must be a developer or owner of the org to update the config.
-      parameters:
-      - in: path
-        name: max_nodes
-        schema:
-          type: integer
-        required: true
-      - in: path
-        name: min_nodes
-        schema:
-          type: integer
-        required: true
-      - in: path
-        name: name
-        schema:
-          type: string
-        required: true
-      tags:
-      - org_config
       security:
       - cookieAuth: []
       - jwtAuth: []

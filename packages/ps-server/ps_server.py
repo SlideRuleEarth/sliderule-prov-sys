@@ -1340,7 +1340,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                                             bucket=S3_BUCKET,
                                             s3_folder=s3_folder):
                     LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for name:{name}")
-            LOG.info(f"Removing local org_dir:{get_cluster_root_dir(name)} and tf_dir:{get_terraform_dir(name)} for org:{name}")
+            LOG.info(f"Removing local cluster_dir:{get_cluster_root_dir(name)} and tf_dir:{get_terraform_dir(name)} for org:{name}")
             yield from self.execute_cmd(name=name, ps_cmd='TearDown', cmd_args=['rm','-rvf',get_cluster_root_dir(name)])
         except Exception as e:
             emsg = (f" Processing {'TearDown'} {name} cluster caught this exception: ")

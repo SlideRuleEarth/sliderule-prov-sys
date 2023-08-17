@@ -398,7 +398,7 @@ def orgConfigure(request, pk):
                 else:
                     emsg = f"Input Errors:{config_form.errors.as_text}"
                     messages.warning(request, emsg)
-                    LOG.info(f"Did not save org_config for {orgAccountObj.name} {emsg}")
+                    LOG.info(f"Did not save cluster_config for {orgAccountObj.name} {emsg}")
                     LOG.info("These are the fields as submitted:")
                     for field, value in config_form.data.items():
                         LOG.info(f"Field: {field} - Value: {value}")            

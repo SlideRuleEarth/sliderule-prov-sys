@@ -147,7 +147,7 @@ def test_download_dir_when_empty(setup_logging, s3, get_S3_BUCKET):
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('version', ['v3'])
-def test_download_dir_when_unit_test_org_deployed(setup_logging, s3, get_S3_BUCKET, test_name, test_public_name, init_s3_current_cluster_tf_by_org_factory, control_instance, version):
+def test_download_dir_when_deployed(setup_logging, s3, get_S3_BUCKET, test_name, test_public_name, init_s3_current_cluster_tf_by_org_factory, control_instance, version):
     '''
         This tests the download_dir function in the ps_server module initialization.
         When we are deploying a new provisioning system the new ps_server

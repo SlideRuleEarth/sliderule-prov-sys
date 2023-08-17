@@ -255,7 +255,7 @@ def test_org_ONN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')
     access_token = json_data['access']   
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -271,7 +271,7 @@ def test_org_ONN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     logger.info(f"msg:{json_data['msg']}")  
     
 
-    url_ttl = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])
+    url_ttl = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
@@ -280,7 +280,7 @@ def test_org_ONN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(OwnerPSCmd.objects.count()==0)
 
     # Test duplicate request does not queue another onn
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
@@ -291,7 +291,7 @@ def test_org_ONN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(OwnerPSCmd.objects.count()==0)
 
     # Test a new request with duplicate time does not create new clocked item
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,1])
+    url = reverse('put-num-nodes',args=[orgAccountObj.name,1])
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
@@ -334,7 +334,7 @@ def test_org_ONN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')
     access_token = json_data['access']   
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -348,20 +348,20 @@ def test_org_ONN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
 
-    url_ttl = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])
+    url_ttl = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     assert(OrgNumNode.objects.count()==2)
     assert(OwnerPSCmd.objects.count()==0)
 
-    url_ttl = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,4,15])
+    url_ttl = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,4,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     assert(OrgNumNode.objects.count()==3)
     assert(OwnerPSCmd.objects.count()==0)
 
 
-    url_remove = reverse('remove-user-org-num-nodes-reqs',args=[orgAccountObj.name])
+    url_remove = reverse('remove-user-num-nodes-reqs',args=[orgAccountObj.name])
     response = client.put(url_remove,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     assert(OrgNumNode.objects.count()==0)
@@ -387,7 +387,7 @@ def test_orgNumNodes(caplog,client,mock_email_backend,initialize_test_environ):
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
-    url = reverse('get-org-num-nodes',args=[orgAccountObj.name])
+    url = reverse('get-num-nodes',args=[orgAccountObj.name])
     response = client.get(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     assert(clusterObj.is_deployed)
@@ -440,7 +440,7 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')
     access_token = json_data['access']   
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -458,7 +458,7 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     
 
 
-    url_ttl = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])
+    url_ttl = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
@@ -482,7 +482,7 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     assert(orgAccountObj.num_onn==1) # only process one of the entries
      # only process one here, wait for expire
 
-    url = reverse('get-org-num-nodes',args=[orgAccountObj.name])
+    url = reverse('get-num-nodes',args=[orgAccountObj.name])
     response = client.get(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
     assert(clusterObj.is_deployed)
@@ -512,7 +512,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,3,17],
                                 access_token=access_token,
                                 data=None,
@@ -524,7 +524,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,4,16],
                                 access_token=access_token,
                                 data=None,
@@ -536,7 +536,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,15],
                                 access_token=access_token,
                                 data=None,
@@ -548,7 +548,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,25],
                                 access_token=access_token,
                                 data=None,
@@ -560,7 +560,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,20],
                                 access_token=access_token,
                                 data=None,
@@ -572,7 +572,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,21],
                                 access_token=access_token,
                                 data=None,
@@ -584,7 +584,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-org-num-nodes-ttl',
+                                view_name='post-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,18],
                                 access_token=access_token,
                                 loop_count=0,
@@ -849,7 +849,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
         'Accept': 'application/json'  # Specify JSON response
     }
 
-    url = reverse('org-cfg',args=[orgAccountObj.name,0,orgAccountObj.admin_max_node_cap])
+    url = reverse('cluster-cfg',args=[orgAccountObj.name,0,orgAccountObj.admin_max_node_cap])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     orgAccountObj.refresh_from_db()
@@ -861,7 +861,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
 
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):

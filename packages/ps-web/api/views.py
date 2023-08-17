@@ -182,7 +182,7 @@ class MembershipStatusView(generics.RetrieveAPIView):
         jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
         return Response(jrsp, status=http_status)   
 
-class DesiredOrgNumNodesView(generics.UpdateAPIView):
+class DesiredNumNodesView(generics.UpdateAPIView):
     '''
         Takes an name and desired_num_nodes and creates an OrgNumNode request for the org. 
         This will go into the pool of requests for the org.
@@ -208,7 +208,7 @@ class DesiredOrgNumNodesView(generics.UpdateAPIView):
             http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
         return Response(jrsp, status=http_status)
 
-class DesiredOrgNumNodesTTLView(generics.CreateAPIView):
+class DesiredNumNodesTTLView(generics.CreateAPIView):
     '''
         Takes an name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
         NOTE: If the ttl is not provided, the time to live will be set the the minimum (15 minutes). The maximum ttl is 720 minutes (i.e. 12 hours).
@@ -275,7 +275,7 @@ class OrgIpAdrView(generics.RetrieveAPIView):
             http_status = status.HTTP_500_INTERNAL_SERVER_ERROR
         return Response(jrsp, status=http_status)
     
-class RemoveUserOrgNumNodesReqsView(generics.UpdateAPIView):
+class RemoveUserNumNodesReqsView(generics.UpdateAPIView):
     '''
         Removes all OrgNumNode requests for the org from this user from the active pool of requests. 
     '''
@@ -295,7 +295,7 @@ class RemoveUserOrgNumNodesReqsView(generics.UpdateAPIView):
         return Response(jrsp,status = status)
 
 
-class RemoveAllOrgNumNodesReqsView(generics.UpdateAPIView):
+class RemoveAllNumNodesReqsView(generics.UpdateAPIView):
     '''
         Removes all OrgNumNode requests for the org from the active pool of requests.  Must be a developer or owner of the org to remove ALL the requests.
     '''
@@ -326,9 +326,9 @@ class RemoveAllOrgNumNodesReqsView(generics.UpdateAPIView):
                 jrsp = {'status': "FAILED","error_msg":f"{user.username} is Not an Active Member of {name}"}
         return Response(jrsp,status = status)
 
-class OrgConfigView(generics.UpdateAPIView):
+class ClusterConfigView(generics.UpdateAPIView):
     '''
-    Takes an name min_nodes and max_nodes and updates the Organization's min and max nodes.
+    Takes an name min_nodes and max_nodes and updates the cluster's min and max nodes.
     These are the limits that regular users can request.
     NOTE: Must be a developer or owner of the org to update the config.
     '''
@@ -377,7 +377,7 @@ class OrgConfigView(generics.UpdateAPIView):
         return Response(jrsp, status=http_status)
     
 
-class OrgNumNodesView(generics.RetrieveAPIView):
+class NumNodesView(generics.RetrieveAPIView):
     '''
     Takes an name and returns the min-current-max number of nodes and the version from the cluster for the org.
     '''
