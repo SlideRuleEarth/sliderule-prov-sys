@@ -21,7 +21,7 @@ import time
 parent_dir = pathlib.Path(__file__).parent.resolve()
 src_path = os.path.join(parent_dir, '..', '')
 sys.path.append(src_path)
-from ps_server import ps_server_pb2, poll_for_localstack_status,get_org_root_dir,delete_folder_from_s3
+from ps_server import ps_server_pb2, poll_for_localstack_status,get_cluster_root_dir,delete_folder_from_s3
 from importlib import import_module
 
 from ps_server import Control  # Import the Control class

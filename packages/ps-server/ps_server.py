@@ -129,11 +129,11 @@ def get_terraform_cli():
 def get_root_dir():
     return '/ps_server'
 
-def get_org_root_dir(name):
+def get_cluster_root_dir(name):
     return os.path.join(get_root_dir(),name)
 
 def get_terraform_dir(name):
-    return os.path.join(get_org_root_dir(name),"terraform")
+    return os.path.join(get_cluster_root_dir(name),"terraform")
 
 def get_chdir_parm(name):
     return f"-chdir={get_terraform_dir(name)}"
@@ -297,7 +297,7 @@ def upload_current_tf_files_to_s3(s3_client,name):
     LOG.info(f"uploading tf files for name:{name}",)
     return upload_folder_to_s3(s3_client=s3_client,
                                 bucket_name=S3_BUCKET, 
-                                local_directory=get_org_root_dir(name), 
+                                local_directory=get_cluster_root_dir(name), 
                                 s3_folder=s3_folder)
 
 def download_s3_folder(s3_client, bucket_name, s3_folder, local_dir=None):
@@ -608,7 +608,7 @@ def get_versions(s3_client):
     return sorted_versions
 
 def read_SetUpCfg(name):
-    setup_json_file_path = os.path.join(get_org_root_dir(name),SETUP_JSON_FILE)
+    setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
     setup_cfg = ps_server_pb2.SetUpReq()
     try:
         with open(setup_json_file_path, 'r') as json_file:
@@ -622,7 +622,7 @@ def read_SetUpCfg(name):
     return setup_cfg
 
 def write_SetUpCfg(name,setup_cfg):
-    setup_json_file_path = os.path.join(get_org_root_dir(name),SETUP_JSON_FILE)
+    setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
     json_str = MessageToJson(setup_cfg)
     with open(setup_json_file_path, 'w') as json_file:
         json_file.write(json_str)
@@ -1340,8 +1340,8 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                                             bucket=S3_BUCKET,
                                             s3_folder=s3_folder):
                     LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for name:{name}")
-            LOG.info(f"Removing local org_dir:{get_org_root_dir(name)} and tf_dir:{get_terraform_dir(name)} for org:{name}")
-            yield from self.execute_cmd(name=name, ps_cmd='TearDown', cmd_args=['rm','-rvf',get_org_root_dir(name)])
+            LOG.info(f"Removing local org_dir:{get_cluster_root_dir(name)} and tf_dir:{get_terraform_dir(name)} for org:{name}")
+            yield from self.execute_cmd(name=name, ps_cmd='TearDown', cmd_args=['rm','-rvf',get_cluster_root_dir(name)])
         except Exception as e:
             emsg = (f" Processing {'TearDown'} {name} cluster caught this exception: ")
             LOG.exception(emsg)

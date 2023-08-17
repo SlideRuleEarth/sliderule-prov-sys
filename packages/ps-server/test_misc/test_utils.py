@@ -24,7 +24,7 @@ def get_terraform_dir(test_name):
 def chdir_parm(test_name):
     return f"-chdir={get_terraform_dir(test_name)}"
 
-def get_org_root_dir(name):
+def get_cluster_root_dir(name):
     return os.path.join(get_root_dir(),name)
 
 def run_subprocess_command(cmd, logger):
@@ -357,7 +357,7 @@ def terraform_teardown(ps_server_cntrl, s3_client, s3_bucket, name, logger):
 
     assert cnt > 0
 
-    assert not os.path.isdir(get_org_root_dir(name))
+    assert not os.path.isdir(get_cluster_root_dir(name))
     assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{name}') 
     logger.info(f'cnt:{cnt} exception_cnt:{exception_cnt} stop_exception_cnt:{stop_exception_cnt}')
     logger.info(f'Done teardown: terraform_env org:{name}')

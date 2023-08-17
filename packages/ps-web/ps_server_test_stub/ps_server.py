@@ -116,11 +116,11 @@ def get_terraform_cli():
 def get_root_dir():
     return '/ps_server'
 
-def get_org_root_dir(name):
+def get_cluster_root_dir(name):
     return os.path.join(get_root_dir(),name)
 
 def get_terraform_dir(name):
-    return os.path.join(get_org_root_dir(name),"terraform")
+    return os.path.join(get_cluster_root_dir(name),"terraform")
 
 def get_s3_client():
     return boto3.client("s3", region_name="us-west-2", endpoint_url= "http://localstack:4566")
@@ -138,7 +138,7 @@ def get_ps_versions():
 ## Hack These were cut-n-pasted from real ps-server.py... TBD what to do Here?
 def read_SetUpCfg(name):
     LOG.info(f"read_SetUpCfg({name})")
-    setup_json_file_path = os.path.join(get_org_root_dir(name),SETUP_JSON_FILE)
+    setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
     setup_cfg = ps_server_pb2.SetUpReq()
     try:
         with open(setup_json_file_path, 'r') as json_file:
@@ -153,7 +153,7 @@ def read_SetUpCfg(name):
 
 
 def write_SetUpCfg(name,setup_cfg):
-    setup_json_file_path = os.path.join(get_org_root_dir(name),SETUP_JSON_FILE)
+    setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
     # Ensure the directory exists
     os.makedirs(os.path.dirname(setup_json_file_path), exist_ok=True)
     json_str = MessageToJson(setup_cfg)

@@ -12,7 +12,7 @@ import pprint
 from unittest.mock import patch
 from google.protobuf.text_format import MessageToString
 from google.protobuf import json_format
-from ps_server import ps_server_pb2,upload_current_tf_files_to_s3,get_terraform_dir,download_s3_folder,delete_folder_from_s3,get_versions,SETUP_JSON_FILE,get_org_root_dir
+from ps_server import ps_server_pb2,upload_current_tf_files_to_s3,get_terraform_dir,download_s3_folder,delete_folder_from_s3,get_versions,SETUP_JSON_FILE,get_cluster_root_dir
 from test_utils import run_subprocess_command, bucket_exists, s3_folder_exist,process_rsp_generator,terraform_teardown 
 
 # discover the src directory to import the file being tested
@@ -203,11 +203,11 @@ def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_nam
         if 'vpc.tf' in entry:
             in_output = True
     assert in_output
-    assert os.path.isdir(get_org_root_dir(test_name))
+    assert os.path.isdir(get_cluster_root_dir(test_name))
 
     cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.teardown_terraform_env(s3_client, test_name),test_name,'TearDown',logger)
     logger.info(f'done with teardown_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
-    assert not os.path.isdir(get_org_root_dir(test_name))
+    assert not os.path.isdir(get_cluster_root_dir(test_name))
 
     # normal exit shows this message
     assert 'unit-test-org TearDown Completed' in stdout
