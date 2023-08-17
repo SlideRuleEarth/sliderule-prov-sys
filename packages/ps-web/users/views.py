@@ -21,7 +21,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env
-from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_org_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_org_num_nodes_api
+from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -201,7 +201,7 @@ def orgManageCluster(request, pk):
                     if ttl_minutes != int(add_onn_form.data['add_onn-ttl_minutes']):
                         msg = f"Clamped ttl_minutes! - "
                     expire_time = datetime.now(timezone.utc)+timedelta(minutes=ttl_minutes)
-                    jrsp,status = process_org_num_nodes_api(name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
+                    jrsp,status = process_num_nodes_api(name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
                     if status == 200:
                         msg += jrsp['msg']
                         messages.success(request,msg)
@@ -302,7 +302,7 @@ def orgDestroyCluster(request, pk):
                     owner_ps_cmd = OwnerPSCmd.objects.get(org=orgAccountObj, ps_cmd='Destroy')
                     msg = f" -- IGNORING -- Destroy {orgAccountObj.name} already queued for processing"
                 except OwnerPSCmd.DoesNotExist:
-                    jrsp = remove_org_num_node_requests(request.user,orgAccountObj)
+                    jrsp = remove_num_node_requests(request.user,orgAccountObj)
                     if jrsp['status'] == 'SUCCESS':
                         messages.info(request,jrsp['msg'])
                     else:
@@ -341,7 +341,7 @@ def clearOrgNumNodesReqs(request, pk):
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':
-            jrsp = remove_org_num_node_requests(request.user,orgAccountObj)
+            jrsp = remove_num_node_requests(request.user,orgAccountObj)
             if jrsp['status'] == 'SUCCESS':
                 messages.info(request,jrsp['msg'])
             else:

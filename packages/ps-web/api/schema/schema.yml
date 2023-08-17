@@ -2,9 +2,40 @@ openapi: 3.0.3
 info:
   title: SlideRule Provisioning API
   version: 0.0.0
-  description: |-
+  description: |2+
+
     User interface for SlideRule Provisioning API.
     NOTE: This interface is encapsulated by the SlideRule Library and is not typically used directly by users.
+
+    The provisioning system allows different organizations to share a given amazon web services account and to maintain independent clusters of sliderule nodes. This provides the owners of organizations the ability to control access to their organization’s cluster via a privilaged ‘owner’ account.
+
+    Regular users of sliderule can create a regular account and request membership to organizations. The owner of the organization can accept the membership and make the user an active member or ignore the request. Owners can make members inactive to temporarily deny access to the cluster. Active members can obtain an access token that provides access to the system for 24 hours. Active members can request node capacity for the duration of the token lifetime or with a provided “time to live”.
+
+    Owner accounts:
+
+    * deploy or shutdown the organization cluster
+
+    * accept users’ membership requests
+
+    * activate/deactivate memberships
+
+    * specify the minimum and maximum number of nodes that can be deployed on the organization cluster
+
+    * can view organization’s cluster account and budget forecast
+
+    Regular accounts:
+
+    * can request membership to organizations
+
+    * can view cluster account balance and status
+
+    Endpoints:
+
+    The provisioning system provides endpoints that allow regular users to request server resources to be allocated for their python client to use throughout a given session. Users share sliderule nodes. All requests for node capacity have an expiration. Requests from all users are combined so that each and every users’ requests for the minimum number of nodes required are honored. When all the node capacity requests have expired the provisioning system will automatically reduce the number of nodes in the cluster to the minimum it is configured for. Organization cluster have two nodes (a load balancer and a monitor) that are always active even if the worker nodes is set to zero. The load balancer node can take several minutes to start. However, the organization cluster can be configured to destroy the overhead nodes if the minimum number of nodes is zero or to keep them active for faster deployment. The organization cluster can also be configured to deploy automatically (if the overhead nodes were configured to be destroyed) upon the first node capacity request. When the load balancer has to be started it will take longer to make the cluster completely available to the users’ client. However this tradeoff can save money if the organization cluster is expected to be idle for long periods of time.
+
+    All endpoints require some kind of authentication.
+
+
   contact:
     name: developer
     email: support@mail.slideruleearth.io
@@ -12,9 +43,9 @@ info:
     name: BSD-3-Clause
     url: https://github.com/ICESat2-SlideRule/sliderule-ps-web/blob/main/LICENSE
 paths:
-  /api/desired_org_num_nodes/{name}/{desired_num_nodes}/:
+  /api/desired_num_nodes/{name}/{desired_num_nodes}/:
     put:
-      operationId: desired_org_num_nodes_update
+      operationId: desired_num_nodes_update
       description: |-
         Takes an name and desired_num_nodes and creates an OrgNumNode request for the org.
         This will go into the pool of requests for the org.
@@ -34,7 +65,7 @@ paths:
           type: string
         required: true
       tags:
-      - desired_org_num_nodes
+      - desired_num_nodes
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -43,7 +74,7 @@ paths:
         '200':
           description: No response body
     patch:
-      operationId: desired_org_num_nodes_partial_update
+      operationId: desired_num_nodes_partial_update
       description: |-
         Takes an name and desired_num_nodes and creates an OrgNumNode request for the org.
         This will go into the pool of requests for the org.
@@ -63,7 +94,7 @@ paths:
           type: string
         required: true
       tags:
-      - desired_org_num_nodes
+      - desired_num_nodes
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -71,9 +102,9 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/desired_org_num_nodes_ttl/{name}/{desired_num_nodes}/{ttl}/:
+  /api/desired_num_nodes_ttl/{name}/{desired_num_nodes}/{ttl}/:
     post:
-      operationId: desired_org_num_nodes_ttl_create
+      operationId: desired_num_nodes_ttl_create
       description: |-
         Takes an name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
         NOTE: If the ttl is not provided, the time to live will be set the the minimum (15 minutes). The maximum ttl is 720 minutes (i.e. 12 hours).
@@ -98,7 +129,7 @@ paths:
           type: integer
         required: true
       tags:
-      - desired_org_num_nodes_ttl
+      - desired_num_nodes_ttl
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -121,6 +152,26 @@ paths:
         required: true
       tags:
       - membership_status
+      security:
+      - cookieAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/num_nodes/{name}/:
+    get:
+      operationId: num_nodes_retrieve
+      description: Takes an name and returns the min-current-max number of nodes and
+        the version from the cluster for the org.
+      parameters:
+      - in: path
+        name: name
+        schema:
+          type: string
+        required: true
+      tags:
+      - num_nodes
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -211,26 +262,6 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/org_num_nodes/{name}/:
-    get:
-      operationId: org_num_nodes_retrieve
-      description: Takes an name and returns the min-current-max number of nodes
-        and the version from the cluster for the org.
-      parameters:
-      - in: path
-        name: name
-        schema:
-          type: string
-        required: true
-      tags:
-      - org_num_nodes
-      security:
-      - cookieAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
   /api/org_token/:
     post:
       operationId: org_token_create
@@ -285,9 +316,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrgTokenRefresh'
           description: ''
-  /api/remove_all_org_num_nodes_reqs/{name}/:
+  /api/remove_all_num_nodes_reqs/{name}/:
     put:
-      operationId: remove_all_org_num_nodes_reqs_update
+      operationId: remove_all_num_nodes_reqs_update
       description: Removes all OrgNumNode requests for the org from the active pool
         of requests.  Must be a developer or owner of the org to remove ALL the requests.
       parameters:
@@ -297,7 +328,7 @@ paths:
           type: string
         required: true
       tags:
-      - remove_all_org_num_nodes_reqs
+      - remove_all_num_nodes_reqs
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -306,7 +337,7 @@ paths:
         '200':
           description: No response body
     patch:
-      operationId: remove_all_org_num_nodes_reqs_partial_update
+      operationId: remove_all_num_nodes_reqs_partial_update
       description: Removes all OrgNumNode requests for the org from the active pool
         of requests.  Must be a developer or owner of the org to remove ALL the requests.
       parameters:
@@ -316,7 +347,7 @@ paths:
           type: string
         required: true
       tags:
-      - remove_all_org_num_nodes_reqs
+      - remove_all_num_nodes_reqs
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -324,9 +355,9 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/remove_user_org_num_nodes_reqs/{name}/:
+  /api/remove_user_num_nodes_reqs/{name}/:
     put:
-      operationId: remove_user_org_num_nodes_reqs_update
+      operationId: remove_user_num_nodes_reqs_update
       description: Removes all OrgNumNode requests for the org from this user from
         the active pool of requests.
       parameters:
@@ -336,7 +367,7 @@ paths:
           type: string
         required: true
       tags:
-      - remove_user_org_num_nodes_reqs
+      - remove_user_num_nodes_reqs
       security:
       - cookieAuth: []
       - jwtAuth: []
@@ -345,7 +376,7 @@ paths:
         '200':
           description: No response body
     patch:
-      operationId: remove_user_org_num_nodes_reqs_partial_update
+      operationId: remove_user_num_nodes_reqs_partial_update
       description: Removes all OrgNumNode requests for the org from this user from
         the active pool of requests.
       parameters:
@@ -355,7 +386,7 @@ paths:
           type: string
         required: true
       tags:
-      - remove_user_org_num_nodes_reqs
+      - remove_user_num_nodes_reqs
       security:
       - cookieAuth: []
       - jwtAuth: []

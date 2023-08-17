@@ -305,7 +305,7 @@ def check_provision_env_ready(orgAccountObj):
                 orgAccountObj.save(update_fields=['provisioning_suspended'])
     return clusterObj.provision_env_ready,setup_occurred       
 
-def process_org_num_node_table(orgAccountObj,prior_need_refresh):
+def process_num_node_table(orgAccountObj,prior_need_refresh):
     '''
     This routine is called in the main loop (high frequency).
     If the the OrgNumNode table changed and the highest num nodes desired 
@@ -451,13 +451,13 @@ def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
         orgNumNode = None
     return orgNumNode,redundant,msg
 
-def process_org_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cmd):
+def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cmd):
     '''
         processes the APIs for setting desired num nodes
     '''
     try:
         jstatus = ''
-        LOG.info(f"process_org_num_nodes_api({name},{user},{desired_num_nodes},{expire_time})")
+        LOG.info(f"process_num_nodes_api({name},{user},{desired_num_nodes},{expire_time})")
         if int(desired_num_nodes) < 0:
             msg = f"desired_num_nodes:{desired_num_nodes} must be >= 0"
             raise ValidationError(msg)
@@ -1101,7 +1101,7 @@ def getConsoleHtml(orgAccountObj, rrsp):
             done=True, name=orgAccountObj.name, cli=failed_cli)
         return 500, ps_server_pb2.PS_AjaxResponseData(rsp=rrsp, console_html=console_html, web_error=True, web_error_msg='caught exception in web server')
 
-def remove_org_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
+def remove_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
     try:
         only_owned_by_user = only_owned_by_user or False
         LOG.info(f"{user.username} cleaning up OrgNumNode for {orgAccountObj.name} {f'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
@@ -1508,7 +1508,7 @@ def  process_prov_sys_tbls(orgAccountObj):
                 num_cmds_processed += num_cmds_processed_this_time
             # check if at least one API called and/or onn expired and is not processed yet
             #LOG.info(f"clusterObj:{clusterObj.org.name} {Cluster.objects.count()} {clusterObj.org.id}")
-            process_org_num_node_table(orgAccountObj,(num_cmds_processed==0 and setup_occurred))
+            process_num_node_table(orgAccountObj,(num_cmds_processed==0 and setup_occurred))
     except Exception as e:
         LOG.exception(f'Exception caught for {orgAccountObj.name}')
         LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")

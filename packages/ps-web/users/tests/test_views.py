@@ -75,7 +75,7 @@ class ViewsTestCase(GlobalTestCase):
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_adding_an_org_num_node(caplog,client,mock_email_backend,initialize_test_environ):
+def test_adding_an_num_node(caplog,client,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test a privileged user can queue a deploy cmd
     '''
@@ -114,7 +114,7 @@ def test_adding_an_org_num_node(caplog,client,mock_email_backend,initialize_test
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_num_node_form_invalid_ttl_too_low(caplog,client,mock_email_backend,initialize_test_environ):
+def test_num_node_form_invalid_ttl_too_low(caplog,client,mock_email_backend,initialize_test_environ):
 
     assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
     
@@ -136,7 +136,7 @@ def test_org_num_node_form_invalid_ttl_too_low(caplog,client,mock_email_backend,
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_num_node_form_invalid_ttl_too_high(caplog,client,mock_email_backend,initialize_test_environ):
+def test_num_node_form_invalid_ttl_too_high(caplog,client,mock_email_backend,initialize_test_environ):
 
     assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
     

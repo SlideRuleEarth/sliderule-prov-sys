@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenBackendError
-from users.tasks import process_org_num_nodes_api,update_cur_num_nodes,remove_org_num_node_requests,set_PROVISIONING_DISABLED,redis_interface
+from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED,redis_interface
 from users.global_constants import *
 from oauth2_provider.views.generic import ProtectedResourceView
 from django.http import JsonResponse
@@ -199,7 +199,7 @@ class DesiredOrgNumNodesView(generics.UpdateAPIView):
                 if active:
                     LOG.info(f"type(token_expire_date):{type(token_expire_date)}")
                     LOG.info(f"token_expire_date:{token_expire_date}")
-                    jrsp, http_status = process_org_num_nodes_api(name, user, desired_num_nodes, token_expire_date, False)
+                    jrsp, http_status = process_num_nodes_api(name, user, desired_num_nodes, token_expire_date, False)
             else:
                 return Response(jrsp, status=http_status)
         except Exception as e:
@@ -236,7 +236,7 @@ class DesiredOrgNumNodesTTLView(generics.CreateAPIView):
                             ttl_exp_tm = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=int(ttl))
                         LOG.info(f"type(ttl_exp_tm):{type(ttl_exp_tm)} ttl_exp_tm:{ttl_exp_tm} ttl:{ttl}")
                         if clusterObj.is_deployed or orgAccountObj.allow_deploy_by_token:
-                            jrsp,http_status = process_org_num_nodes_api(name,user,desired_num_nodes,ttl_exp_tm,False)
+                            jrsp,http_status = process_num_nodes_api(name,user,desired_num_nodes,ttl_exp_tm,False)
                         else:
                             jrsp = {'status': "FAILED","error_msg":f"cluster for {orgAccountObj.name} is not deployed and is not configured to be deployed with this request (See admin for details)"}
                             http_status = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -291,7 +291,7 @@ class RemoveUserOrgNumNodesReqsView(generics.UpdateAPIView):
         jrsp,status,active,user,token_expire_date = get_token_org_active_membership(request,name)
         if status == 200:
             if active:
-                jrsp = remove_org_num_node_requests(request.user,orgAccountObj,only_owned_by_user=True)
+                jrsp = remove_num_node_requests(request.user,orgAccountObj,only_owned_by_user=True)
         return Response(jrsp,status = status)
 
 
@@ -314,7 +314,7 @@ class RemoveAllOrgNumNodesReqsView(generics.UpdateAPIView):
                 jrsp,status,user_in_token = get_user_in_token(request)
                 if user_in_token is not None:
                     if user_in_token.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner==user_in_token:
-                        jrsp = remove_org_num_node_requests(request.user,orgAccountObj,only_owned_by_user=False)
+                        jrsp = remove_num_node_requests(request.user,orgAccountObj,only_owned_by_user=False)
                     else:
                         status = 400
                         jrsp = {'status': "FAILED","error_msg":f"{user_in_token.username} is not an admin of {name}"}

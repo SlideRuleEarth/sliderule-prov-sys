@@ -53,7 +53,7 @@ def teardown_module(tasks_module):
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_num_node_form_valid(caplog,client,create_TEST_USER,mock_email_backend,initialize_test_environ):
+def test_num_node_form_valid(caplog,client,create_TEST_USER,mock_email_backend,initialize_test_environ):
     form_data = {
         'desired_num_nodes': get_test_org().MIN_NODES,
         'ttl_minutes': 15,
