@@ -76,11 +76,11 @@ def test_experiment(tasks_module,caplog):
             start= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)- timedelta(days=7)
             start_tm_str = datetime.strftime(start, FMT_Z) 
             logger.info(f"DailyHistCost start_tm_str:{start_tm_str}  using:{FMT_Z}")
-            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(org_name="sliderule", start_tm=start_tm_str, end_tm=time_now_str))
+            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(name="sliderule", start_tm=start_tm_str, end_tm=time_now_str))
             most_recent_tm_str = rsp.tm[len(rsp.tm)-1]
             logger.info(f"DailyHistCost most_recent_tm_str:{most_recent_tm_str} ")
             time_now,time_now_str = tasks.get_tm_now_tuple()
-            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(org_name="sliderule",tm=time_now_str))
+            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(name="sliderule",tm=time_now_str))
             most_recent_tm_str = rsp.tm[len(rsp.tm)-1]
             logger.info(f"TodaysCost most_recent_tm_str:{most_recent_tm_str} ")
 

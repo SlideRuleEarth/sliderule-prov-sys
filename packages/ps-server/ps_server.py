@@ -281,23 +281,23 @@ def s3_folder_exists(s3_client, bucket_name, s3_folder):
         LOG.info(f'Bucket:{bucket_name} DOES NOT exist')
         return False
 
-def upload_current_tf_files_to_s3(s3_client,org_name):
+def upload_current_tf_files_to_s3(s3_client,name):
     '''
     Uploads the currently used terraform files of an org to s3
     This uploads the entire org dir with subdir of terraform and it's files
     The root dir is the org name and it contains the terraform subdir and the file with  setup info, i.e. SETUP_JSON_FILE 
     '''
-    s3_folder = os.path.join('prov-sys',f'{get_domain_env()}','current_cluster_tf_by_org',org_name)
+    s3_folder = os.path.join('prov-sys',f'{get_domain_env()}','current_cluster_tf_by_org',name)
     if s3_folder_exists(s3_client=s3_client,bucket_name=S3_BUCKET,s3_folder=s3_folder):
-        LOG.info(f"deleting s3_folder:{s3_folder} from s3 for org_name:{org_name}")
+        LOG.info(f"deleting s3_folder:{s3_folder} from s3 for name:{name}")
         if not delete_folder_from_s3(s3_client=s3_client,
                                     bucket=S3_BUCKET,
                                     s3_folder=s3_folder):
-            LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for org_name:{org_name}")
-    LOG.info(f"uploading tf files for org_name:{org_name}",)
+            LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for name:{name}")
+    LOG.info(f"uploading tf files for name:{name}",)
     return upload_folder_to_s3(s3_client=s3_client,
                                 bucket_name=S3_BUCKET, 
-                                local_directory=get_org_root_dir(org_name), 
+                                local_directory=get_org_root_dir(name), 
                                 s3_folder=s3_folder)
 
 def download_s3_folder(s3_client, bucket_name, s3_folder, local_dir=None):
@@ -541,7 +541,7 @@ def ce_get_cost_and_usage(ce_client,ccr,st_str,et_str,tag_key,tag_values):
         Metrics=["UnblendedCost"],
         GroupBy=[{"Type": "DIMENSION", "Key": "LINKED_ACCOUNT"}],
     )
-    LOG.info(f" $$$$$$$$$$$$$$$$$$$ cost explorer call $$$$$$$$$$$$$$ {ccr.org_name} {ccr.granularity} {st_str} - {et_str}")
+    LOG.info(f" $$$$$$$$$$$$$$$$$$$ cost explorer call $$$$$$$$$$$$$$ {ccr.name} {ccr.granularity} {st_str} - {et_str}")
     #LOG.info(result)
     rbt = result.get("ResultsByTime")
     for r in rbt:
@@ -607,8 +607,8 @@ def get_versions(s3_client):
     LOG.info(f"sorted_versions:{sorted_versions}")  
     return sorted_versions
 
-def read_SetUpCfg(org_name):
-    setup_json_file_path = os.path.join(get_org_root_dir(org_name),SETUP_JSON_FILE)
+def read_SetUpCfg(name):
+    setup_json_file_path = os.path.join(get_org_root_dir(name),SETUP_JSON_FILE)
     setup_cfg = ps_server_pb2.SetUpReq()
     try:
         with open(setup_json_file_path, 'r') as json_file:
@@ -621,36 +621,36 @@ def read_SetUpCfg(org_name):
     LOG.info(f"{setup_cfg} from {setup_json_file_path}")
     return setup_cfg
 
-def write_SetUpCfg(org_name,setup_cfg):
-    setup_json_file_path = os.path.join(get_org_root_dir(org_name),SETUP_JSON_FILE)
+def write_SetUpCfg(name,setup_cfg):
+    setup_json_file_path = os.path.join(get_org_root_dir(name),SETUP_JSON_FILE)
     json_str = MessageToJson(setup_cfg)
     with open(setup_json_file_path, 'w') as json_file:
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(org_name,version,is_public,now):
-    LOG.info(f"update_SetUpCfg: org_name:{org_name} version:{version} is_public:{is_public} now:{now}")
+def update_SetUpCfg(name,version,is_public,now):
+    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
     try:
-        setup_cfg = read_SetUpCfg(org_name) # might not exist
+        setup_cfg = read_SetUpCfg(name) # might not exist
         LOG.info(f"FROM: {setup_cfg}")
-        setup_cfg.org_name = org_name
+        setup_cfg.name = name
         setup_cfg.version = version
         setup_cfg.is_public = is_public
         setup_cfg.now = now
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
-        write_SetUpCfg(org_name, setup_cfg)
+        write_SetUpCfg(name, setup_cfg)
     except Exception as e:
-        LOG.exception(f" FAILED to read to read_SetUpCfg({org_name}) caught UNKNOWN exception:{repr(e)}")
+        LOG.exception(f" FAILED to read to read_SetUpCfg({name}) caught UNKNOWN exception:{repr(e)}")
         raise e
     LOG.info(f"  TO: {MessageToString(setup_cfg)}")
  
 
 class Account(ps_server_pb2_grpc.AccountServicer):
     # Assumes st is on an hourly or daily boundry that lines up with cost explorer times
-    def GetCostAndUsageRsp(self,org_name,gran,st,et):  ## This is a common routine
-        LOG.info(f"{org_name} {gran} {st} {et}")
+    def GetCostAndUsageRsp(self,name,gran,st,et):  ## This is a common routine
+        LOG.info(f"{name} {gran} {st} {et}")
         ccr = ps_server_pb2.CostAndUsageRsp(
-            org_name=org_name,
+            name=name,
             total=0.0,
             unit="",
             server_error=False,
@@ -701,7 +701,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             #
             # These are the default_tags in the provider section of the cluster terraform definition
             #
-            ProjectTagValuesToUse = "cluster-"+org_name
+            ProjectTagValuesToUse = "cluster-"+name
             LOG.info(f"get_tags {ProjectTagValuesToUse} {tags_st.strftime(DAY_FMT)} {et.strftime(DAY_FMT)}")
             if endpoint_url is None or endpoint_url == "": # i.e. not localstack or local test env
                 tags_result = ce_client.get_tags(  SearchString=ProjectTagValuesToUse,
@@ -714,9 +714,9 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                 LOG.info("project tags -- rs:%s ts:%s",tags_result.get('ReturnSize'),tags_result.get('TotalSize'))
                 LOG.info(f"project_tags{project_tags}")
                 if tags_result.get('ReturnSize') == 0:
-                    LOG.info(f"No project cost tags returned for {org_name} {tags_st.strftime(fmt)} {et.strftime(fmt)}")
+                    LOG.info(f"No project cost tags returned for {name} {tags_st.strftime(fmt)} {et.strftime(fmt)}")
                 if (tags_result.get('ReturnSize') != tags_result.get('TotalSize')):
-                    LOG.error(f"Unexpected multiple pages of cost tags returned for {org_name} {tags_st.strftime(fmt)} {et.strftime(fmt)}")
+                    LOG.error(f"Unexpected multiple pages of cost tags returned for {name} {tags_st.strftime(fmt)} {et.strftime(fmt)}")
 
                 if len(project_tags) > 0:
                     LOG.info(f"ce_get_cost_and_usage {st.strftime(fmt)} {et.strftime(fmt)}")
@@ -731,16 +731,16 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                 LOG.info("legacy_name_tags:%s,",legacy_name_tags) 
                 # These Name tags will continue to exist but will be (are) redundant with Project tags 
                 legacy_name_tags = [
-                    org_name+"-ilb",                
-                    org_name+"-lb",                
-                    org_name+"-monitor",                
-                    org_name+"-node",                
-                    org_name+"-node-manager",                
-                    org_name+"-orchestrator",                
-                    org_name+"-proxy",                
+                    name+"-ilb",                
+                    name+"-lb",                
+                    name+"-monitor",                
+                    name+"-node",                
+                    name+"-node-manager",                
+                    name+"-orchestrator",                
+                    name+"-proxy",                
                 ]
                 # These tags are obsolete and no longer exist but they were active until ~ 3/5/2023
-                if org_name == 'sliderule':
+                if name == 'sliderule':
                     sliderule_org_legacy_names = [
                         "sliderule-alpha",
                         "sliderule-asg",
@@ -773,7 +773,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             else:
                 LOG.warning(f"SKIPPING because of endpoint_url:{endpoint_url} localstack or local test env? ")
         except Exception as e:
-            emsg = (f" Processing for org: {org_name} cluster caught this exception:")
+            emsg = (f" Processing for org: {name} cluster caught this exception:")
             LOG.exception(emsg)
             emsg += repr(e)
             ccr.server_error = True
@@ -786,7 +786,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
         #gran = ps_server_pb2.GRANULARITY.Name(currentCostReq.granularity)
         try:
             gran = currentCostReq.granularity
-            LOG.info("%s %s", currentCostReq.org_name, gran)
+            LOG.info("%s %s", currentCostReq.name, gran)
             et = pytz.utc.localize(datetime.strptime(currentCostReq.tm, FULL_FMT)) + timedelta(hours=1) 
             et.replace(minute=0, second=0, microsecond=0) #end of this hour
             if gran == "HOURLY":
@@ -807,28 +807,28 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             else:
                 errMsg = " FAILED, Unknown granularity "+gran
                 LOG.error("FAILED")
-                return ps_server_pb2.CostAndUsageRsp(   org_name  = currentCostReq.org_name,
+                return ps_server_pb2.CostAndUsageRsp(   name  = currentCostReq.name,
                                                         granularity = currentCostReq.granularity,
                                                         server_error = True,
                                                         error_msg = errMsg)
             LOG.info("%s",repr(currentCostReq))
-            return self.GetCostAndUsageRsp( currentCostReq.org_name,
+            return self.GetCostAndUsageRsp( currentCostReq.name,
                                             currentCostReq.granularity,
                                             st,
                                             et)
         except Exception as e:
-            emsg = (f" Processing for org: {currentCostReq.org_name} cluster caught this exception:")
+            emsg = (f" Processing for org: {currentCostReq.name} cluster caught this exception:")
             LOG.exception(emsg)
             emsg += repr(e)
             return ps_server_pb2.CostAndUsageRsp(
-                org_name=currentCostReq.org_name,
+                name=currentCostReq.name,
                 total=0.0,
                 unit="",
                 server_error=True,
                 error_msg=emsg)            
 
     def TodaysCost(self, todaysCostReq, context):  ## This is called by GRPC framework
-        LOG.info("%s cluster", todaysCostReq.org_name)
+        LOG.info("%s cluster", todaysCostReq.name)
         try:
             tm = pytz.utc.localize(datetime.strptime(todaysCostReq.tm, FULL_FMT))
             # st truncate to start of the day et extrapolate to beginning of this hour
@@ -836,16 +836,16 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             if (tm - st) < timedelta(hours=1): # must have a range
                 tm = st + timedelta(hours=1)
             LOG.info(f"st:{st.strftime(FULL_FMT)} et:{tm.strftime(FULL_FMT)}")
-            return self.GetCostAndUsageRsp( todaysCostReq.org_name,
+            return self.GetCostAndUsageRsp( todaysCostReq.name,
                                             "HOURLY",
                                             st,
                                             tm)
         except Exception as e:
-            emsg = (f" Processing for org: {todaysCostReq.org_name} cluster caught this exception:")
+            emsg = (f" Processing for org: {todaysCostReq.name} cluster caught this exception:")
             LOG.exception(emsg)
             emsg += repr(e)
             return ps_server_pb2.CostAndUsageRsp(
-                org_name=todaysCostReq.org_name,
+                name=todaysCostReq.name,
                 total=0.0,
                 unit="",
                 server_error=True,
@@ -854,7 +854,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
     ## This is called by GRPC framework
     def DailyHistCost(self, dailyHistCost, context):
         try:
-            LOG.info("%s cluster", dailyHistCost.org_name)
+            LOG.info("%s cluster", dailyHistCost.name)
             # truncate to start of day for time passed as st
             st = datetime.strptime(dailyHistCost.start_tm, FULL_FMT).replace(
                 hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.utc
@@ -864,25 +864,25 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                 hour=0, minute=0, second=0, microsecond=0, tzinfo=pytz.utc
             )
             LOG.info("st:%s et:%s", st.strftime(FULL_FMT), et.strftime(FULL_FMT))
-            return self.GetCostAndUsageRsp( dailyHistCost.org_name,
+            return self.GetCostAndUsageRsp( dailyHistCost.name,
                                             "DAILY",
                                             st,
                                             et)
         except Exception as e:
-            emsg = (f" Processing for org: {dailyHistCost.org_name} cluster caught this exception:")
+            emsg = (f" Processing for org: {dailyHistCost.name} cluster caught this exception:")
             LOG.exception(emsg)
             emsg += repr(e)
             return ps_server_pb2.CostAndUsageRsp(
-                org_name=dailyHistCost.org_name,
+                name=dailyHistCost.name,
                 total=0.0,
                 unit="",
                 server_error=True,
                 error_msg=emsg)            
 
     def NumNodes(self,numNodesReq, context):
-        #LOG.info("%s %s %s",numNodesReq.region,numNodesReq.org_name,numNodesReq.version)
-        num_nodes = get_num_nodes(numNodesReq.region,numNodesReq.org_name,numNodesReq.version)
-        return ps_server_pb2.NumNodesRsp(org_name = numNodesReq.org_name,version=numNodesReq.version,region=numNodesReq.region,num_nodes = num_nodes)
+        #LOG.info("%s %s %s",numNodesReq.region,numNodesReq.name,numNodesReq.version)
+        num_nodes = get_num_nodes(numNodesReq.region,numNodesReq.name,numNodesReq.version)
+        return ps_server_pb2.NumNodesRsp(name = numNodesReq.name,version=numNodesReq.version,region=numNodesReq.region,num_nodes = num_nodes)
 
 
 class Control(ps_server_pb2_grpc.ControlServicer):
@@ -979,12 +979,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             and request.num_nodes <= request.max_nodes
             and request.num_nodes >= request.min_nodes)
 
-    def after_tf_refresh_cmd_proc(self, org_name, ps_cmd):
+    def after_tf_refresh_cmd_proc(self, name, ps_cmd):
         #LOG.info("Enter")
         cmd_args = ["state", "list"]
-        yield from self.execute_sequence_of_terraform_cmds(org_name, ps_cmd, cmd_args)
+        yield from self.execute_sequence_of_terraform_cmds(name, ps_cmd, cmd_args)
 
-    def poll_and_process_tf_state_list_cmd_proc(self, org_name, ps_cmd, state_list_cmd_args, state_list_cmd_proc):
+    def poll_and_process_tf_state_list_cmd_proc(self, name, ps_cmd, state_list_cmd_args, state_list_cmd_proc):
         #LOG.info("Enter")
         NUM_LINES_TO_SEND = 150
         deployed = False
@@ -992,16 +992,16 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         ip_address = "unknown"
         expected_str = str("data.aws_ami.sliderule_cluster_ami\n")
         outStr = ""
-        yield self.get_cmd_args_response(org_name, ps_cmd, state_list_cmd_args)
+        yield self.get_cmd_args_response(name, ps_cmd, state_list_cmd_args)
         while state_list_cmd_proc.poll() is None:
             # handle std err
-            yield from self.batch_std_lines(org_name, ps_cmd, state_list_cmd_proc.stderr, self.get_stderr_response)
+            yield from self.batch_std_lines(name, ps_cmd, state_list_cmd_proc.stderr, self.get_stderr_response)
             # don't call batch_std_lines for stdout this way we can capture plain text in outStr
             olines = "".encode()
             for line in state_list_cmd_proc.stdout:
                 outStr = outStr + str(line, "utf-8").strip()
                 olines = olines + line
-            yield self.get_stdout_response(org_name, ps_cmd, olines)
+            yield self.get_stdout_response(name, ps_cmd, olines)
         if state_list_cmd_proc.returncode != 0:
             emsg = (
                 "terraform cmd "
@@ -1020,7 +1020,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             deployed_state = "NOT deployed"
             ip_address = "0.0.0.0"
             yield self.get_state_response(
-                org_name,
+                name,
                 ps_cmd,
                 state_list_cmd_args,
                 state_list_cmd_proc,
@@ -1032,20 +1032,20 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             ## Assuming deployed now do an output cmd
             LOG.info("Assuming deployed")
             cmd_args = ["output"]
-            LOG.info(f"{org_name} out_cmd_args:{repr(cmd_args)}" )
-            yield from self.execute_sequence_of_terraform_cmds(org_name, ps_cmd, cmd_args)
+            LOG.info(f"{name} out_cmd_args:{repr(cmd_args)}" )
+            yield from self.execute_sequence_of_terraform_cmds(name, ps_cmd, cmd_args)
 
-    def poll_and_process_tf_output_cmd_proc(self, org_name, ps_cmd, out_cmd_args, out_cmd_proc):
+    def poll_and_process_tf_output_cmd_proc(self, name, ps_cmd, out_cmd_args, out_cmd_proc):
         LOG.info("Enter")
         lines = []
         olines = "".encode()
         NUM_LINES_TO_SEND = 150
         LOG.info("calling for stderr")
         yield self.get_cmd_args_response(
-            org_name, ps_cmd, out_cmd_args
+            name, ps_cmd, out_cmd_args
         )
         while out_cmd_proc.poll() is None:
-            yield from self.batch_std_lines(org_name, ps_cmd, out_cmd_proc.stderr, self.get_stderr_response)
+            yield from self.batch_std_lines(name, ps_cmd, out_cmd_proc.stderr, self.get_stderr_response)
             oln_cnt = 0
             LOG.info("Reading stdout lines...")
             for line in out_cmd_proc.stdout:
@@ -1055,7 +1055,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 oln_cnt = oln_cnt + 1
             LOG.info("Sending response with %d lines",oln_cnt)
             if oln_cnt > 0:
-                yield self.get_stdout_response(org_name, ps_cmd, olines)
+                yield self.get_stdout_response(name, ps_cmd, olines)
                 LOG.info(olines.decode())
         LOG.handlers[0].flush()
 
@@ -1098,7 +1098,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
 
         LOG.info("Sending state rsp")
         yield self.get_state_response(
-            org_name,
+            name,
             ps_cmd,
             out_cmd_args,
             out_cmd_proc,
@@ -1107,17 +1107,17 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             ilb_ip_address,
         )
 
-    def after_tf_apply_cmd_proc(self, org_name, ps_cmd):
+    def after_tf_apply_cmd_proc(self, name, ps_cmd):
         #LOG.info(cmd_args)
         cmd_args = ["state", "list"]
-        yield from self.execute_sequence_of_terraform_cmds(org_name, ps_cmd, cmd_args)
+        yield from self.execute_sequence_of_terraform_cmds(name, ps_cmd, cmd_args)
 
-    def after_tf_destroy_cmd_proc(self, org_name, ps_cmd):
+    def after_tf_destroy_cmd_proc(self, name, ps_cmd):
         #LOG.info(cmd_args)
         cmd_args = ["state", "list"]
-        yield from self.execute_sequence_of_terraform_cmds(org_name, ps_cmd, cmd_args)
+        yield from self.execute_sequence_of_terraform_cmds(name, ps_cmd, cmd_args)
 
-    def batch_std_lines(self, org_name, ps_cmd, proc_lines, get_std_response):
+    def batch_std_lines(self, name, ps_cmd, proc_lines, get_std_response):
         stdlines = "".encode()
         LOG.info("Reading lines...")
         n = 0
@@ -1127,14 +1127,14 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             n = n + 1
         LOG.info(f"Sending response with {n} lines")
         yield get_std_response(
-            org_name,
+            name,
             ps_cmd,
             stdlines,
         )
         #LOG.info(stdlines.decode())
         LOG.handlers[0].flush()
 
-    def poll_proc_and_yield_console_rsps(self, org_name, ps_cmd, cmd_args, proc):
+    def poll_proc_and_yield_console_rsps(self, name, ps_cmd, cmd_args, proc):
         '''
         The method `proc.poll()` checks if the subprocess has terminated. If the subprocess has not terminated, `proc.poll()` returns `None` and if it has terminated, it returns the exit code of the subprocess. Therefore, `proc.poll()` is non-blocking; it simply checks the status of the process and returns immediately.
 
@@ -1147,14 +1147,14 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         If the subprocess doesn't output anything (or very little) to its stdout or stderr until it has completed, the self.batch_std_lines(...) calls are likely to block until the subprocess is finished.
 
         '''
-        LOG.info(f"Enter -- {ps_cmd} {org_name} with {cmd_args}")
-        yield self.get_cmd_args_response(org_name, ps_cmd, cmd_args)
+        LOG.info(f"Enter -- {ps_cmd} {name} with {cmd_args}")
+        yield self.get_cmd_args_response(name, ps_cmd, cmd_args)
         n = 0
         while proc.poll() is None:
             LOG.info("calling for stdout")
-            yield from self.batch_std_lines(org_name, ps_cmd, proc.stdout, self.get_stdout_response)
+            yield from self.batch_std_lines(name, ps_cmd, proc.stdout, self.get_stdout_response)
             LOG.info("calling for stderr")
-            yield from self.batch_std_lines(org_name, ps_cmd, proc.stderr, self.get_stderr_response)
+            yield from self.batch_std_lines(name, ps_cmd, proc.stderr, self.get_stderr_response)
             if n > 1:
                 LOG.info("sleeping 1 ...")
                 sleep(1)
@@ -1162,12 +1162,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         LOG.info(f"Polled {n} times with return code:{proc.returncode} for {ps_cmd} SUB cmd_args:{cmd_args}")
         LOG.handlers[0].flush()
         if proc.returncode != 0:
-            emsg = (f"{cmd_args} FAILED for ps_cmd |{ps_cmd}| {org_name} with return code {proc.returncode}")
+            emsg = (f"{cmd_args} FAILED for ps_cmd |{ps_cmd}| {name} with return code {proc.returncode}")
             LOG.warning(emsg)
             raise subprocess.CalledProcessError(returncode=proc.returncode, cmd=cmd_args)
 
-    def execute_sequence_of_terraform_cmds(self, org_name, ps_cmd, cmd_args):
-        cmd_args = [get_terraform_cli(), get_chdir_parm(org_name)] + cmd_args
+    def execute_sequence_of_terraform_cmds(self, name, ps_cmd, cmd_args):
+        cmd_args = [get_terraform_cli(), get_chdir_parm(name)] + cmd_args
         LOG.info(cmd_args)
         with subprocess.Popen(
             cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -1175,54 +1175,54 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             # at this point the subprocess is done
             # Here we call the followup processing function specific to that terraform cmd
             if "refresh" in cmd_args:
-                yield from self.poll_proc_and_yield_console_rsps(org_name,  ps_cmd, cmd_args, proc)
-                yield from self.after_tf_refresh_cmd_proc(org_name, ps_cmd)
+                yield from self.poll_proc_and_yield_console_rsps(name,  ps_cmd, cmd_args, proc)
+                yield from self.after_tf_refresh_cmd_proc(name, ps_cmd)
             elif "-destroy" in cmd_args:
-                yield from self.poll_proc_and_yield_console_rsps(org_name,  ps_cmd, cmd_args, proc)
-                yield from self.after_tf_destroy_cmd_proc(org_name, ps_cmd)
+                yield from self.poll_proc_and_yield_console_rsps(name,  ps_cmd, cmd_args, proc)
+                yield from self.after_tf_destroy_cmd_proc(name, ps_cmd)
             elif "apply" in cmd_args:
-                yield from self.poll_proc_and_yield_console_rsps(org_name,  ps_cmd, cmd_args, proc)
-                yield from self.after_tf_apply_cmd_proc(org_name, ps_cmd)
+                yield from self.poll_proc_and_yield_console_rsps(name,  ps_cmd, cmd_args, proc)
+                yield from self.after_tf_apply_cmd_proc(name, ps_cmd)
             elif "plan" in cmd_args:
-                yield from self.poll_proc_and_yield_console_rsps(org_name,  ps_cmd, cmd_args, proc)
-                yield from self.after_tf_apply_cmd_proc(org_name, ps_cmd)
+                yield from self.poll_proc_and_yield_console_rsps(name,  ps_cmd, cmd_args, proc)
+                yield from self.after_tf_apply_cmd_proc(name, ps_cmd)
             elif "state" in cmd_args:
-                yield from self.poll_and_process_tf_state_list_cmd_proc(org_name, ps_cmd, cmd_args, proc)
+                yield from self.poll_and_process_tf_state_list_cmd_proc(name, ps_cmd, cmd_args, proc)
             elif "output" in cmd_args:
-                yield from self.poll_and_process_tf_output_cmd_proc(org_name, ps_cmd, cmd_args, proc)
+                yield from self.poll_and_process_tf_output_cmd_proc(name, ps_cmd, cmd_args, proc)
             else:
                 emsg = (f"terraform cmd {repr(cmd_args)} FAILED for ps_cmd |{ps_cmd}|")
                 LOG.error(emsg)
                 raise PS_InternalError(emsg)
 
-    def execute_cmd(self, org_name, ps_cmd, cmd_args):
-        LOG.info(f'{org_name} {ps_cmd} with {cmd_args}')
+    def execute_cmd(self, name, ps_cmd, cmd_args):
+        LOG.info(f'{name} {ps_cmd} with {cmd_args}')
         with subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             # at this point the subprocess is done
             # Here we call the followup processing function specific to that terraform cmd
-            yield from self.poll_proc_and_yield_console_rsps(org_name, ps_cmd, cmd_args, proc)
+            yield from self.poll_proc_and_yield_console_rsps(name, ps_cmd, cmd_args, proc)
 
-    def execute_terraform_cmd(self, org_name, ps_cmd, cmd_args):
-        cmd_args = [get_terraform_cli(), get_chdir_parm(org_name)] + cmd_args
-        LOG.info(f'{org_name} {ps_cmd} with {cmd_args}')
+    def execute_terraform_cmd(self, name, ps_cmd, cmd_args):
+        cmd_args = [get_terraform_cli(), get_chdir_parm(name)] + cmd_args
+        LOG.info(f'{name} {ps_cmd} with {cmd_args}')
         with subprocess.Popen(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
             # at this point the subprocess is done
             # Here we call the followup processing function specific to that terraform cmd
-            yield from self.poll_proc_and_yield_console_rsps(org_name, ps_cmd, cmd_args, proc)
+            yield from self.poll_proc_and_yield_console_rsps(name, ps_cmd, cmd_args, proc)
 
-    def delete_workspace_for_org(self, org_name):
+    def delete_workspace_for_org(self, name):
         try:
             tf_cmd_args = ["workspace", "select", "default"]
-            yield from self.execute_terraform_cmd(org_name, 'TearDown', tf_cmd_args)
-            tf_cmd_args = ["workspace", "delete", f'localhost-{org_name}']
-            yield from self.execute_terraform_cmd(org_name, 'TearDown', tf_cmd_args)
+            yield from self.execute_terraform_cmd(name, 'TearDown', tf_cmd_args)
+            tf_cmd_args = ["workspace", "delete", f'localhost-{name}']
+            yield from self.execute_terraform_cmd(name, 'TearDown', tf_cmd_args)
         except Exception as e:
             LOG.exception(f'Exception:{e}')
             raise e
 
-    def get_specific_tf_version_files_from_s3(self, s3_client, org_name, version):
+    def get_specific_tf_version_files_from_s3(self, s3_client, name, version):
         try:
-            tf_dir = get_terraform_dir(org_name) # of the form /<org>/terraform/
+            tf_dir = get_terraform_dir(name) # of the form /<org>/terraform/
             folder = f"prov-sys/cluster_tf_versions/{version}"
             if download_s3_folder(s3_client=s3_client, 
                                     bucket_name=S3_BUCKET,
@@ -1237,63 +1237,63 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             LOG.exception(f'Exception:{e}')
             raise e
 
-    def setup_terraform_env(self, s3_client, org_name, version, is_public, now):
-        LOG.info(f"Start SetUp of provision environment for org:{org_name} version:{version}")
+    def setup_terraform_env(self, s3_client, name, version, is_public, now):
+        LOG.info(f"Start SetUp of provision environment for org:{name} version:{version}")
         st = datetime.now(timezone.utc)
         try:
-            tf_dir = get_terraform_dir(org_name) # of the form /<org>/terraform/
+            tf_dir = get_terraform_dir(name) # of the form /<org>/terraform/
             # 
             # First check if terraform files are already downloaded 
             #  
             if Path(tf_dir).exists():
                 LOG.info(f"terrform files in folder {tf_dir} already exist")
-                setup_cfg = read_SetUpCfg(org_name)
+                setup_cfg = read_SetUpCfg(name)
                 if version != setup_cfg.version:
                     LOG.info(f"terraform files in folder {tf_dir} are for version:{setup_cfg.version} and not for requested setup version:{version} replacing...")
-                    yield from self.execute_cmd(org_name=org_name, ps_cmd='SetUp', cmd_args=["rm", "-rvf", tf_dir])
+                    yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["rm", "-rvf", tf_dir])
             else:
                 LOG.info(f"terraform folder {tf_dir} do not exist creating it")
                 try:
-                    yield from self.execute_cmd(org_name=org_name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
+                    yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
                     setup_cfg = ps_server_pb2.SetUpReq()
-                    setup_cfg.org_name = org_name
+                    setup_cfg.name = name
                     setup_cfg.version = version
                     setup_cfg.is_public = is_public
                     setup_cfg.now = now
                 except Exception as e:
-                    emsg = (f" Processing SetUp {org_name} cluster caught this exception creating tf_dir: ")
+                    emsg = (f" Processing SetUp {name} cluster caught this exception creating tf_dir: ")
                     LOG.exception(emsg)
                 try:
-                    write_SetUpCfg(org_name, setup_cfg)
-                    yield from self.execute_cmd(org_name=org_name, ps_cmd='SetUp', cmd_args=["ls", tf_dir])
+                    write_SetUpCfg(name, setup_cfg)
+                    yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["ls", tf_dir])
                 except subprocess.CalledProcessError as e:
                     # expect to see this--> "ls: cannot access {tf_dir}: No such file or directory"
                     LOG.info(f"terraform folder {tf_dir} do not exist expect to see this--> 'ls: cannot access {tf_dir}: No such file or directory' in e:{e}")
-            yield from self.execute_cmd(org_name=org_name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
-            self.get_specific_tf_version_files_from_s3(s3_client, org_name, version)       
-            update_SetUpCfg(org_name, version, is_public, now)
-            yield from self.execute_cmd          (org_name=org_name, ps_cmd='SetUp',    cmd_args=["ls", '-al', tf_dir])
-            yield from self.execute_terraform_cmd(org_name=org_name, ps_cmd='SetUp',    cmd_args=["init"])
-            yield from self.execute_terraform_cmd(org_name=org_name, ps_cmd='SetUp',    cmd_args=["validate"])
-            ws_name = get_domain_env()+"-"+org_name
-            workspaces = get_workspace_list(org_name)
+            yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
+            self.get_specific_tf_version_files_from_s3(s3_client, name, version)       
+            update_SetUpCfg(name, version, is_public, now)
+            yield from self.execute_cmd          (name=name, ps_cmd='SetUp',    cmd_args=["ls", '-al', tf_dir])
+            yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["init"])
+            yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["validate"])
+            ws_name = get_domain_env()+"-"+name
+            workspaces = get_workspace_list(name)
             LOG.info("%s in %s ?",ws_name,workspaces)
             if ws_name not in workspaces:
-                yield from self.execute_terraform_cmd(org_name=org_name, ps_cmd='SetUp',  cmd_args=["workspace", "new", ws_name])
+                yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',  cmd_args=["workspace", "new", ws_name])
             else:
-                yield from self.execute_terraform_cmd(org_name=org_name, ps_cmd='SetUp',  cmd_args=["workspace", "select", ws_name])
+                yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',  cmd_args=["workspace", "select", ws_name])
 
-            if not upload_current_tf_files_to_s3(s3_client=s3_client,org_name=org_name):
+            if not upload_current_tf_files_to_s3(s3_client=s3_client,name=name):
                 emsg = f"FAILED! to upload_current_tf_files_to_s3()"
                 LOG.error(emsg)
                 raise PS_InternalError(emsg)
 
         except Exception as e:
-            emsg = (f" Processing SetUp {org_name} cluster caught this exception: ")
+            emsg = (f" Processing SetUp {name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += repr(e)
             yield self.get_Response_Obj(
-                name=org_name,
+                name=name,
                 ps_cmd='SetUp',
                 ps_server_error=True,
                 error_msg=emsg,)
@@ -1301,7 +1301,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         finally:
             # ALWAYS send a done!
             r = self.get_Response_Obj(
-                name=org_name,
+                name=name,
                 ps_cmd='SetUp',
                 done=True,
             )
@@ -1310,7 +1310,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             elapsed_tm = datetime.now(timezone.utc) - st
             r.cli.stdout = (
                 "**************** "
-                + org_name
+                + name
                 + " "
                 + 'SetUp'
                 + " Completed "
@@ -1319,42 +1319,42 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 + repr(elapsed_tm)
             )
             yield r
-            LOG.info(f"Done SetUp of provision environment for org:{org_name} version:{version}")
+            LOG.info(f"Done SetUp of provision environment for org:{name} version:{version}")
             LOG.handlers[0].flush()
 
-    def teardown_terraform_env(self, s3_client, org_name):
-        LOG.info(f"Start TearDown of provision environment for org:{org_name}")
+    def teardown_terraform_env(self, s3_client, name):
+        LOG.info(f"Start TearDown of provision environment for org:{name}")
         st = datetime.now(timezone.utc)
         try:
-            ws_list = get_workspace_list(org_name)
+            ws_list = get_workspace_list(name)
             if ws_list is not None:
                 for ws in ws_list:
-                    if org_name in ws:
-                        LOG.info(f'clean_workspace: deleting workspace ws:{ws} for org:{org_name}')
-                        yield from self.delete_workspace_for_org(org_name)
-            LOG.info(f"Removing tf files from s3 for org_name:{org_name}")
-            s3_folder = os.path.join('prov-sys',f'{get_domain_env()}','current_cluster_tf_by_org',org_name)
+                    if name in ws:
+                        LOG.info(f'clean_workspace: deleting workspace ws:{ws} for org:{name}')
+                        yield from self.delete_workspace_for_org(name)
+            LOG.info(f"Removing tf files from s3 for name:{name}")
+            s3_folder = os.path.join('prov-sys',f'{get_domain_env()}','current_cluster_tf_by_org',name)
             if s3_folder_exists(s3_client,S3_BUCKET,s3_folder):
-                LOG.info(f"Removing s3_folder:{s3_folder} from s3 for org_name:{org_name}")
+                LOG.info(f"Removing s3_folder:{s3_folder} from s3 for name:{name}")
                 if not delete_folder_from_s3(s3_client=s3_client,
                                             bucket=S3_BUCKET,
                                             s3_folder=s3_folder):
-                    LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for org_name:{org_name}")
-            LOG.info(f"Removing local org_dir:{get_org_root_dir(org_name)} and tf_dir:{get_terraform_dir(org_name)} for org:{org_name}")
-            yield from self.execute_cmd(org_name=org_name, ps_cmd='TearDown', cmd_args=['rm','-rvf',get_org_root_dir(org_name)])
+                    LOG.error(f"Failed to remove s3_folder:{s3_folder} from s3 for name:{name}")
+            LOG.info(f"Removing local org_dir:{get_org_root_dir(name)} and tf_dir:{get_terraform_dir(name)} for org:{name}")
+            yield from self.execute_cmd(name=name, ps_cmd='TearDown', cmd_args=['rm','-rvf',get_org_root_dir(name)])
         except Exception as e:
-            emsg = (f" Processing {'TearDown'} {org_name} cluster caught this exception: ")
+            emsg = (f" Processing {'TearDown'} {name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += repr(e)
             yield self.get_Response_Obj(
-                name=org_name,
+                name=name,
                 ps_cmd='TearDown',
                 ps_server_error=True,
                 error_msg=emsg,)
         finally:
             # ALWAYS send a done!
             r = self.get_Response_Obj(
-                name=org_name,
+                name=name,
                 ps_cmd='TearDown',
                 done=True,
             )
@@ -1363,7 +1363,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             elapsed_tm = datetime.now(timezone.utc) - st
             r.cli.stdout = (
                 "**************** "
-                + org_name
+                + name
                 + " "
                 + 'TearDown'
                 + " Completed "
@@ -1372,20 +1372,20 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 + repr(elapsed_tm)
             )
             yield r
-            LOG.info(f"TearDown {org_name} cluster completed")
+            LOG.info(f"TearDown {name} cluster completed")
             LOG.handlers[0].flush()
 
     def process_Update_cmd(self,request,s3_client):
-        LOG.info(f"Update {request.org_name}")
+        LOG.info(f"Update {request.name}")
         try:
             st = datetime.now(timezone.utc)
-            tf_dir = get_terraform_dir(request.org_name)
+            tf_dir = get_terraform_dir(request.name)
             dir_exists = Path(tf_dir).exists()
             current_version = None
             if dir_exists:
                 # the files already existed so we assume the cluster is already deployed
                 # so we need to use the version that is in the SetUp.json file
-                setup_cfg = read_SetUpCfg(org_name=request.org_name)
+                setup_cfg = read_SetUpCfg(name=request.name)
             else:
                 emsg = f"FAILED! terraform files in folder {tf_dir} do not exist, SetUp must be run first"
                 LOG.error(emsg)
@@ -1394,7 +1394,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             is_public = "is_public="+ str(setup_cfg.is_public)
             if self.valid_deploy_args(request):
                 domain = "domain=" + get_domain_env()
-                cluster_name = "cluster_name=" + request.org_name  # lowercase enables matches to dns records
+                cluster_name = "cluster_name=" + request.name  # lowercase enables matches to dns records
                 node_asg_min_capacity = "node_asg_min_capacity=" + str(request.min_nodes)
                 node_asg_max_capacity = "node_asg_max_capacity=" + str(request.max_nodes)
                 node_asg_desired_capacity = "node_asg_desired_capacity=" + str(request.num_nodes)
@@ -1417,28 +1417,28 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     node_asg_desired_capacity
                 ]
                 try:
-                    yield from self.execute_sequence_of_terraform_cmds(org_name=request.org_name, ps_cmd='Update', cmd_args=cmd_args)
+                    yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
                 except Exception as e:
-                    emsg = f"FAILED! {str(e)} for Update {request.org_name}"
+                    emsg = f"FAILED! {str(e)} for Update {request.name}"
                     LOG.error(emsg)
                     raise PS_InternalError(emsg)
             else:
-                emsg = f"valid_deploy_args FAILED for Update {request.org_name} INVALID deploy args (unmentioned fields are ZERO!) {str(request)}"
+                emsg = f"valid_deploy_args FAILED for Update {request.name} INVALID deploy args (unmentioned fields are ZERO!) {str(request)}"
                 LOG.error(emsg)
                 raise PS_InternalError(emsg)
         except Exception as e:
-            emsg = (f" Processing Update {request.org_name} cluster caught this exception: ")
+            emsg = (f" Processing Update {request.name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += repr(e)
             yield self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd='Update',
                 ps_server_error=True,
                 error_msg=emsg,)
         finally:
             # ALWAYS send a done!
             r = self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd='Update',
                 done=True,
             )
@@ -1447,7 +1447,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             elapsed_tm = datetime.now(timezone.utc) - st
             r.cli.stdout = (
                 "**************** "
-                + request.org_name
+                + request.name
                 + " "
                 + 'Update'
                 + " Completed "
@@ -1456,36 +1456,36 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 + repr(elapsed_tm)
             )
             yield r
-            LOG.info(f"Update {request.org_name} cluster completed")
+            LOG.info(f"Update {request.name} cluster completed")
             LOG.handlers[0].flush()
 
     def process_Refresh_cmd(self,request,s3_client):
-        LOG.info(f"Refresh {request.org_name}")
+        LOG.info(f"Refresh {request.name}")
         try:
             st = datetime.now(timezone.utc)
-            tf_dir = get_terraform_dir(request.org_name)
+            tf_dir = get_terraform_dir(request.name)
             if not Path(tf_dir).exists():
                 clirsp = ps_server_pb2.cli_rsp(valid=True, stdout=f"terraform files in folder {tf_dir} do not exist, assuming cluster is not deployed")
                 stateObj = ps_server_pb2.StateOfCluster(valid=True,deployed=False,deployed_state="",ip_address="")
-                yield ps_server_pb2.Response(   name=request.org_name,
+                yield ps_server_pb2.Response(   name=request.name,
                                                 ps_cmd='Refresh',
                                                 state=stateObj,
                                                 cli=clirsp)
             else:
-                yield from self.execute_sequence_of_terraform_cmds(org_name=request.org_name, ps_cmd='Refresh', cmd_args=["refresh"])                    
+                yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Refresh', cmd_args=["refresh"])                    
         except Exception as e:
-            emsg = (f" Processing Refresh {request.org_name} cluster caught this exception: ")
+            emsg = (f" Processing Refresh {request.name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += repr(e)
             yield self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd='Refresh',
                 ps_server_error=True,
                 error_msg=emsg,)
         finally:
             # ALWAYS send a done!
             r = self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd='Refresh',
                 done=True,
             )
@@ -1494,7 +1494,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             elapsed_tm = datetime.now(timezone.utc) - st
             r.cli.stdout = (
                 "**************** "
-                + request.org_name
+                + request.name
                 + " "
                 + 'Refresh'
                 + " Completed "
@@ -1503,34 +1503,34 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 + repr(elapsed_tm)
             )
             yield r
-            LOG.info(f"Refresh {request.org_name} cluster completed")
+            LOG.info(f"Refresh {request.name} cluster completed")
             LOG.handlers[0].flush()
 
     def process_Destroy_cmd(self,request,s3_client):
-        LOG.info(f"Destroy {request.org_name} ")
+        LOG.info(f"Destroy {request.name} ")
         try:
             st = datetime.now(timezone.utc)
-            tf_dir = get_terraform_dir(request.org_name)
-            LOG.info(f"Destroying cluster {request.org_name} with version:{read_SetUpCfg(request.org_name).version}")
+            tf_dir = get_terraform_dir(request.name)
+            LOG.info(f"Destroying cluster {request.name} with version:{read_SetUpCfg(request.name).version}")
             cmd_args = [
                 "apply",
                 "-auto-approve", 
                 "-destroy" 
             ]
-            yield from self.execute_sequence_of_terraform_cmds(org_name=request.org_name, ps_cmd='Destroy', cmd_args=cmd_args)
+            yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Destroy', cmd_args=cmd_args)
         except Exception as e:
-            emsg = (f" Processing Destroy {request.org_name} cluster caught this exception: ")
+            emsg = (f" Processing Destroy {request.name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += repr(e)
             yield self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd='Destroy',
                 ps_server_error=True,
                 error_msg=emsg,)
         finally:
             # ALWAYS send a done!
             r = self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd='Destroy',
                 done=True,
             )
@@ -1539,7 +1539,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             elapsed_tm = datetime.now(timezone.utc) - st
             r.cli.stdout = (
                 "**************** "
-                + request.org_name
+                + request.name
                 + " "
                 + 'Destroy'
                 + " Completed "
@@ -1548,17 +1548,17 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 + repr(elapsed_tm)
             )
             yield r
-            LOG.info(f"Destroy {request.org_name} cluster completed")
+            LOG.info(f"Destroy {request.name} cluster completed")
             LOG.handlers[0].flush()
 
     def SetUp(self, request, context):
         LOG.info(f"SetUp request:{MessageToString(request)} ")
         s3_client = get_s3_client()
-        yield from self.setup_terraform_env(s3_client=s3_client, org_name=request.org_name, version=request.version, is_public=request.is_public, now=request.now)
+        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now)
 
     def TearDown(self, request, context):
         s3_client = get_s3_client()
-        yield from self.teardown_terraform_env(s3_client=s3_client, org_name=request.org_name)
+        yield from self.teardown_terraform_env(s3_client=s3_client, name=request.name)
 
     ############## Control RPC Entrances #########
     def GetVersions(self, request, context):
@@ -1572,7 +1572,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         '''
         This is the version of terraform files setup for the Org's cluster
         '''
-        setup_cfg = read_SetUpCfg(request.org_name)
+        setup_cfg = read_SetUpCfg(request.name)
         return ps_server_pb2.GetCurrentSetUpCfgRsp(setup_cfg=setup_cfg)
 
     # these are the pkg versions obtained from the container
@@ -1587,12 +1587,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         yield from self.process_Update_cmd(request,s3_client)
 
     def Refresh(self, request, context):  ## This is called by GRPC framework
-        LOG.info(f'Refresh {request.org_name} domain:{get_domain_env()} TERRAFORM_CLI:{get_terraform_cli()}')
+        LOG.info(f'Refresh {request.name} domain:{get_domain_env()} TERRAFORM_CLI:{get_terraform_cli()}')
         s3_client = get_s3_client()
         yield from self.process_Refresh_cmd(request,s3_client)
 
     def Destroy(self, request, context):  ## This is called by GRPC framework
-        LOG.info(f'Destroy {request.org_name} domain:{get_domain_env()} TERRAFORM_CLI:{get_terraform_cli()}')
+        LOG.info(f'Destroy {request.name} domain:{get_domain_env()} TERRAFORM_CLI:{get_terraform_cli()}')
         s3_client = get_s3_client()
         yield from self.process_Destroy_cmd(request,s3_client)
 

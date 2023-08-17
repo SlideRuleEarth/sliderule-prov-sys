@@ -92,7 +92,7 @@ def log_ONN():
     ordered_nodes = OrgNumNode.objects.all().order_by('org__name', 'user__username', '-desired_num_nodes')
 
     # Determine the maximum width needed for each column
-    max_org_name_len = max(len(node.org.name) for node in ordered_nodes)
+    max_name_len = max(len(node.org.name) for node in ordered_nodes)
     max_username_len = max(len(node.user.username) for node in ordered_nodes)
     max_desired_num_nodes_len = max(len(str(node.desired_num_nodes)) for node in ordered_nodes)
     max_expiration_len = max(len(node.expiration.strftime(FMT)) for node in ordered_nodes)
@@ -100,7 +100,7 @@ def log_ONN():
     # Now, print each node with proper formatting
     for node in ordered_nodes:
         expiration_str = node.expiration.strftime(FMT) if node.expiration else 'N/A'
-        logger.info(f"{node.org.name:<{max_org_name_len}} "
+        logger.info(f"{node.org.name:<{max_name_len}} "
                     f"{node.user.username:<{max_username_len}} "
                     f"{node.desired_num_nodes:<{max_desired_num_nodes_len}} "
                     f"{expiration_str:<{max_expiration_len}}")
@@ -172,7 +172,7 @@ def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num
     '''
     logged_in = client.login(username=user.username, password=password)
     assert logged_in
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':user.username,'password':password, 'org_name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':user.username,'password':password, 'name':orgAccountObj.name})
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
@@ -195,7 +195,7 @@ def is_celery_working():
     return bool(result)  # True if at least one result
 
 
-def create_test_org(org_name, 
+def create_test_org(name, 
                     org_owner, 
                     max_allowance=None, 
                     monthly_allowance=None,
@@ -253,9 +253,9 @@ def create_test_org(org_name,
     desired_num_nodes = desired_num_nodes or 1
     version = version or 'latest'
     is_public = is_public or False
-    init_mock_ps_server(org_name=org_name,num_nodes=0)
+    init_mock_ps_server(name=name,num_nodes=0)
 
-    return OrgAccount.objects.create(name=org_name, 
+    return OrgAccount.objects.create(name=name, 
                                     owner=org_owner,
                                     max_allowance=max_allowance, 
                                     monthly_allowance=monthly_allowance,
@@ -271,11 +271,11 @@ def create_test_org(org_name,
                                     desired_num_nodes = desired_num_nodes,
                                     version=version,
                                     is_public=is_public)
-def get_test_org(org_name=None):
-    org_name = org_name or TEST_ORG_NAME
-    return OrgAccount.objects.get(name=org_name)
+def get_test_org(name=None):
+    name = name or TEST_ORG_NAME
+    return OrgAccount.objects.get(name=name)
 
-def init_test_environ(  org_name=None,
+def init_test_environ(  name=None,
                         org_owner=None,
                         the_logger=None,                        
                         max_allowance=None, 
@@ -294,9 +294,9 @@ def init_test_environ(  org_name=None,
                         is_public=None):
     
     this_logger = the_logger or logger
-    org_name = org_name or 'test_org'
+    name = name or 'test_org'
     org_owner = org_owner or verify_user(create_owner_user())
-    this_logger.info(f"--------- org:{org_name} owner:{org_owner} ---------")
+    this_logger.info(f"--------- org:{name} owner:{org_owner} ---------")
     monthly_allowance = monthly_allowance or 1000
     balance = balance or 2000
     fytd_accrued_cost = fytd_accrued_cost or 100
@@ -317,7 +317,7 @@ def init_test_environ(  org_name=None,
 
 
     form = OrgAccountForm(data={
-        'name': org_name,
+        'name': name,
         'owner': org_owner, # use same as sliderule org
         'point_of_contact_name': 'test point of contact here',
         'email': OWNER_EMAIL, 
@@ -359,7 +359,7 @@ def init_test_environ(  org_name=None,
     return new_orgAccountObj,new_orgAccountObj.owner
 
 
-def initialize_test_org(org_name,
+def initialize_test_org(name,
                         org_owner=None,
                         max_allowance=None, 
                         monthly_allowance=None,
@@ -381,7 +381,7 @@ def initialize_test_org(org_name,
     desired_num_nodes = desired_num_nodes or 1
     version = version or 'latest'
     is_public = is_public or False
-    test_org = create_test_org( org_name=org_name,
+    test_org = create_test_org( name=name,
                                 org_owner=org_owner,
                                 max_allowance=max_allowance,
                                 monthly_allowance=monthly_allowance,
@@ -407,18 +407,18 @@ def initialize_test_org(org_name,
     assert(qs[0].user==test_org.owner)
     return test_org,test_org.owner
 
-def get_org_dict(org_name):
+def get_org_dict(name):
     try:
-        model_org_json = serializers.serialize('json', OrgAccount.objects.filter(name=org_name), indent=4)
+        model_org_json = serializers.serialize('json', OrgAccount.objects.filter(name=name), indent=4)
         logger.info(f"type(model_org_json):{type(model_org_json)}  model_org_json:{model_org_json}")
         model_org_d = json.loads(model_org_json)[0]['fields']
         logger.info(f"type(model_org_d):{type(model_org_d)}  model_org_d:{model_org_d}")
     except Exception as e:
-        logger.info(f"org_name:<{org_name}> orgs:{OrgAccount.objects.values_list('name', flat=True)}")
+        logger.info(f"name:<{name}> orgs:{OrgAccount.objects.values_list('name', flat=True)}")
         logger.exception("Caught:")
     return model_org_d,model_org_json
-def dump_org_account(org_name,banner=None,level=None):
-    org_dict,org_json = get_org_dict(org_name)
+def dump_org_account(name,banner=None,level=None):
+    org_dict,org_json = get_org_dict(name)
     fake_now = datetime.now(timezone.utc)
     banner = banner or f"************** {fake_now} **************"
     bottom =           "***************************************************"
@@ -690,16 +690,16 @@ def process_onn_expires(orgAccountObj,
         assert(orgAccountObj.desired_num_nodes==expected_desired_num_nodes)
     return f_loop_count
 
-def init_mock_ps_server(org_name=None,num_nodes=None):
-    org_name = org_name or TEST_ORG_NAME
+def init_mock_ps_server(name=None,num_nodes=None):
+    name = name or TEST_ORG_NAME
     num_nodes = num_nodes or 0
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.Init(ps_server_pb2.InitReq(org_name=org_name,num_nodes=num_nodes))
+        rsp = stub.Init(ps_server_pb2.InitReq(name=name,num_nodes=num_nodes))
         assert(rsp.success)
         assert(rsp.error_msg=='')
 
-def process_rsp_gen(rrsp_gen, org_name, ps_cmd,  logger):
+def process_rsp_gen(rrsp_gen, name, ps_cmd,  logger):
     '''
     process the response generator
     '''
@@ -716,7 +716,7 @@ def process_rsp_gen(rrsp_gen, org_name, ps_cmd,  logger):
         try:
             cnt += 1
             rrsp = next(rrsp_gen)  # grab the next one and process it
-            logger.info(f"org_name:{org_name} ps_cmd:{ps_cmd} CNT:{cnt} {json_format.MessageToJson(rrsp, including_default_value_fields=True)}")
+            logger.info(f"name:{name} ps_cmd:{ps_cmd} CNT:{cnt} {json_format.MessageToJson(rrsp, including_default_value_fields=True)}")
             logger.info(f'rrsp.cli.valid: {rrsp.cli.valid}')
             logger.info(f'rrsp.cli.updating: {rrsp.cli.updating}')
             logger.info(f'rrsp.cli.cmd_args: {rrsp.cli.cmd_args}')
@@ -725,7 +725,7 @@ def process_rsp_gen(rrsp_gen, org_name, ps_cmd,  logger):
             stdout = rrsp.cli.stdout
             stderr = rrsp.cli.stderr
             assert rrsp.ps_cmd == ps_cmd
-            assert rrsp.name == org_name
+            assert rrsp.name == name
             assert hasattr(rrsp.cli, 'stderr')
             assert hasattr(rrsp.cli, 'stdout')
             if not rrsp.ps_server_error:
@@ -760,7 +760,7 @@ def call_SetUp(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.provision_env_ready = False
     clusterObj.save()
-    setup_req = ps_server_pb2.SetUpReq(org_name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
+    setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
     logger.info(f"SetUp setup_req:{setup_req}")
     rsp = None
     with ps_client.create_client_channel("control") as channel:
@@ -772,13 +772,13 @@ def call_SetUp(orgAccountObj):
         assert(stop_exception_cnt == 0)
         assert(exception_cnt == 0)
         assert(ps_error_cnt == 0)
-        assert(f"{setup_req.org_name}" in stdout)
+        assert(f"{setup_req.name}" in stdout)
         assert(stderr == '')
         logger.info(f"SetUp stdout:{stdout}")
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
         logger.info(f"GetCurrentSetUpCfg rsp:{rsp}")
     assert(rsp is not None)
-    assert(rsp.setup_cfg.org_name == setup_req.org_name)
+    assert(rsp.setup_cfg.name == setup_req.name)
     assert(rsp.setup_cfg.version == setup_req.version)
     assert(rsp.setup_cfg.is_public == setup_req.is_public)
     assert(rsp.setup_cfg.now == setup_req.now)
@@ -791,8 +791,8 @@ def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
     logger.info(f"fake_sync_clusterObj_to_orgAccountObj orgAccountObj:{orgAccountObj.name}")
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
-    assert rsp.setup_cfg.org_name == orgAccountObj.name
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+    assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public    
     clusterObj = Cluster.objects.get(org=orgAccountObj)

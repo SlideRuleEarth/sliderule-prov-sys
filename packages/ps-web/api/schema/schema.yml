@@ -12,11 +12,11 @@ info:
     name: BSD-3-Clause
     url: https://github.com/ICESat2-SlideRule/sliderule-ps-web/blob/main/LICENSE
 paths:
-  /api/desired_org_num_nodes/{org_name}/{desired_num_nodes}/:
+  /api/desired_org_num_nodes/{name}/{desired_num_nodes}/:
     put:
       operationId: desired_org_num_nodes_update
       description: |-
-        Takes an org_name and desired_num_nodes and creates an OrgNumNode request for the org.
+        Takes an name and desired_num_nodes and creates an OrgNumNode request for the org.
         This will go into the pool of requests for the org.
         This request will expire when the token expires (one hour).
         The msg field of the JSON response will contain the this expiration date/time.
@@ -29,7 +29,7 @@ paths:
           type: integer
         required: true
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -45,7 +45,7 @@ paths:
     patch:
       operationId: desired_org_num_nodes_partial_update
       description: |-
-        Takes an org_name and desired_num_nodes and creates an OrgNumNode request for the org.
+        Takes an name and desired_num_nodes and creates an OrgNumNode request for the org.
         This will go into the pool of requests for the org.
         This request will expire when the token expires (one hour).
         The msg field of the JSON response will contain the this expiration date/time.
@@ -58,7 +58,7 @@ paths:
           type: integer
         required: true
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -71,11 +71,11 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/desired_org_num_nodes_ttl/{org_name}/{desired_num_nodes}/{ttl}/:
+  /api/desired_org_num_nodes_ttl/{name}/{desired_num_nodes}/{ttl}/:
     post:
       operationId: desired_org_num_nodes_ttl_create
       description: |-
-        Takes an org_name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
+        Takes an name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
         NOTE: If the ttl is not provided, the time to live will be set the the minimum (15 minutes). The maximum ttl is 720 minutes (i.e. 12 hours).
         This request will go into the pool of requests for the org.
         The msg field of the JSON response will contain the this expiration date/time.
@@ -88,7 +88,7 @@ paths:
           type: integer
         required: true
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -106,16 +106,16 @@ paths:
       responses:
         '201':
           description: No response body
-  /api/membership_status/{org_name}/:
+  /api/membership_status/{name}/:
     get:
       operationId: membership_status_retrieve
       description: |-
-        Takes an org_name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
+        Takes an name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
         Users membership is controlled by the organization's admins.
-        NOTE: the org_name passed as a parameter must match the organization of the claim in the token that is used for authorization.
+        NOTE: the name passed as a parameter must match the organization of the claim in the token that is used for authorization.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -128,11 +128,11 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/org_config/{org_name}/{min_nodes}/{max_nodes}/:
+  /api/org_config/{name}/{min_nodes}/{max_nodes}/:
     put:
       operationId: org_config_update
       description: |-
-        Takes an org_name min_nodes and max_nodes and updates the Organization's min and max nodes.
+        Takes an name min_nodes and max_nodes and updates the Organization's min and max nodes.
         These are the limits that regular users can request.
         NOTE: Must be a developer or owner of the org to update the config.
       parameters:
@@ -147,7 +147,7 @@ paths:
           type: integer
         required: true
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -163,7 +163,7 @@ paths:
     patch:
       operationId: org_config_partial_update
       description: |-
-        Takes an org_name min_nodes and max_nodes and updates the Organization's min and max nodes.
+        Takes an name min_nodes and max_nodes and updates the Organization's min and max nodes.
         These are the limits that regular users can request.
         NOTE: Must be a developer or owner of the org to update the config.
       parameters:
@@ -178,7 +178,7 @@ paths:
           type: integer
         required: true
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -191,14 +191,14 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/org_ip_adr/{org_name}/:
+  /api/org_ip_adr/{name}/:
     get:
       operationId: org_ip_adr_retrieve
-      description: Takes an org_name and returns the IP address of the cluster manager
+      description: Takes an name and returns the IP address of the cluster manager
         for the org.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -211,14 +211,14 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/org_num_nodes/{org_name}/:
+  /api/org_num_nodes/{name}/:
     get:
       operationId: org_num_nodes_retrieve
-      description: Takes an org_name and returns the min-current-max number of nodes
+      description: Takes an name and returns the min-current-max number of nodes
         and the version from the cluster for the org.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -285,14 +285,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrgTokenRefresh'
           description: ''
-  /api/remove_all_org_num_nodes_reqs/{org_name}/:
+  /api/remove_all_org_num_nodes_reqs/{name}/:
     put:
       operationId: remove_all_org_num_nodes_reqs_update
       description: Removes all OrgNumNode requests for the org from the active pool
         of requests.  Must be a developer or owner of the org to remove ALL the requests.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -311,7 +311,7 @@ paths:
         of requests.  Must be a developer or owner of the org to remove ALL the requests.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -324,14 +324,14 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/remove_user_org_num_nodes_reqs/{org_name}/:
+  /api/remove_user_org_num_nodes_reqs/{name}/:
     put:
       operationId: remove_user_org_num_nodes_reqs_update
       description: Removes all OrgNumNode requests for the org from this user from
         the active pool of requests.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -350,7 +350,7 @@ paths:
         the active pool of requests.
       parameters:
       - in: path
-        name: org_name
+        name: name
         schema:
           type: string
         required: true
@@ -545,10 +545,10 @@ components:
         password:
           type: string
           writeOnly: true
-        org_name:
+        name:
           type: string
       required:
-      - org_name
+      - name
       - password
       - username
     OrgTokenRefresh:

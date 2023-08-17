@@ -201,7 +201,7 @@ def orgManageCluster(request, pk):
                     if ttl_minutes != int(add_onn_form.data['add_onn-ttl_minutes']):
                         msg = f"Clamped ttl_minutes! - "
                     expire_time = datetime.now(timezone.utc)+timedelta(minutes=ttl_minutes)
-                    jrsp,status = process_org_num_nodes_api(org_name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
+                    jrsp,status = process_org_num_nodes_api(name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
                     if status == 200:
                         msg += jrsp['msg']
                         messages.success(request,msg)

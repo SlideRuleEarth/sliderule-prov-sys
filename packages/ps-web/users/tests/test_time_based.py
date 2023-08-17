@@ -62,14 +62,14 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
     #@pytest.mark.dev
     @pytest.mark.ps_server_stubbed
     def test_ps_server_stub(self):
-        #org = ps_server_pb2.Org(org_name=TimeBasedTasksTest.test_ps_server_stub.__name__)
-        org_name = TimeBasedTasksTest.test_ps_server_stub.__name__
+        #org = ps_server_pb2.Org(name=TimeBasedTasksTest.test_ps_server_stub.__name__)
+        name = TimeBasedTasksTest.test_ps_server_stub.__name__
         st = datetime(year=2022,month=1,day=3)
         start_tm = st.strftime(FULL_FMT)
         #LOG.info(f"start_tm:{start_tm}")
         with ps_client.create_client_channel("account") as channel:
             ac = ps_server_pb2_grpc.AccountStub(channel)
-            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(org_name=org_name, start_tm=start_tm))
+            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(name=name, start_tm=start_tm))
             #LOG.info(f"rsp:{rsp}")
     # @pytest.mark.dev
     # @pytest.mark.ps_server_stubbed
@@ -80,7 +80,7 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
     #     with time_machine.travel(datetime(year=2019, month=1, day=28,hour=11),tick=False):
     #         fake_now1 = datetime.now(timezone.utc)
     #         LOG.info(f"fake now1:{fake_now1}")
-    #         orgAccountObj,owner = init_test_environ(org_name=TimeBasedTasksTest.test_reconcileOrg.__name__,
+    #         orgAccountObj,owner = init_test_environ(name=TimeBasedTasksTest.test_reconcileOrg.__name__,
     #                                                 org_owner=None,
     #                                                 max_allowance=20000, 
     #                                                 monthly_allowance=1000,

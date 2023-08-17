@@ -205,7 +205,7 @@ def check_provision_env_ready(orgAccountObj):
                 timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
                 rsp_gen = stub.SetUp(
                     ps_server_pb2.SetUpReq(
-                        org_name=orgAccountObj.name,
+                        name=orgAccountObj.name,
                         version=orgAccountObj.version,
                         is_public=orgAccountObj.is_public,
                         now=datetime.now(timezone.utc).strftime(FMT)),
@@ -272,7 +272,7 @@ def check_provision_env_ready(orgAccountObj):
                                 clusterObj = Cluster.objects.get(org=orgAccountObj)
                                 clusterObj.provision_env_ready = True
                                 ps_server_pb2.GetCurrentSetUpCfgRsp()
-                                rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
+                                rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
                                 clusterObj.prov_env_version = rsp.setup_cfg.version
                                 clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
                                 if clusterObj.prov_env_version == '':
@@ -451,17 +451,17 @@ def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
         orgNumNode = None
     return orgNumNode,redundant,msg
 
-def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_owner_ps_cmd):
+def process_org_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cmd):
     '''
         processes the APIs for setting desired num nodes
     '''
     try:
         jstatus = ''
-        LOG.info(f"process_org_num_nodes_api({org_name},{user},{desired_num_nodes},{expire_time})")
+        LOG.info(f"process_org_num_nodes_api({name},{user},{desired_num_nodes},{expire_time})")
         if int(desired_num_nodes) < 0:
             msg = f"desired_num_nodes:{desired_num_nodes} must be >= 0"
             raise ValidationError(msg)
-        orgAccountObj = OrgAccount.objects.get(name=org_name)
+        orgAccountObj = OrgAccount.objects.get(name=name)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if (not clusterObj.is_deployed) and (not orgAccountObj.allow_deploy_by_token):
             msg = f"Org {orgAccountObj.name} is not configured to allow deploy by token"
@@ -486,7 +486,7 @@ def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_own
             jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
             status = 200
         else:
-            emsg = f"FAILED to process request for {org_name} {user} {desired_num_nodes} {expire_time} - Server Error"
+            emsg = f"FAILED to process request for {name} {user} {desired_num_nodes} {expire_time} - Server Error"
             jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
             status = 500
     except ClusterDeployAuthError as e:
@@ -535,7 +535,7 @@ def get_current_cost_report(name, gran, time_now):
     with ps_client.create_client_channel("account") as channel:
         ac = ps_server_pb2_grpc.AccountStub(channel)
         rsp = ac.CurrentCost(
-            ps_server_pb2.CurrentCostReq(org_name=name, granularity=gran, tm=now_str))
+            ps_server_pb2.CurrentCostReq(name=name, granularity=gran, tm=now_str))
     #LOG.info("Sending rsp...")
     return MessageToJson(rsp), rsp
 
@@ -642,7 +642,7 @@ def update_cur_num_nodes(orgAccountObj):
             clusterObj = Cluster.objects.get(org=orgAccountObj) 
             ac = ps_server_pb2_grpc.AccountStub(channel)
             region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-            req = ps_server_pb2.NumNodesReq(org_name=clusterObj.org.name,version=clusterObj.org.version,region=region)
+            req = ps_server_pb2.NumNodesReq(name=clusterObj.org.name,version=clusterObj.org.version,region=region)
             #LOG.info(req)
             rsp = ac.NumNodes(req)
             clusterObj.cur_nodes = rsp.num_nodes
@@ -816,7 +816,7 @@ def reconcile_org(orgAccountObj):
             #  below is the Hourly for today
             #
             LOG.info(f"{orgAccountObj.name} now:{time_now_str} start_tm_str:{start_tm_str} end_tm_str:{end_tm_str}")
-            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(org_name=orgAccountObj.name, start_tm=start_tm_str, end_tm=end_tm_str))
+            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(name=orgAccountObj.name, start_tm=start_tm_str, end_tm=end_tm_str))
             if rsp.server_error:
                 LOG.error(f"{orgAccountObj.name} DailyHistCost got this error:{rsp.error_msg}")
                 raise Exception(f"ps server error caught:{rsp.error_msg}")            
@@ -844,7 +844,7 @@ def reconcile_org(orgAccountObj):
         #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} start_of_this_hour:{start_of_this_hour}")
         if orgAccountObj.most_recent_charge_time < start_of_this_hour:
             LOG.info(f"calling TodaysCost with {orgAccountObj.name} time_now_str:{time_now_str}")
-            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(org_name=orgAccountObj.name,tm=time_now_str))
+            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(name=orgAccountObj.name,tm=time_now_str))
             if rsp.server_error:
                 LOG.error(f"{orgAccountObj.name} TodaysCost got this error:{rsp.error_msg}")
                 raise Exception(f"ps server error caught:{rsp.error_msg}")            
@@ -1315,7 +1315,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                     LOG.info("Setting num_nodes_to_use to zero (i.e. deploy load balancer and monitor only)")
                 rsp_gen = stub.Update(
                     ps_server_pb2.UpdateRequest(
-                        org_name    = orgAccountObj.name,
+                        name    = orgAccountObj.name,
                         min_nodes   = int(deploy_values['min_node_cap']),
                         max_nodes   = int(deploy_values['max_node_cap']),
                         num_nodes   = int(deploy_values['desired_num_nodes']),
@@ -1365,7 +1365,7 @@ def process_Refresh_cmd(orgAccountObj, username=None, owner_ps_cmd=None):
             LOG.info(f"gRpc: Refresh {orgAccountObj.name} timeout:{timeout}")
             rsp_gen = stub.Refresh(
                 ps_server_pb2.RefreshRequest(
-                    org_name=orgAccountObj.name,
+                    name=orgAccountObj.name,
                     now=datetime.now(timezone.utc).strftime(FMT)),
                     timeout=timeout)
             process_rsp_generator(orgAccountObj=orgAccountObj, 
@@ -1405,7 +1405,7 @@ def process_Destroy_cmd(orgAccountObj, username=None, owner_ps_cmd=None):
             LOG.info(f"gRpc: 'Destroy {orgAccountObj.name} timeout:{timeout}")
             rsp_gen = stub.Destroy(
                 ps_server_pb2.DestroyRequest(
-                    org_name=orgAccountObj.name,
+                    name=orgAccountObj.name,
                     now=datetime.now(timezone.utc).strftime(FMT)),
                     timeout=timeout)
             process_rsp_generator(  orgAccountObj=orgAccountObj,
@@ -1583,11 +1583,11 @@ def refresh_token_maintenance(self):
         return False
 
 @shared_task(name="forever_loop_main_task",bind=True) 
-def forever_loop_main_task(self,org_name,loop_count):
+def forever_loop_main_task(self,name,loop_count):
     '''
     This is the main loop for each org. 
     '''
-    orgAccountObj = OrgAccount.objects.get(name=org_name)
+    orgAccountObj = OrgAccount.objects.get(name=name)
     result = True
     task_idle = True
     redis_interface = None

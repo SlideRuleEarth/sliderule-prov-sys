@@ -53,12 +53,12 @@ def test_token(tasks_module,caplog,client,initialize_test_environ):
     time_now = datetime.now(timezone.utc)
     caplog.set_level(logging.DEBUG)
     url = reverse('org-token-obtain-pair')
-    data = {'username': OWNER_USER, 'password': OWNER_PASSWORD, 'org_name': 'wrongOrgName'}
+    data = {'username': OWNER_USER, 'password': OWNER_PASSWORD, 'name': 'wrongOrgName'}
     response = client.post(url,data)
     assert (response.status_code == 403) # first pass is wrong org
-    data = {'username': OWNER_USER, 'password': TEST_PASSWORD, 'org_name': TEST_ORG_NAME}
+    data = {'username': OWNER_USER, 'password': TEST_PASSWORD, 'name': TEST_ORG_NAME}
     response = client.post(url,data)
     assert (response.status_code == 401) # wrong password
-    data = {'username': OWNER_USER, 'password': OWNER_PASSWORD, 'org_name': TEST_ORG_NAME}
+    data = {'username': OWNER_USER, 'password': OWNER_PASSWORD, 'name': TEST_ORG_NAME}
     response = client.post(url,data)
     assert (response.status_code == 200) # first pass is 

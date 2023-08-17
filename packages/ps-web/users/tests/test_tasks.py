@@ -73,7 +73,7 @@ def test_update_burn_rates(tasks_module,initialize_test_environ):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
 
     assert(orgAccountObj.name == TEST_ORG_NAME)
-    init_mock_ps_server(org_name=TEST_ORG_NAME,num_nodes=1)
+    init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1)
 
     assert(orgAccountObj.owner.username == OWNER_USER)
     forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly = update_burn_rates(orgAccountObj)
@@ -404,7 +404,7 @@ def test_process_Update_cmd_when_exception_occurs(create_TEST_USER, NEG_TEST_ERR
         This procedure will accept generic parms to negative test the 'process_Update_cmd' routine 
     '''
     logger = setup_logging
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME,the_logger=logger)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME,the_logger=logger)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -445,7 +445,7 @@ def test_process_Update_cmd_when_LOW_BALANCE_exception_occurs_ON_Update(create_T
         This procedure will do a negative test of the 'process_Update_cmd' routine for LOW balance error
     '''
 
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -488,7 +488,7 @@ def test_process_Update_cmd_when_exception_occurs_ON_OWNER_PS_CMD(create_TEST_US
     '''
         This procedure will accept generic parms to negative test the 'process_Update_cmd' routine when processing Owner PS Cmds (i.e. Destroy and Refresh)
     '''
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -673,7 +673,7 @@ def test_process_org_num_node_table_NEGATIVE_TESTS(tasks_module,create_TEST_USER
         and min num nodes is zero and an terraform exception is raised
         Note: we use the org name to trigger the specific exception in our Mock ps-server
     '''
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     setup_before_process_org_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     process_org_num_node_table(orgAccountObj,False)
@@ -730,7 +730,7 @@ def test_process_process_org_num_node_table_when_LOW_BALANCE_exception_occurs_ON
         This procedure will do a negative test of the 'process_Update_cmd' routine for LOW balance error
     '''
     #logger.critical(f"COOLOFF_SECS:{COOLOFF_SECS}")
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     #logger.critical(f"BEFORE orgAccountObj:{pprint.pformat(model_to_dict(orgAccountObj,fields=None))}")
     cost_accounting(orgAccountObj)
@@ -779,8 +779,8 @@ def test_get_current_version_after_setup(tasks_module,initialize_test_environ,ve
     assert setup_occurred == True # we set provision_env_ready to False above so we forced setup
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
-    assert rsp.setup_cfg.org_name == orgAccountObj.name
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+    assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public    
 
@@ -805,7 +805,7 @@ def test_provision_env_ready(tasks_module_to_import,developer_TEST_USER,initiali
     assert setup_occurred  # fixture already did setup
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
-    assert rsp.setup_cfg.org_name == orgAccountObj.name
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+    assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public

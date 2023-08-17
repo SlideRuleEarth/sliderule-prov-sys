@@ -23,7 +23,7 @@ from conftest import *
 
 def example_ccr(gran,tm,cost):
     ccr = ps_server_pb2.CostAndUsageRsp(
-        org_name="test_org",
+        name="test_org",
         granularity = gran,
         tm=tm,
         cost=cost,
@@ -240,34 +240,34 @@ def test_get_versions(setup_logging,terraform_env,s3):
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('v3',False),('v3',True)], indirect=True)
-def test_read_SetUpCfg_version_v3(setup_logging,terraform_env,test_org_name):
+def test_read_SetUpCfg_version_v3(setup_logging,terraform_env,test_name):
     logger = setup_logging
-    cur_version = read_SetUpCfg(org_name=test_org_name).version
+    cur_version = read_SetUpCfg(name=test_name).version
     logger.info(f'cur_version:{cur_version}')
     assert ('latest' != cur_version)
     assert ('v3' == cur_version)
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('latest',False),('latest',True)], indirect=True)
-def test_read_SetUpCfg_version_latest(setup_logging,terraform_env,test_org_name):
+def test_read_SetUpCfg_version_latest(setup_logging,terraform_env,test_name):
     logger = setup_logging
-    cur_version = read_SetUpCfg(org_name=test_org_name).version
+    cur_version = read_SetUpCfg(name=test_name).version
     logger.info(f'cur_version:{cur_version}')
     assert ('latest' == cur_version)
     assert ('v3' != cur_version)
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('latest',False),('v3',False)], indirect=True)
-def test_read_SetUpCfg_is_public_False(setup_logging,terraform_env,test_org_name):
+def test_read_SetUpCfg_is_public_False(setup_logging,terraform_env,test_name):
     logger = setup_logging
-    is_public = read_SetUpCfg(org_name=test_org_name).is_public
+    is_public = read_SetUpCfg(name=test_name).is_public
     logger.info(f'is_public:{is_public}')
     assert not is_public
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('latest',True),('v3',True)], indirect=True)
-def test_read_SetUpCfg_is_public_True(setup_logging,terraform_env,test_org_name):
+def test_read_SetUpCfg_is_public_True(setup_logging,terraform_env,test_name):
     logger = setup_logging
-    is_public = read_SetUpCfg(org_name=test_org_name).is_public
+    is_public = read_SetUpCfg(name=test_name).is_public
     logger.info(f'is_public:{is_public}')
     assert is_public
