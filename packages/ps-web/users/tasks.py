@@ -131,9 +131,15 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
         ids_list.extend(string_ids)
 
     # Sum up the highest nodes for all users within the OrgAccount
-    total = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
+    num_nodes_to_deploy = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
+    if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
+        #LOG.info(f"Clamped num_nodes_to_deploy to min_node_cap:{orgAccountObj.min_node_cap} from {num_nodes_to_deploy}")
+        num_nodes_to_deploy = orgAccountObj.min_node_cap
+    if(int(num_nodes_to_deploy) > orgAccountObj.max_node_cap):
+        #LOG.info(f"Clamped num_nodes_to_deploy to max_node_cap:{orgAccountObj.max_node_cap} from {num_nodes_to_deploy}")
+        num_nodes_to_deploy = orgAccountObj.max_node_cap
 
-    return total, ids_list
+    return num_nodes_to_deploy, ids_list
 
 def cull_expired_entries(org,tm):
     LOG.debug(f"started with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
@@ -322,13 +328,6 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
             if env_ready:
                 cull_expired_entries(orgAccountObj,datetime.now(timezone.utc))
                 num_nodes_to_deploy,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
-                if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
-                    LOG.info(f"Clamped num_nodes_to_deploy to min_node_cap:{orgAccountObj.min_node_cap} from {num_nodes_to_deploy}")
-                    num_nodes_to_deploy = orgAccountObj.min_node_cap
-                if(int(num_nodes_to_deploy) > orgAccountObj.max_node_cap):
-                    LOG.info(f"Clamped num_nodes_to_deploy to max_node_cap:{orgAccountObj.max_node_cap} from {num_nodes_to_deploy}")
-                    num_nodes_to_deploy = orgAccountObj.max_node_cap
-
                 expire_time = None
                 onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
                 if onnTop is not None:

@@ -861,7 +861,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
 
 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
@@ -905,3 +905,24 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert len(onn) == 22
     assert onn[0].desired_num_nodes == 4
     assert onn[11].desired_num_nodes == 4
+
+
+    # now test out of bounds requests, and see that it is clamped
+
+    # now verify different users can make different requests
+    LARGE_REQ = orgAccountObj.max_node_cap+5
+    assert verify_api_user_makes_onn_ttl( client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    user=the_OWNER_USER(),
+                                    password=OWNER_PASSWORD,
+                                    desired_num_nodes=LARGE_REQ,
+                                    ttl_minutes=15,
+                                    expected_change_ps_cmd=1) 
+
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
+    assert(sum_of_all_users_dnn==orgAccountObj.max_node_cap) # clamped
+
+    onn = log_ONN()
+    assert len(onn) == 23
+    assert onn[0].desired_num_nodes == 4
+    assert onn[5].desired_num_nodes == LARGE_REQ
