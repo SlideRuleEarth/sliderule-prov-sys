@@ -66,7 +66,7 @@ def test_org_num_node_form_valid(caplog,client,create_TEST_USER,mock_email_backe
         'ttl_minutes': 15,
     }
     form = OrgNumNodeForm(form_data, min_nodes=get_test_org().MIN_NODES, max_nodes=get_test_org().ABS_MAX_NODES)
-    assert form.is_valid() # NOTE we catch this in the clean method
+    assert not form.is_valid() # NOTE we catch this in the clean method
 
     form_data = {
         'desired_num_nodes': get_test_org().MIN_NODES+1,

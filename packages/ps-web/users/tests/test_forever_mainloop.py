@@ -199,7 +199,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
                                     url_args=[orgAccountObj.name,1],
                                     access_token=access_token,
                                     expected_status=200)
-    assert (f"Clamped desired_num_nodes to min_node_cap:{orgAccountObj.min_node_cap} from 1" in json_data['msg'])
+    assert (f"Deploying test_org cluster Created new " in json_data['msg'])
     assert((f'Deploying {orgAccountObj.name} cluster' in json_data['msg']) or (f'Updating {orgAccountObj.name} cluster' in json_data['msg']))
 
     # test num_nodes greater than max gets clamped
@@ -210,7 +210,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
                                     url_args=[orgAccountObj.name,15],
                                     access_token=access_token,
                                     expected_status=200)
-    assert (f"Clamped desired_num_nodes to max_node_cap:{orgAccountObj.max_node_cap} from 15" in json_data['msg'])
+    assert (f"Deploying test_org cluster Created new " in json_data['msg'])
     assert((f'Updating {orgAccountObj.name} cluster' in json_data['msg']) or (f'Deploying {orgAccountObj.name} cluster' in json_data['msg']))
 
 

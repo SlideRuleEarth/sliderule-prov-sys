@@ -107,7 +107,7 @@ def format_num_nodes_tbl(org):
 def sort_ONN_by_nn_exp(orgAccountObj):
     return OrgNumNode.objects.filter(org=orgAccountObj).order_by('-desired_num_nodes','expiration')
 
-def sum_of_highest_nodes_for_each_user():
+def sum_of_highest_nodes_for_each_user(orgAccountObj):
     '''
         This routine is used to determine the number of nodes to use for the cluster.
         First, fetch the maximum desired_num_nodes for each user using annotate.
@@ -115,20 +115,31 @@ def sum_of_highest_nodes_for_each_user():
         Finally, calculate the total and gather the list of IDs.
     
     '''
-    # Get the highest desired_num_nodes for each user
-    highest_nodes_per_user = OrgNumNode.objects.values('user').annotate(max_nodes=Max('desired_num_nodes'))
+    # Get the highest desired_num_nodes for each user within the provided OrgAccount instance
+    highest_nodes_per_user = (OrgNumNode.objects
+                              .filter(org=orgAccountObj)
+                              .values('user')
+                              .annotate(max_nodes=Max('desired_num_nodes')))
 
-    # Filter the OrgNumNode table to get the entries that match these maximum values for each user
+    # Filter the OrgNumNode table to get the entries that match these maximum values for each user within the OrgAccount
     ids_list = []
     for entry in highest_nodes_per_user:
-        ids = OrgNumNode.objects.filter(user_id=entry['user'], desired_num_nodes=entry['max_nodes']).values_list('id', flat=True)
+        ids = (OrgNumNode.objects
+               .filter(user_id=entry['user'], desired_num_nodes=entry['max_nodes'], org=orgAccountObj)
+               .values_list('id', flat=True))
         string_ids = [str(id) for id in ids]  # Convert each UUID to string
         ids_list.extend(string_ids)
 
-    # Sum up the highest nodes for all users
-    total = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
+    # Sum up the highest nodes for all users within the OrgAccount
+    num_nodes_to_deploy = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
+    if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
+        #LOG.info(f"Clamped num_nodes_to_deploy to min_node_cap:{orgAccountObj.min_node_cap} from {num_nodes_to_deploy}")
+        num_nodes_to_deploy = orgAccountObj.min_node_cap
+    if(int(num_nodes_to_deploy) > orgAccountObj.max_node_cap):
+        #LOG.info(f"Clamped num_nodes_to_deploy to max_node_cap:{orgAccountObj.max_node_cap} from {num_nodes_to_deploy}")
+        num_nodes_to_deploy = orgAccountObj.max_node_cap
 
-    return total, ids_list
+    return num_nodes_to_deploy, ids_list
 
 def cull_expired_entries(org,tm):
     LOG.debug(f"started with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
@@ -143,7 +154,7 @@ def cull_expired_entries(org,tm):
     LOG.debug(f"ended with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
 
 
-def need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn):
+def need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     # LOG.debug(f"cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
     # LOG.debug(f"    org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
@@ -153,9 +164,8 @@ def need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users
         #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
         if changed_version or changed_is_public:
             #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-            #LOG.debug(f"onnTop.id:{onnTop.id} != clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
-            if sum_of_all_users_dnn != orgAccountObj.desired_num_nodes: # we (changed version or is_public) and we are processing a new set of top items (new deployment request)
-                LOG.info(f"sum_of_all_users_dnn:{sum_of_all_users_dnn} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes} need_destroy_for_changed_version_or_is_public: True")
+            if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: # we (changed version or is_public) and we are processing a new set of top items (new deployment request)
+                LOG.info(f"num_nodes_to_deploy:{num_nodes_to_deploy} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes} need_destroy_for_changed_version_or_is_public: True")
                 return True
     return False
 
@@ -317,39 +327,39 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
             start_num_ps_cmds = orgAccountObj.num_ps_cmd
             if env_ready:
                 cull_expired_entries(orgAccountObj,datetime.now(timezone.utc))
-                sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user()
-                onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+                num_nodes_to_deploy,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
                 expire_time = None
-                if sum_of_all_users_dnn > 0:
-                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn):
+                onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+                if onnTop is not None:
+                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
                         try:
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
-                            LOG.info(f"TRIGGERED Destroy --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+                            LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
                             process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
                         except Exception as e:
                             LOG.exception("ERROR processing Destroy when version or is_public changes in ONN: caught exception:")
                             clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=True)
-                            LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                            LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                             sleep(COOLOFF_SECS)
                     else:
                         user = onnTop.user
                         expire_time = onnTop.expiration
-                        if sum_of_all_users_dnn != orgAccountObj.desired_num_nodes: 
-                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': sum_of_all_users_dnn , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                        if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
+                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             clusterObj.cnnro_ids = cnnro_ids
                             clusterObj.save(update_fields=['cnnro_ids'])
-                            LOG.info(f"Using top entry sorted by num/exp_tm with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} onnTop.id:{onnTop.id} clusterObj.cnnro_ids:{clusterObj.cnnro_ids}")
+                            LOG.info(f"{orgAccountObj.name} Using top entry sorted by num/exp_tm with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} onnTop.id:{onnTop.id} clusterObj.cnnro_ids:{clusterObj.cnnro_ids}")
                             try:
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                             except Exception as e:
                                 LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} Update {orgAccountObj.name} {user.username} {deploy_values} Exception:")
                                 clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=False)
-                                LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                                LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
                             orgAccountObj.num_onn += 1
                             orgAccountObj.save(update_fields=['num_onn'])
-                            LOG.info(f"{orgAccountObj.name} Update processed")
+                            LOG.info(f"Update {orgAccountObj.name} processed")
                 else:
                     # No entries in table
                     user = orgAccountObj.owner
@@ -360,13 +370,13 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
                             try:
                                 process_Destroy_cmd(orgAccountObj=orgAccountObj, username=user.username)
                             except Exception as e:
-                                LOG.exception("ERROR processing destroy when no entries in ONN: caught exception:")
-                                LOG.warning(f"Destroy FAILED when no entries in ONN; Setting destroy_when_no_nodes to False")
+                                LOG.exception("ERROR processing Destroy {orgAccountObj.name} when no entries in ONN: caught exception:")
+                                LOG.warning(f"Destroy {orgAccountObj.name} FAILED when no entries in ONN; Setting destroy_when_no_nodes to False")
                                 orgAccountObj.destroy_when_no_nodes = False
                                 orgAccountObj.min_node_cap = 0 
                                 orgAccountObj.desired_num_nodes = 0
                                 orgAccountObj.save(update_fields=['destroy_when_no_nodes','min_node_cap','desired_num_nodes'])
-                                LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                                LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
 
                             orgAccountObj.num_onn += 1
@@ -375,17 +385,17 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
                     else:
                         if orgAccountObj.min_node_cap != orgAccountObj.desired_num_nodes: 
                             num_entries = OrgNumNode.objects.filter(org=orgAccountObj).count()
-                            LOG.info(f"({num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} exp_time:None")
+                            LOG.info(f"{orgAccountObj.name} ({num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} exp_time:None")
                             deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': orgAccountObj.min_node_cap, 'max_node_cap': orgAccountObj.max_node_cap,'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                             try:
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                             except Exception as e:
-                                LOG.exception("ERROR in Update ps_cmd when no entries in ONN and min != desired: caught exception:")
-                                LOG.warning(f"Setting min_node_cap to zero; Update FAILED when no entries in ONN and min_node_cap != desired_num_nodes (i.e. current target, assumed num nodes)")
+                                LOG.exception("ERROR in Update {orgAccountObj.name} ps_cmd when no entries in ONN and min != desired: caught exception:")
+                                LOG.warning(f"Setting {orgAccountObj.name} min_node_cap to zero; Update FAILED when no entries in ONN and min_node_cap != desired_num_nodes (i.e. current target, assumed num nodes)")
                                 orgAccountObj.min_node_cap = 0 
                                 orgAccountObj.desired_num_nodes = 0
                                 orgAccountObj.save(update_fields=['min_node_cap','desired_num_nodes'])
-                                LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                                LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
 
                             orgAccountObj.num_onn += 1
@@ -406,12 +416,12 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
                         LOG.info(f"Refresh {orgAccountObj.name} post SetUp")
                         process_Refresh_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
                     except Exception as e:
-                        LOG.exception("ERROR processing Refresh caught exception:")
-                        LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                        LOG.exception("ERROR processing Refresh {orgAccountObj.name} caught exception:")
+                        LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                         sleep(COOLOFF_SECS)
     except Exception as e:
-        LOG.exception("caught exception:")
-        LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+        LOG.exception(f"{orgAccountObj.name} caught exception:")
+        LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
         for handler in LOG.handlers:
             handler.flush()
         sleep(COOLOFF_SECS)
@@ -460,13 +470,7 @@ def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_own
             msg = f"Deploying {orgAccountObj.name} cluster"
         else:
             msg = f"Updating {orgAccountObj.name} cluster"
-        # check against 'users' limits. Admin limits are checked later
-        if (int(desired_num_nodes) < orgAccountObj.min_node_cap):
-            msg += f" Clamped desired_num_nodes to min_node_cap:{orgAccountObj.min_node_cap} from {desired_num_nodes}"
-            desired_num_nodes = orgAccountObj.min_node_cap
-        if(int(desired_num_nodes) > orgAccountObj.max_node_cap):
-            msg += f" Clamped desired_num_nodes to max_node_cap:{orgAccountObj.max_node_cap} from {desired_num_nodes}"
-            desired_num_nodes = orgAccountObj.max_node_cap
+
         orgNumNode,redundant,onn_msg = get_or_create_OrgNumNodes(user=user,
                                                             org=orgAccountObj,
                                                             desired_num_nodes=desired_num_nodes,

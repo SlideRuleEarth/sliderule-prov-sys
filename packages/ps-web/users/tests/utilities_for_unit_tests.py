@@ -87,6 +87,25 @@ def create_test_user(first_name,last_name, email, username, password, verify=Non
         assert verify_user(new_user)
     return new_user
 
+def log_ONN():
+    # Order by org, then by owner (username), and finally by desired_num_nodes (descending)
+    ordered_nodes = OrgNumNode.objects.all().order_by('org__name', 'user__username', '-desired_num_nodes')
+
+    # Determine the maximum width needed for each column
+    max_org_name_len = max(len(node.org.name) for node in ordered_nodes)
+    max_username_len = max(len(node.user.username) for node in ordered_nodes)
+    max_desired_num_nodes_len = max(len(str(node.desired_num_nodes)) for node in ordered_nodes)
+    max_expiration_len = max(len(node.expiration.strftime(FMT)) for node in ordered_nodes)
+
+    # Now, print each node with proper formatting
+    for node in ordered_nodes:
+        expiration_str = node.expiration.strftime(FMT) if node.expiration else 'N/A'
+        logger.info(f"{node.org.name:<{max_org_name_len}} "
+                    f"{node.user.username:<{max_username_len}} "
+                    f"{node.desired_num_nodes:<{max_desired_num_nodes_len}} "
+                    f"{expiration_str:<{max_expiration_len}}")
+    return ordered_nodes    
+
 def create_active_membership(the_org,the_user):
     m = Membership()
     m.user = the_user
