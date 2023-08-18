@@ -129,7 +129,6 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
                .values_list('id', flat=True))
         string_ids = [str(id) for id in ids]  # Convert each UUID to string
         ids_list.extend(string_ids)
-
     # Sum up the highest nodes for all users within the OrgAccount
     num_nodes_to_deploy = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
     if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
@@ -138,7 +137,9 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
     if(int(num_nodes_to_deploy) > orgAccountObj.max_node_cap):
         #LOG.info(f"Clamped num_nodes_to_deploy to max_node_cap:{orgAccountObj.max_node_cap} from {num_nodes_to_deploy}")
         num_nodes_to_deploy = orgAccountObj.max_node_cap
-
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    clusterObj.cnnro_ids = ids_list
+    clusterObj.save(update_fields=['cnnro_ids'])
     return num_nodes_to_deploy, ids_list
 
 def cull_expired_entries(org,tm):
@@ -346,10 +347,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                         expire_time = onnTop.expiration
                         if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
                             deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
-                            clusterObj = Cluster.objects.get(org=orgAccountObj)
-                            clusterObj.cnnro_ids = cnnro_ids
-                            clusterObj.save(update_fields=['cnnro_ids'])
-                            LOG.info(f"{orgAccountObj.name} Using top entry sorted by num/exp_tm with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} onnTop.id:{onnTop.id} clusterObj.cnnro_ids:{clusterObj.cnnro_ids}")
+                            LOG.info(f"{orgAccountObj.name} Using top entries of each user sorted by num/exp_tm  with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} ")
                             try:
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                             except Exception as e:

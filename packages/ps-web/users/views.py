@@ -308,12 +308,16 @@ def orgDestroyCluster(request, pk):
                     else:
                         messages.error(request,jrsp['error_msg'])           
                     clusterObj = Cluster.objects.get(org=orgAccountObj)
-                    active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
-
-                    if active_onns is not None:
-                        for active_onn in active_onns:
-                            active_onn.delete()
-                        messages.info(request,"Successfully deleted active Org Num Node requests")
+                    if clusterObj.cnnro_ids is not None:
+                        active_onns = OrgNumNode.objects.filter(id__in=clusterObj.cnnro_ids)
+                        if active_onns.exists():
+                            try:
+                                for active_onn in active_onns:
+                                    active_onn.delete()
+                                messages.info(request,"Successfully deleted active Org Num Node requests")
+                            except Exception as e:
+                                LOG.exception("caught exception:")
+                                messages.error(request, 'Error deleting active Org Num Node requests')
                     owner_ps_cmd = OwnerPSCmd.objects.create(user=request.user, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
                     owner_ps_cmd.save()
                     msg = f"Destroy {orgAccountObj.name} queued for processing"
@@ -322,8 +326,7 @@ def orgDestroyCluster(request, pk):
             except Exception as e:
                 status = 500
                 LOG.exception("caught exception:")
-                emsg = "Caught exception:"+repr(e)
-                messages.error(request, emsg)
+                messages.error(request, 'Error destroying cluster')
         # GET just displays org_manage_cluster
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
@@ -364,8 +367,8 @@ def clearActiveNumNodeReq(request, pk):
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':
-            active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
-            if active_onns is not None:
+            active_onns = OrgNumNode.objects.filter(id__in=clusterObj.cnnro_ids)
+            if active_onns.exists():
                 for active_onn in active_onns:
                     active_onn.delete()
                 messages.info(request,"Successfully deleted active Org Num Node requests")

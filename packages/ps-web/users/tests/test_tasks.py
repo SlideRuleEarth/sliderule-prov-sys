@@ -570,7 +570,7 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
     logger.info(f"orgAccountObj.max_ddt:{orgAccountObj.max_ddt}")
     logger.info(f"timedelta(hours=MIN_HRS_TO_LIVE_TO_START):{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
     assert OrgNumNode.objects.count() == 0 # on exception we remove the entry
-    assert clusterObj.cnnro_ids == None # cleaned up on exception
+    assert ((clusterObj.cnnro_ids == []) or (clusterObj.cnnro_ids == None)) # cleaned up on exception
     psCmdResultObj = PsCmdResult.objects.first()
     called_process_Update_cmd = True
     if ONN_IS_EMPTY:

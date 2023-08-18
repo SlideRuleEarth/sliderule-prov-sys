@@ -249,7 +249,7 @@
                                         <form method="POST" action="{% url 'clear-num-nodes-reqs' org.id %}" class="d-inline">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-primary mt-1 me-1">
-                                                <i class="im im-edit"></i> Clear
+                                                <i class="im im-edit"></i> Clear Inactive
                                             </button>
                                             <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
                                         </form>
@@ -279,7 +279,7 @@
                                                                         <p>Warning: Clearing the entire table when the 'min node cap' is > 0 will cause an update of cluster to min nodes.</p>
                                                                     </div>
                                                                     <button type="submit" class="btn btn-primary mt-1 me-1">
-                                                                        <i class="im im-edit"></i> Clear Last
+                                                                        <i class="im im-edit"></i> Clear Highest
                                                                     </button>
                                                                 </form>
                                                             {% endif %}
