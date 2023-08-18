@@ -1598,6 +1598,33 @@ class Control(ps_server_pb2_grpc.ControlServicer):
 
 
 ####################### Control End ##################################
+def update_key_in_file(filename, old_key, new_key):
+    # Open the JSON file and load its content
+    with open(filename, 'r') as file:
+        data = json.load(file)
+        
+    # Check if the old key exists
+    if old_key in data:
+        # Update the key and save the content back to the file
+        data[new_key] = data.pop(old_key)
+        with open(filename, 'w') as file:
+            json.dump(data, file, indent=4)
+
+def update_key_in_dir(local_dir, target_filename, old_key, new_key):
+    # Walk through all directories and files under the given directory
+    for dirpath, _, filenames in os.walk(local_dir):
+        for file in filenames:
+            if file == target_filename:
+                update_key_in_file(os.path.join(dirpath, file), old_key, new_key)
+
+def idempotent_migration():
+    '''
+    This is a one time migration to change the key from orgName to name in the SetUp.json file
+    This routine can run many times without any side effects
+    '''
+    # this can be removed after a successful migration and deploy to production servers
+    update_key_in_dir(local_dir=get_root_dir(), target_filename="SetUp.json", old_key="orgName", new_key="name")
+
 
 @contextlib.contextmanager
 def run_server(host, port, use_tls):
@@ -1678,6 +1705,7 @@ def main():
                 emsg = f"FAILED! error in download of s3 bucket:{S3_BUCKET} folder:{s3_folder} into local_dir:{local_dir}"
                 LOG.error(emsg)
 
+            idempotent_migration()
         except Exception as e:
             LOG.exception(f"download_dir caught exception:{repr(e)}")
         #LOG.info("calling run_server")
