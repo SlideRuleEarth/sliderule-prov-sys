@@ -22,7 +22,7 @@ from django.urls import reverse
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
-from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_org_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready
+from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready
 from time import sleep
 from django.contrib import messages
 from allauth.account.decorators import verified_email_required
@@ -73,7 +73,7 @@ def test_update_burn_rates(tasks_module,initialize_test_environ):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
 
     assert(orgAccountObj.name == TEST_ORG_NAME)
-    init_mock_ps_server(org_name=TEST_ORG_NAME,num_nodes=1)
+    init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1)
 
     assert(orgAccountObj.owner.username == OWNER_USER)
     forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly = update_burn_rates(orgAccountObj)
@@ -105,9 +105,9 @@ def test_purge_old_PsCmdResultsForOrg(tasks_module,initialize_test_environ):
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_test_environ):
+def test_process_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when it should destroy the cluster when there are no
         capacity requests (i.e. onn) 
         and min num nodes is zero
@@ -124,7 +124,7 @@ def test_process_org_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_te
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     assert orgAccountObj.num_onn == 1
     assert orgAccountObj.num_setup_cmd == 0
@@ -141,9 +141,9 @@ def test_process_org_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_te
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_test_environ):
+def test_process_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when it should NOT destroy the cluster when there 
         are no capacity requests and 
         and min num nodes is NOT zero so Update is issued for min num nodes
@@ -162,7 +162,7 @@ def test_process_org_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_tes
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     assert orgAccountObj.num_onn == 1
     assert orgAccountObj.num_ps_cmd == 1 #  Update
@@ -177,9 +177,9 @@ def test_process_org_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_tes
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initialize_test_environ):
+def test_process_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when it should NOT destroy the cluster when there 
         are no capacity requests and 
         and min num nodes is zero and the cluster is not deployed (i.e. NOTHING HAPPENS)
@@ -198,7 +198,7 @@ def test_process_org_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initiali
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     assert orgAccountObj.num_onn == 0
     assert orgAccountObj.num_ps_cmd == 0
@@ -208,9 +208,9 @@ def test_process_org_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initiali
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize_test_environ):
+def test_process_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when it should NOT destroy the cluster when there 
         are no capacity requests and 
         and min num nodes is NOT zero and 
@@ -231,7 +231,7 @@ def test_process_org_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     assert orgAccountObj.num_onn == 1
     assert orgAccountObj.num_ps_cmd == 1 #  Update
@@ -246,9 +246,9 @@ def test_process_org_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,create_TEST_USER,initialize_test_environ):
+def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,create_TEST_USER,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when the ONN table entry processed changes the version
         and generates a Destroy cmd
     '''
@@ -274,7 +274,7 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,cr
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     logger.info(f"orgAccountObj: num_onn={orgAccountObj.num_onn} num_ps_cmd={orgAccountObj.num_ps_cmd} desired_num_nodes={orgAccountObj.desired_num_nodes} cnt:{PsCmdResult.objects.count()}")
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -296,9 +296,9 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,cr
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,create_TEST_USER,initialize_test_environ):
+def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,create_TEST_USER,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when the ONN table is not empty and  the is_public flag changes
         and generates a Destroy cmd
     '''
@@ -329,7 +329,7 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
 
     orgAccountObj.refresh_from_db()
     assert orgAccountObj.num_onn == 0
@@ -344,9 +344,9 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_process_org_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TEST_USER,initialize_test_environ):
+def test_process_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TEST_USER,initialize_test_environ):
     '''
-        This procedure will test the 'process_org_num_node_table' routine
+        This procedure will test the 'process_num_node_table' routine
         for the case when the ONN table entry processed changes desired num nodes
         and generates an Update
     '''
@@ -372,7 +372,7 @@ def test_process_org_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TES
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     
-    process_org_num_node_table(orgAccountObj,False)
+    process_num_node_table(orgAccountObj,False)
 
     orgAccountObj.refresh_from_db()
     assert orgAccountObj.num_onn == 1
@@ -404,7 +404,7 @@ def test_process_Update_cmd_when_exception_occurs(create_TEST_USER, NEG_TEST_ERR
         This procedure will accept generic parms to negative test the 'process_Update_cmd' routine 
     '''
     logger = setup_logging
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME,the_logger=logger)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME,the_logger=logger)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -445,7 +445,7 @@ def test_process_Update_cmd_when_LOW_BALANCE_exception_occurs_ON_Update(create_T
         This procedure will do a negative test of the 'process_Update_cmd' routine for LOW balance error
     '''
 
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -488,7 +488,7 @@ def test_process_Update_cmd_when_exception_occurs_ON_OWNER_PS_CMD(create_TEST_US
     '''
         This procedure will accept generic parms to negative test the 'process_Update_cmd' routine when processing Owner PS Cmds (i.e. Destroy and Refresh)
     '''
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -523,7 +523,7 @@ def test_process_Update_cmd_when_exception_occurs_ON_OWNER_PS_CMD(create_TEST_US
     #logger.critical(f"error:{repr(error)}")
     assert str(NEG_TEST_ERROR_MSG) in str(error.value)
 
-def setup_before_process_org_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED):
+def setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = IS_DEPLOYED
     clusterObj.is_public = False
@@ -553,7 +553,7 @@ def setup_before_process_org_num_node_table_with_exception(orgAccountObj,ONN_IS_
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
 
-def verify_after_process_org_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,WAS_DEPLOYED):
+def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,WAS_DEPLOYED):
     '''
         This procedure will verify the OrgNumNode table after an exception occurs in the process_Update_cmd routine
 
@@ -570,7 +570,7 @@ def verify_after_process_org_num_node_table_after_exception(orgAccountObj,ONN_IS
     logger.info(f"orgAccountObj.max_ddt:{orgAccountObj.max_ddt}")
     logger.info(f"timedelta(hours=MIN_HRS_TO_LIVE_TO_START):{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
     assert OrgNumNode.objects.count() == 0 # on exception we remove the entry
-    assert clusterObj.cnnro_ids == None # cleaned up on exception
+    assert ((clusterObj.cnnro_ids == []) or (clusterObj.cnnro_ids == None)) # cleaned up on exception
     psCmdResultObj = PsCmdResult.objects.first()
     called_process_Update_cmd = True
     if ONN_IS_EMPTY:
@@ -665,19 +665,19 @@ test_params = [
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 @pytest.mark.parametrize("PS_EXCEPTIONS,NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP, IS_DEPLOYED", test_params)
-def test_process_org_num_node_table_NEGATIVE_TESTS(tasks_module,create_TEST_USER, PS_EXCEPTIONS, NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP, IS_DEPLOYED):
+def test_process_num_node_table_NEGATIVE_TESTS(tasks_module,create_TEST_USER, PS_EXCEPTIONS, NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP, IS_DEPLOYED):
     '''
-        This procedure will negative test the 'process_org_num_node_table' routine
+        This procedure will negative test the 'process_num_node_table' routine
         for the case when it should destroy the cluster when there are no
         capacity requests (i.e. onn) 
         and min num nodes is zero and an terraform exception is raised
         Note: we use the org name to trigger the specific exception in our Mock ps-server
     '''
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
-    setup_before_process_org_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
-    process_org_num_node_table(orgAccountObj,False)
-    verify_after_process_org_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
+    setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
+    process_num_node_table(orgAccountObj,False)
+    verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     if ONN_IS_EMPTY:
         if DESTROY_WHEN_NO_NODES and MIN_NODE_CAP == 0:
             if IS_DEPLOYED:
@@ -725,20 +725,20 @@ test_params = [
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 @pytest.mark.parametrize("PS_EXCEPTIONS, NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP, IS_DEPLOYED", test_params)
-def test_process_process_org_num_node_table_when_LOW_BALANCE_exception_occurs_ON_Update(create_TEST_USER, PS_EXCEPTIONS, NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP,IS_DEPLOYED):
+def test_process_process_num_node_table_when_LOW_BALANCE_exception_occurs_ON_Update(create_TEST_USER, PS_EXCEPTIONS, NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP,IS_DEPLOYED):
     '''
         This procedure will do a negative test of the 'process_Update_cmd' routine for LOW balance error
     '''
     #logger.critical(f"COOLOFF_SECS:{COOLOFF_SECS}")
-    init_test_environ(org_name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
+    init_test_environ(name=NEG_TEST_ERROR_ORG_NAME,balance=2.0)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     #logger.critical(f"BEFORE orgAccountObj:{pprint.pformat(model_to_dict(orgAccountObj,fields=None))}")
     cost_accounting(orgAccountObj)
-    setup_before_process_org_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
+    setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     orgAccountObj.balance = 2.0 # force low balance exception
     orgAccountObj.save()
-    process_org_num_node_table(orgAccountObj,False)
-    verify_after_process_org_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
+    process_num_node_table(orgAccountObj,False)
+    verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     if ONN_IS_EMPTY:
         if DESTROY_WHEN_NO_NODES and MIN_NODE_CAP == 0:
             if IS_DEPLOYED:
@@ -779,8 +779,8 @@ def test_get_current_version_after_setup(tasks_module,initialize_test_environ,ve
     assert setup_occurred == True # we set provision_env_ready to False above so we forced setup
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
-    assert rsp.setup_cfg.org_name == orgAccountObj.name
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+    assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public    
 
@@ -805,7 +805,7 @@ def test_provision_env_ready(tasks_module_to_import,developer_TEST_USER,initiali
     assert setup_occurred  # fixture already did setup
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
-    assert rsp.setup_cfg.org_name == orgAccountObj.name
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+    assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public

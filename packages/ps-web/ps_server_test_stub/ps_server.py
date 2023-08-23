@@ -116,11 +116,11 @@ def get_terraform_cli():
 def get_root_dir():
     return '/ps_server'
 
-def get_org_root_dir(name):
+def get_cluster_root_dir(name):
     return os.path.join(get_root_dir(),name)
 
 def get_terraform_dir(name):
-    return os.path.join(get_org_root_dir(name),"terraform")
+    return os.path.join(get_cluster_root_dir(name),"terraform")
 
 def get_s3_client():
     return boto3.client("s3", region_name="us-west-2", endpoint_url= "http://localstack:4566")
@@ -136,9 +136,9 @@ def get_ps_versions():
     return versions
 
 ## Hack These were cut-n-pasted from real ps-server.py... TBD what to do Here?
-def read_SetUpCfg(org_name):
-    LOG.info(f"read_SetUpCfg({org_name})")
-    setup_json_file_path = os.path.join(get_org_root_dir(org_name),SETUP_JSON_FILE)
+def read_SetUpCfg(name):
+    LOG.info(f"read_SetUpCfg({name})")
+    setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
     setup_cfg = ps_server_pb2.SetUpReq()
     try:
         with open(setup_json_file_path, 'r') as json_file:
@@ -152,8 +152,8 @@ def read_SetUpCfg(org_name):
     return setup_cfg
 
 
-def write_SetUpCfg(org_name,setup_cfg):
-    setup_json_file_path = os.path.join(get_org_root_dir(org_name),SETUP_JSON_FILE)
+def write_SetUpCfg(name,setup_cfg):
+    setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
     # Ensure the directory exists
     os.makedirs(os.path.dirname(setup_json_file_path), exist_ok=True)
     json_str = MessageToJson(setup_cfg)
@@ -161,19 +161,19 @@ def write_SetUpCfg(org_name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(org_name,version,is_public,now):
-    LOG.info(f"update_SetUpCfg: org_name:{org_name} version:{version} is_public:{is_public} now:{now}")
+def update_SetUpCfg(name,version,is_public,now):
+    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
     try:
-        setup_cfg = read_SetUpCfg(org_name) # might not exist
+        setup_cfg = read_SetUpCfg(name) # might not exist
         LOG.info(f"FROM: {setup_cfg}")
-        setup_cfg.org_name = org_name
+        setup_cfg.name = name
         setup_cfg.version = version
         setup_cfg.is_public = is_public
         setup_cfg.now = now
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
-        write_SetUpCfg(org_name, setup_cfg)
+        write_SetUpCfg(name, setup_cfg)
     except Exception as e:
-        LOG.exception(f" FAILED to read to read_SetUpCfg({org_name}) caught UNKNOWN exception:{repr(e)}")
+        LOG.exception(f" FAILED to read to read_SetUpCfg({name}) caught UNKNOWN exception:{repr(e)}")
         raise e
     LOG.info(f"  TO: {MessageToString(setup_cfg)}")
 
@@ -183,11 +183,11 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def Init(self, request, context): # Test only
         LOG.critical(f'Init request:{request}')
         try:
-            if request.org_name == '': # set all orgs to this value
+            if request.name == '': # set all orgs to this value
                 for o in shared_Mock_Clusters.mocked_NUM_NODES_dict:
                     shared_Mock_Clusters.mocked_NUM_NODES_dict[o] = request.num_nodes
             else:
-                shared_Mock_Clusters.mocked_NUM_NODES_dict[request.org_name] = request.num_nodes
+                shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = request.num_nodes
         except Exception as e:
             LOG.critical(f'Exception in Init:{e}')
             return ps_server_pb2.InitRsp(success=False, error_msg=str(e))
@@ -216,34 +216,34 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def check_for_fake_orgs(self, request, ps_cmd):
 
         if ps_cmd == 'Update':
-            shared_Mock_Clusters.deployed_dict[request.org_name] = True
-            shared_Mock_Clusters.mocked_NUM_NODES_dict[request.org_name] = request.num_nodes
-            setup_cfg = read_SetUpCfg(request.org_name)
-            shared_Mock_Clusters.cluster_version_dict[request.org_name] = setup_cfg.version
-            shared_Mock_Clusters.cluster_is_public_dict[request.org_name] = setup_cfg.is_public
+            shared_Mock_Clusters.deployed_dict[request.name] = True
+            shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = request.num_nodes
+            setup_cfg = read_SetUpCfg(request.name)
+            shared_Mock_Clusters.cluster_version_dict[request.name] = setup_cfg.version
+            shared_Mock_Clusters.cluster_is_public_dict[request.name] = setup_cfg.is_public
         if ps_cmd == 'Destroy':
-            shared_Mock_Clusters.deployed_dict[request.org_name] = False
-            shared_Mock_Clusters.cluster_version_dict[request.org_name] = ''
-            shared_Mock_Clusters.cluster_is_public_dict[request.org_name] = ''
+            shared_Mock_Clusters.deployed_dict[request.name] = False
+            shared_Mock_Clusters.cluster_version_dict[request.name] = ''
+            shared_Mock_Clusters.cluster_is_public_dict[request.name] = ''
 
-        cli_rsp = ps_server_pb2.cli_rsp(valid=True,updating=True,stdout=f'{ps_cmd} {request.org_name} testing 1..2...3...')
-        state = ps_server_pb2.StateOfCluster(valid=True,deployed=shared_Mock_Clusters.deployed_dict[request.org_name],deployed_state=f'{ps_cmd} Testing....',ip_address='0.0.0.0')
-        yield ps_server_pb2.Response(name=request.org_name,
+        cli_rsp = ps_server_pb2.cli_rsp(valid=True,updating=True,stdout=f'{ps_cmd} {request.name} testing 1..2...3...')
+        state = ps_server_pb2.StateOfCluster(valid=True,deployed=shared_Mock_Clusters.deployed_dict[request.name],deployed_state=f'{ps_cmd} Testing....',ip_address='0.0.0.0')
+        yield ps_server_pb2.Response(name=request.name,
                                         ps_cmd=ps_cmd,
                                         done=False,
                                         cli=cli_rsp,
                                         ps_server_error=False,
                                         error_msg='')
-        if request.org_name == NEG_TEST_TERRAFORM_ERROR_ORG_NAME and ps_cmd != 'SetUp':
+        if request.name == NEG_TEST_TERRAFORM_ERROR_ORG_NAME and ps_cmd != 'SetUp':
             state = ps_server_pb2.StateOfCluster(valid=True,deployed=False,deployed_state=f'{ps_cmd} Not Deployed (TEST)',ip_address='0.0.0.0')
             raise subprocess.CalledProcessError(returncode=1, cmd=NEG_TEST_TERRAFORM_ERROR_MSG, output='',stderr='dummy stderr')
-        if request.org_name == NEG_TEST_GRPC_ERROR_ORG_NAME and ps_cmd != 'SetUp':
+        if request.name == NEG_TEST_GRPC_ERROR_ORG_NAME and ps_cmd != 'SetUp':
             state = ps_server_pb2.StateOfCluster(valid=True,deployed=False,deployed_state=f'{ps_cmd} Not Deployed (TEST)',ip_address='0.0.0.0')
             raise Exception(NEG_TEST_GRPC_ERROR_MSG)
-        if request.org_name == NEG_TEST_STOP_ITER_ERROR_ORG_NAME and ps_cmd != 'SetUp':
+        if request.name == NEG_TEST_STOP_ITER_ERROR_ORG_NAME and ps_cmd != 'SetUp':
             state = ps_server_pb2.StateOfCluster(valid=True,deployed=False,deployed_state=f'{ps_cmd} Not Deployed (TEST)',ip_address='0.0.0.0')
             raise StopIteration(NEG_TEST_STOP_ITER_ERROR_MSG)
-        yield ps_server_pb2.Response(  name=request.org_name,
+        yield ps_server_pb2.Response(  name=request.name,
                                     ps_cmd=ps_cmd,
                                     state=state,
                                     cli=cli_rsp,
@@ -255,18 +255,18 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         try:
             yield from self.check_for_fake_orgs(request, ps_cmd)
         except Exception as e:
-            emsg = (f" Processing fake_cmd {ps_cmd} {request.org_name} cluster caught this exception: ")
+            emsg = (f" Processing fake_cmd {ps_cmd} {request.name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += str(e)
             yield self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd=ps_cmd,
                 ps_server_error=True,
                 error_msg=emsg,)
         finally:
             # ALWAYS send a done!
             r = self.get_Response_Obj(
-                name=request.org_name,
+                name=request.name,
                 ps_cmd=ps_cmd,
                 done=True,
             )
@@ -275,7 +275,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             elapsed_tm = datetime.now(timezone.utc) - st
             r.cli.stdout = (
                 "**************** "
-                + request.org_name
+                + request.name
                 + " "
                 + f'{ps_cmd}'
                 + " Completed "
@@ -284,7 +284,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 + repr(elapsed_tm)
             )
             yield r
-            LOG.info(f"{ps_cmd} {request.org_name} cluster completed")
+            LOG.info(f"{ps_cmd} {request.name} cluster completed")
             for handler in LOG.handlers:
                 handler.flush()
 
@@ -301,18 +301,18 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         If that changes in the real ps_server, then this test driver will need to be updated.
 
         '''
-        LOG.critical(f'STUBBED {ps_cmd} {request.org_name} cluster')
+        LOG.critical(f'STUBBED {ps_cmd} {request.name} cluster')
         with time_machine.travel(datetime.strptime(request.now,FMT),tick=False):
             try:
                 LOG.critical(f'STUBBED {ps_cmd} {request} cluster in  domain:{domain_env}')
                 st = datetime.now(timezone.utc)
                 yield from self.fake_cmd(request,ps_cmd,st)
             except Exception as e:
-                emsg = (f" Processing FAKE_CMD {ps_cmd} {request.org_name} cluster caught this exception: ")
+                emsg = (f" Processing FAKE_CMD {ps_cmd} {request.name} cluster caught this exception: ")
                 LOG.exception(emsg)
                 emsg += str(e)
                 yield self.get_Response_Obj(
-                    name=request.org_name,
+                    name=request.name,
                     ps_cmd=f'{ps_cmd}',
                     ps_server_error=True,
                     error_msg=emsg,)
@@ -329,19 +329,19 @@ class Control(ps_server_pb2_grpc.ControlServicer):
 
     def SetUp(self, request, context):
         try:
-            LOG.critical(f'STUBBED SetUp {request.org_name} version:{request.version} is_public:{request.is_public} cluster in  domain:{domain_env}')
-            deployed = shared_Mock_Clusters.deployed_dict[request.org_name]
+            LOG.critical(f'STUBBED SetUp {request.name} version:{request.version} is_public:{request.is_public} cluster in  domain:{domain_env}')
+            deployed = shared_Mock_Clusters.deployed_dict[request.name]
         except KeyError:
-            shared_Mock_Clusters.deployed_dict[request.org_name] = False
-            shared_Mock_Clusters.mocked_NUM_NODES_dict[request.org_name] = 0
-        update_SetUpCfg(request.org_name, request.version, request.is_public, request.now)
+            shared_Mock_Clusters.deployed_dict[request.name] = False
+            shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
+        update_SetUpCfg(request.name, request.version, request.is_public, request.now)
         yield from self.FakeCMD(request,'SetUp')
 
     def GetCurrentSetUpCfg(self,request,context):
         '''
         This is the version of terraform files setup for the Org's cluster
         '''
-        setup_cfg = read_SetUpCfg(request.org_name)
+        setup_cfg = read_SetUpCfg(request.name)
         return ps_server_pb2.GetCurrentSetUpCfgRsp(setup_cfg=setup_cfg)
 
 class Account(ps_server_pb2_grpc.AccountServicer):
@@ -350,8 +350,8 @@ class Account(ps_server_pb2_grpc.AccountServicer):
     DAY_FMT = "%Y-%m-%d"
 
     def CurrentCost(self, currentCostReq, context):  ## This is called by GRPC framework
-        LOG.info("%s cluster", currentCostReq.org_name)
-        retRsp = ps_server_pb2.CostAndUsageRsp( org_name=currentCostReq.org_name,
+        LOG.info("%s cluster", currentCostReq.name)
+        retRsp = ps_server_pb2.CostAndUsageRsp( name=currentCostReq.name,
                                                 total=0.0,
                                                 unit="",
                                                 server_error=True,
@@ -363,7 +363,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             rsp_cost = []
             now = datetime.now(timezone.utc)
             retRsp = ps_server_pb2.CostAndUsageRsp(
-                org_name=currentCostReq.org_name,
+                name=currentCostReq.name,
                 granularity=currentCostReq.granularity,
                 total=0.0,
                 unit="",
@@ -407,7 +407,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     ]        
 
             retRsp = ps_server_pb2.CostAndUsageRsp(
-                org_name=currentCostReq.org_name,
+                name=currentCostReq.name,
                 granularity=currentCostReq.granularity,
                 total=0.0,
                 unit="",
@@ -417,10 +417,10 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                 error_msg="")
 
         except Exception as e:
-            emsg = (f" Processing for org: {currentCostReq.org_name} cluster caught this exception {e}")
+            emsg = (f" Processing for org: {currentCostReq.name} cluster caught this exception {e}")
             LOG.exception(emsg)
             return ps_server_pb2.CostAndUsageRsp(
-                org_name=currentCostReq.org_name,
+                name=currentCostReq.name,
                 total=0.0,
                 unit="",
                 server_error=True,
@@ -429,7 +429,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
         return retRsp
 
     def TodaysCost(self, todaysCostReq, context):  ## This is called by GRPC framework
-        retRsp = ps_server_pb2.CostAndUsageRsp( org_name=todaysCostReq.org_name,
+        retRsp = ps_server_pb2.CostAndUsageRsp( name=todaysCostReq.name,
                                                 total=0.0,
                                                 unit="",
                                                 server_error=True,
@@ -438,7 +438,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             LOG.critical(f"todaysCostReq:{todaysCostReq}")
             rsp_tm = []
             rsp_cost = []
-            if todaysCostReq.org_name=="test_reconcileOrg:Req1:2020-01-28 11:00:00+00:00":
+            if todaysCostReq.name=="test_reconcileOrg:Req1:2020-01-28 11:00:00+00:00":
                 fake_now1 = datetime.now(timezone.utc)
                 LOG.critical(f"fake now1:{fake_now1}")
                 
@@ -446,7 +446,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     rsp_tm.append(datetime.strftime(datetime(year=2020,month=1,day=27,hour=h),FMT_Z))
                     rsp_cost.append(float("0.45"))
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=todaysCostReq.org_name,
+                    name=todaysCostReq.name,
                     granularity='HOURLY',
                     total=0.0,
                     unit="",
@@ -454,7 +454,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     cost = rsp_cost,
                     server_error=False,
                     error_msg="")
-            if todaysCostReq.org_name=="test_reconcileOrg:Req2:2020-01-29 11:00:00+00:00":
+            if todaysCostReq.name=="test_reconcileOrg:Req2:2020-01-29 11:00:00+00:00":
                 fake_now1 = datetime.now(timezone.utc)
                 LOG.critical(f"fake now1:{fake_now1}")
                 
@@ -462,7 +462,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     rsp_tm.append(datetime.strftime(datetime(year=2020,month=1,day=28,hour=h),FMT_Z))
                     rsp_cost.append(float("0.45"))
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=todaysCostReq.org_name,
+                    name=todaysCostReq.name,
                     granularity='HOURLY',
                     total=0.0,
                     unit="",
@@ -470,7 +470,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     cost = rsp_cost,
                     server_error=False,
                     error_msg="")
-            if todaysCostReq.org_name=="test_reconcileOrg:Req3:2020-01-30 11:00:00+00:00":
+            if todaysCostReq.name=="test_reconcileOrg:Req3:2020-01-30 11:00:00+00:00":
                 fake_now1 = datetime.now(timezone.utc)
                 LOG.critical(f"fake now1:{fake_now1}")
                 
@@ -478,7 +478,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     rsp_tm.append(datetime.strftime(datetime(year=2020,month=1,day=29,hour=h),FMT_Z))
                     rsp_cost.append(float("0.45"))
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=todaysCostReq.org_name,
+                    name=todaysCostReq.name,
                     granularity='HOURLY',
                     total=0.0,
                     unit="",
@@ -487,7 +487,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     server_error=False,
                     error_msg="")
 
-            if todaysCostReq.org_name=="test_reconcileOrg:Req4:2021-01-30 11:00:00+00:00":
+            if todaysCostReq.name=="test_reconcileOrg:Req4:2021-01-30 11:00:00+00:00":
                 fake_now1 = datetime.now(timezone.utc)
                 LOG.critical(f"fake now1:{fake_now1}")
                 
@@ -495,7 +495,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     rsp_tm.append(datetime.strftime(datetime(year=2021,month=1,day=29,hour=h),FMT_Z))
                     rsp_cost.append(float("0.45"))
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=todaysCostReq.org_name,
+                    name=todaysCostReq.name,
                     granularity='HOURLY',
                     total=0.0,
                     unit="",
@@ -504,7 +504,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     server_error=False,
                     error_msg="")
 
-            if todaysCostReq.org_name=="test_reconcileOrg:Req5:2021-01-31 11:00:00+00:00":
+            if todaysCostReq.name=="test_reconcileOrg:Req5:2021-01-31 11:00:00+00:00":
                 fake_now1 = datetime.now(timezone.utc)
                 LOG.critical(f"fake now1:{fake_now1}")
                 
@@ -512,7 +512,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     rsp_tm.append(datetime.strftime(datetime(year=2021,month=1,day=30,hour=h),FMT_Z))
                     rsp_cost.append(float("0.45"))
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=todaysCostReq.org_name,
+                    name=todaysCostReq.name,
                     granularity='HOURLY',
                     total=0.0,
                     unit="",
@@ -523,10 +523,10 @@ class Account(ps_server_pb2_grpc.AccountServicer):
 
 
         except Exception as e:
-            emsg = (f" Processing for org: {todaysCostReq.org_name} cluster caught this exception {e}")
+            emsg = (f" Processing for org: {todaysCostReq.name} cluster caught this exception {e}")
             LOG.exception(emsg)
             retRsp = ps_server_pb2.CostAndUsageRsp(
-                org_name=todaysCostReq.org_name,
+                name=todaysCostReq.name,
                 total=0.0,
                 unit="",
                 server_error=True,
@@ -535,21 +535,21 @@ class Account(ps_server_pb2_grpc.AccountServicer):
         return retRsp
 
     def DailyHistCost(self, dailyHistCostReq, context):
-        retRsp = ps_server_pb2.CostAndUsageRsp( org_name=dailyHistCostReq.org_name,
+        retRsp = ps_server_pb2.CostAndUsageRsp( name=dailyHistCostReq.name,
                                                 total=0.0,
                                                 unit="",
                                                 server_error=True,
                                                 error_msg="Response Not Set Yet")  
         try:
             LOG.critical(f"{dailyHistCostReq}")
-            if dailyHistCostReq.org_name=="test_ps_server_stub":
+            if dailyHistCostReq.name=="test_ps_server_stub":
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=dailyHistCostReq.org_name,
+                    name=dailyHistCostReq.name,
                     total=0.0,
                     unit="",
                     server_error=False,
                     error_msg="")
-            if dailyHistCostReq.org_name=="test_reconcileOrg:Req1:2020-01-28 11:00:00+00:00":
+            if dailyHistCostReq.name=="test_reconcileOrg:Req1:2020-01-28 11:00:00+00:00":
                 rsp_tm= [
                     datetime.strftime(datetime(year=2020,month=1,day=25),FMT_DAILY),
                     datetime.strftime(datetime(year=2020,month=1,day=26),FMT_DAILY),
@@ -561,7 +561,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     float("2.40")
                 ]
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=dailyHistCostReq.org_name,
+                    name=dailyHistCostReq.name,
                     granularity='DAILY',
                     total=0.0,
                     unit="",
@@ -570,7 +570,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     server_error=False,
                     error_msg="")
 
-            if dailyHistCostReq.org_name=="test_reconcileOrg:Req2:2020-01-29 11:00:00+00:00":
+            if dailyHistCostReq.name=="test_reconcileOrg:Req2:2020-01-29 11:00:00+00:00":
                 rsp_tm= [
                     datetime.strftime(datetime(year=2020,month=1,day=28),FMT_DAILY),
                     ]
@@ -578,7 +578,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     float("3.00"),
                 ]
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=dailyHistCostReq.org_name,
+                    name=dailyHistCostReq.name,
                     granularity='DAILY',
                     total=0.0,
                     unit="",
@@ -587,7 +587,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     server_error=False,
                     error_msg="")
 
-            if dailyHistCostReq.org_name=="test_reconcileOrg:Req3:2020-01-30 11:00:00+00:00":
+            if dailyHistCostReq.name=="test_reconcileOrg:Req3:2020-01-30 11:00:00+00:00":
                 rsp_tm= [
                     datetime.strftime(datetime(year=2020,month=1,day=29),FMT_DAILY),
                     ]
@@ -595,7 +595,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     float("3.00"),
                 ]
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=dailyHistCostReq.org_name,
+                    name=dailyHistCostReq.name,
                     granularity='DAILY',
                     total=0.0,
                     unit="",
@@ -604,7 +604,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     server_error=False,
                     error_msg="")
 
-            if dailyHistCostReq.org_name=="test_reconcileOrg:Req4:2021-01-30 11:00:00+00:00":
+            if dailyHistCostReq.name=="test_reconcileOrg:Req4:2021-01-30 11:00:00+00:00":
                 rsp_tm= [
                     datetime.strftime(datetime(year=2021,month=1,day=29),FMT_DAILY),
                     ]
@@ -612,7 +612,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     float("3.00"),
                 ]
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=dailyHistCostReq.org_name,
+                    name=dailyHistCostReq.name,
                     granularity='DAILY',
                     total=0.0,
                     unit="",
@@ -622,7 +622,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     error_msg="")
 
 
-            if dailyHistCostReq.org_name=="test_reconcileOrg:Req5:2021-01-31 11:00:00+00:00":
+            if dailyHistCostReq.name=="test_reconcileOrg:Req5:2021-01-31 11:00:00+00:00":
                 rsp_tm= [
                     datetime.strftime(datetime(year=2021,month=1,day=30),FMT_DAILY),
                     ]
@@ -630,7 +630,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     float("3.00"),
                 ]
                 retRsp = ps_server_pb2.CostAndUsageRsp(
-                    org_name=dailyHistCostReq.org_name,
+                    name=dailyHistCostReq.name,
                     granularity='DAILY',
                     total=0.0,
                     unit="",
@@ -640,10 +640,10 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     error_msg="")
 
         except Exception as e:
-            emsg = (f" Processing for org: {dailyHistCostReq.org_name} cluster caught this exception {e}")
+            emsg = (f" Processing for org: {dailyHistCostReq.name} cluster caught this exception {e}")
             LOG.exception(emsg)
             retRsp = ps_server_pb2.CostAndUsageRsp(
-                org_name=dailyHistCostReq.org_name,
+                name=dailyHistCostReq.name,
                 total=0.0,
                 unit="",
                 server_error=True,
@@ -652,14 +652,14 @@ class Account(ps_server_pb2_grpc.AccountServicer):
         return retRsp
 
     def NumNodes(self,numNodesReq, context):
-        LOG.critical(f"{numNodesReq.region} {numNodesReq.org_name} {numNodesReq.version}")
+        LOG.critical(f"{numNodesReq.region} {numNodesReq.name} {numNodesReq.version}")
         try:
-            num_nodes = shared_Mock_Clusters.mocked_NUM_NODES_dict.get(numNodesReq.org_name,0) 
+            num_nodes = shared_Mock_Clusters.mocked_NUM_NODES_dict.get(numNodesReq.name,0) 
         except KeyError:
             num_nodes=-1
-            LOG.error(f"INVALID org_name:{numNodesReq.org_name}")
+            LOG.error(f"INVALID name:{numNodesReq.name}")
             raise KeyError
-        rsp = ps_server_pb2.NumNodesRsp(org_name = numNodesReq.org_name,version=numNodesReq.version,region=numNodesReq.region,num_nodes = num_nodes)
+        rsp = ps_server_pb2.NumNodesRsp(name = numNodesReq.name,version=numNodesReq.version,region=numNodesReq.region,num_nodes = num_nodes)
         LOG.critical(f"NumNodes response: {rsp}")
         return rsp
 

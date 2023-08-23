@@ -18,13 +18,13 @@ import subprocess
 def get_root_dir():
     return '/ps_server'
 
-def get_terraform_dir(test_org_name):
-    return os.path.join(get_root_dir(), test_org_name, 'terraform')
+def get_terraform_dir(test_name):
+    return os.path.join(get_root_dir(), test_name, 'terraform')
 
-def chdir_parm(test_org_name):
-    return f"-chdir={get_terraform_dir(test_org_name)}"
+def chdir_parm(test_name):
+    return f"-chdir={get_terraform_dir(test_name)}"
 
-def get_org_root_dir(name):
+def get_cluster_root_dir(name):
     return os.path.join(get_root_dir(),name)
 
 def run_subprocess_command(cmd, logger):
@@ -58,7 +58,7 @@ def run_subprocess_command(cmd, logger):
     logger.info(f"SUCCESS: {cmd}")
     return process.returncode, stdout_lines, stderr_lines
 
-def run_terraform_cmd(test_org_name, tf_cmd_args, logger):
+def run_terraform_cmd(test_name, tf_cmd_args, logger):
     """
     Run a terraform command in a subprocess, and return the output.
 
@@ -66,9 +66,9 @@ def run_terraform_cmd(test_org_name, tf_cmd_args, logger):
     :return: None
     :raises: subprocess.CalledProcessError if the command returns a non-zero exit status.
     """
-    cmd = ['tflocal',chdir_parm(test_org_name)]
+    cmd = ['tflocal',chdir_parm(test_name)]
     cmd.extend(tf_cmd_args)
-    logger.info(f"Running terraform command: {cmd} using {chdir_parm(test_org_name)}")
+    logger.info(f"Running terraform command: {cmd} using {chdir_parm(test_name)}")
     return run_subprocess_command(cmd, logger)
 
 def bucket_exists(s3_client,bucket_name):
@@ -148,12 +148,12 @@ def count_subdirectories(directory):
 
     return subdir_count
 
-def get_tf_workspaces(logger,test_org_name):
+def get_tf_workspaces(logger,test_name):
     '''
         Gets the list of workspaces for the test org
     '''
     # get the list of workspaces
-    cmd_args = ['tflocal', chdir_parm(test_org_name), "workspace", "list"]
+    cmd_args = ['tflocal', chdir_parm(test_name), "workspace", "list"]
     workspaces = []
     rc,stdout_lns,stderr_lns = run_subprocess_command(cmd_args, logger)
     #logger.info(f'rc:{rc}')
@@ -170,7 +170,7 @@ def get_tf_workspaces(logger,test_org_name):
     #logger.info(f'workspaces:{workspaces}')
     return workspaces
 
-def delete_workspace(logger, test_org_name, ws_name):
+def delete_workspace(logger, test_name, ws_name):
     tf_cmd_args = ["workspace", "select", "default"]
     run_terraform_cmd(tf_cmd_args, logger)
     tf_cmd_args = ["workspace", "delete", f'{ws_name}']
@@ -240,7 +240,7 @@ def delete_folder_from_s3(logger, s3_client, bucket, s3_folder):
         logger.exception(f"FAILED to delete {s3_folder} from to bucket {bucket}")
     return deleted
 
-def process_rsp_generator(rrsp_gen, org_name, ps_cmd,  logger):
+def process_rsp_generator(rrsp_gen, name, ps_cmd,  logger):
     '''
     process the response generator
     '''
@@ -260,7 +260,7 @@ def process_rsp_generator(rrsp_gen, org_name, ps_cmd,  logger):
             logger.info(f'rrsp.cli.stdout: {rrsp.cli.stdout}')
             logger.info(f'rrsp.cli.stderr: {rrsp.cli.stderr}')
             assert rrsp.ps_cmd == ps_cmd
-            assert rrsp.name == org_name
+            assert rrsp.name == name
             assert hasattr(rrsp.cli, 'stderr')
             assert hasattr(rrsp.cli, 'stdout')
             assert (rrsp.cli.valid and not rrsp.ps_server_error)
@@ -282,12 +282,12 @@ def process_rsp_generator(rrsp_gen, org_name, ps_cmd,  logger):
                 logger.error(f"rrsp.error_msg:{rrsp.error_msg}")
     return cnt,rrsp.done,stop_exception_cnt,exception_cnt,ps_error_cnt,rrsp.cli.stdout,rrsp.cli.stderr
 
-def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, org_name, logger):
+def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, name, logger):
 
     assert bucket_exists(s3_client, s3_bucket)
-    rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,org_name=org_name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"))
+    rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,name=name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"))
 
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(rrsp_gen,org_name,'SetUp',logger)
+    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(rrsp_gen,name,'SetUp',logger)
 
     logger.info('done with terraform_env test')
     logger.info(f'cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
@@ -301,7 +301,7 @@ def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, o
     s3_folder = f'prov-sys/cluster_tf_versions/{version}/'
     assert s3_folder_exist(logger, s3_client, s3_bucket, s3_folder)
 
-    path = f'/ps_server/{org_name}/terraform'
+    path = f'/ps_server/{name}/terraform'
     returncode,stdout_lns,stderr_lns = run_subprocess_command(['ls', '-al', path],logger)
     assert returncode == 0
     logger.info(f'path:{path} stdout_lns:{stdout_lns}')
@@ -313,9 +313,9 @@ def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, o
     assert in_output
     return True
 
-def terraform_teardown(ps_server_cntrl, s3_client, s3_bucket, org_name, logger):
+def terraform_teardown(ps_server_cntrl, s3_client, s3_bucket, name, logger):
 
-    rrsp_gen = ps_server_cntrl.teardown_terraform_env(s3_client,org_name)
+    rrsp_gen = ps_server_cntrl.teardown_terraform_env(s3_client,name)
     done = False
     cnt = 0
     exception_cnt = 0
@@ -333,7 +333,7 @@ def terraform_teardown(ps_server_cntrl, s3_client, s3_bucket, org_name, logger):
             logger.info(f'rrsp.cli.stdout: {rrsp.cli.stdout}')
             logger.info(f'rrsp.cli.stderr: {rrsp.cli.stderr}')
             assert rrsp.ps_cmd == 'TearDown'
-            assert rrsp.name == org_name
+            assert rrsp.name == name
             assert hasattr(rrsp.cli, 'stderr')
             assert hasattr(rrsp.cli, 'stdout')
             assert (rrsp.cli.valid and not rrsp.ps_server_error)
@@ -357,9 +357,9 @@ def terraform_teardown(ps_server_cntrl, s3_client, s3_bucket, org_name, logger):
 
     assert cnt > 0
 
-    assert not os.path.isdir(get_org_root_dir(org_name))
-    assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{org_name}') 
+    assert not os.path.isdir(get_cluster_root_dir(name))
+    assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{name}') 
     logger.info(f'cnt:{cnt} exception_cnt:{exception_cnt} stop_exception_cnt:{stop_exception_cnt}')
-    logger.info(f'Done teardown: terraform_env org:{org_name}')
+    logger.info(f'Done teardown: terraform_env org:{name}')
     assert exception_cnt==0
     return True

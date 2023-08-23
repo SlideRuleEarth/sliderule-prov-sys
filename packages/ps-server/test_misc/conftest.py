@@ -21,7 +21,7 @@ import time
 parent_dir = pathlib.Path(__file__).parent.resolve()
 src_path = os.path.join(parent_dir, '..', '')
 sys.path.append(src_path)
-from ps_server import ps_server_pb2, poll_for_localstack_status,get_org_root_dir,delete_folder_from_s3
+from ps_server import ps_server_pb2, poll_for_localstack_status,get_cluster_root_dir,delete_folder_from_s3
 from importlib import import_module
 
 from ps_server import Control  # Import the Control class
@@ -72,11 +72,11 @@ def ps_server_module():
     yield import_module(module_name)
 
 @pytest.fixture(scope='session', autouse=True)
-def test_org_name():
+def test_name():
     return 'unit-test-org' 
  
 @pytest.fixture(scope='session', autouse=True)
-def test_public_org_name():
+def test_public_name():
     return 'unit-test-public' 
 
  # TBD use Monkeypatch to mock this in env?
@@ -90,7 +90,7 @@ def root_dir():
 
 
 @pytest.fixture(scope="function")
-def terraform_env(setup_logging, s3, get_S3_BUCKET, root_dir, localstack_setup, test_org_name, control_instance, request):
+def terraform_env(setup_logging, s3, get_S3_BUCKET, root_dir, localstack_setup, test_name, control_instance, request):
 
     '''
     This fixture will setup and teardown a terraform environment for each test function that references it
@@ -101,23 +101,23 @@ def terraform_env(setup_logging, s3, get_S3_BUCKET, root_dir, localstack_setup, 
     #
     logger = setup_logging
     version,is_public = request.param
-    logger.info(f'fixture setup for org:{test_org_name} and version:{version} is_public:{is_public}')
-    assert terraform_setup(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, version=version, is_public=is_public, org_name=test_org_name, logger=setup_logging)
+    logger.info(f'fixture setup for org:{test_name} and version:{version} is_public:{is_public}')
+    assert terraform_setup(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, version=version, is_public=is_public, name=test_name, logger=setup_logging)
 
     yield
 
     #
     #  ----- TearDown -----
     #
-    logger.info(f'fixture teardown for org:{test_org_name} and version:{request.param[0]} is_public:{request.param[1]}')
-    assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, org_name=test_org_name, logger=setup_logging)
+    logger.info(f'fixture teardown for org:{test_name} and version:{request.param[0]} is_public:{request.param[1]}')
+    assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, name=test_name, logger=setup_logging)
 
 
 @pytest.fixture
-def UpdateReq(test_org_name):  # You can provide a default value here if necessary
+def UpdateReq(test_name):  # You can provide a default value here if necessary
 
     provision_req = ps_server_pb2.UpdateRequest(
-        org_name=test_org_name,
+        name=test_name,
         min_nodes=1,
         max_nodes=5,
         num_nodes=3,
@@ -127,24 +127,24 @@ def UpdateReq(test_org_name):  # You can provide a default value here if necessa
     return provision_req
 
 @pytest.fixture
-def SetUpReq(test_org_name,setup_logging,request):  # You can provide a default value here if necessary
+def SetUpReq(test_name,setup_logging,request):  # You can provide a default value here if necessary
     version = request.param[0]  # This is where you get the version from
     logger = setup_logging
 
     setup_request = ps_server_pb2.SetUpReq(
-        org_name=test_org_name,
+        name=test_name,
         version=version,  # Use the version passed to the fixture
         now=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     )
     return setup_request
 
 @pytest.fixture
-def TearDownReq(test_org_name,setup_logging,request):  # You can provide a default value here if necessary
+def TearDownReq(test_name,setup_logging,request):  # You can provide a default value here if necessary
     version = request.param  # This is where you get the version from
     logger = setup_logging
 
     td_request = ps_server_pb2.TearDownReq(
-        org_name=test_org_name,
+        name=test_name,
         version=version,  # Use the version passed to the fixture
         now=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     )
@@ -166,7 +166,7 @@ def s3(setup_logging, get_S3_BUCKET):
     logger.info(f'verify teardown of mocked s3 with s3_client:{s3_client} s3 bucket:{get_S3_BUCKET}')
 
 @pytest.fixture(scope="function")
-def clean_all_workspaces(setup_logging,test_org_name,control_instance):
+def clean_all_workspaces(setup_logging,test_name,control_instance):
     '''
         This fixture cleans up all the workspaces
     '''
@@ -174,15 +174,15 @@ def clean_all_workspaces(setup_logging,test_org_name,control_instance):
     rc, stdout, stderr = run_subprocess_command(['terraform', 'workspace', 'list'], logger)
     logger.info(f'clean_workspaces')
     retStatus = True
-    if os.path.exists(f"/ps_server/{test_org_name}"):
+    if os.path.exists(f"/ps_server/{test_name}"):
         # clean up the workspaces for the test org
         #   get the list of workspaces
-        ws_list = get_tf_workspaces(logger,test_org_name)
+        ws_list = get_tf_workspaces(logger,test_name)
         for ws_name in ws_list:
-            if test_org_name in ws_name:
-                logger.info(f'clean_workspace: deleting workspace for org:{test_org_name}')
-                return control_instance.delete_workspace_for_org(test_org_name)
-        cmd_args = ['rm', '-rf', 'ps_server/{test_org_name}']
+            if test_name in ws_name:
+                logger.info(f'clean_workspace: deleting workspace for org:{test_name}')
+                return control_instance.delete_workspace_for_org(test_name)
+        cmd_args = ['rm', '-rf', 'ps_server/{test_name}']
         returncode, stdout_lines, stderr_lines = run_subprocess_command(cmd_args, logger)
         if returncode != 0:
             retStatus = False
@@ -190,7 +190,7 @@ def clean_all_workspaces(setup_logging,test_org_name,control_instance):
     return retStatus
 
 @pytest.fixture(scope="function")
-def init_s3_current_cluster_tf_by_org_factory(setup_logging, s3, get_S3_BUCKET, root_dir,  test_org_name, version, ps_server_module):
+def init_s3_current_cluster_tf_by_org_factory(setup_logging, s3, get_S3_BUCKET, root_dir,  test_name, version, ps_server_module):
     '''
         This returns a function that when executed emulates state of the real system when a cluster is deployed 
         This fixture will initialize the bucket:sliderule s3_path:prov-sys/localhost/current_cluster_tf_by_org/<version> .
@@ -198,9 +198,9 @@ def init_s3_current_cluster_tf_by_org_factory(setup_logging, s3, get_S3_BUCKET, 
     s3_client = s3
     logger = setup_logging
     s3_bucket = get_S3_BUCKET
-    def _init_s3_current_cluster_tf_by_org(logger,test_org_name,version):
+    def _init_s3_current_cluster_tf_by_org(logger,test_name,version):
         src_s3_folder = f'prov-sys/cluster_tf_versions/{version}'
-        dest_s3_folder = f'prov-sys/localhost/current_cluster_tf_by_org/{test_org_name}'
+        dest_s3_folder = f'prov-sys/localhost/current_cluster_tf_by_org/{test_name}'
         logger.critical(f'init_s3_current_cluster_tf_by_org: s3_client:{s3_client} s3_bucket:{s3_bucket} src_s3_folder:{src_s3_folder} dest_s3_folder:{dest_s3_folder}')
         assert s3_folder_exist(logger, s3_client, s3_bucket, src_s3_folder)
         try:

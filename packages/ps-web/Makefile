@@ -1,4 +1,4 @@
-ROOT = $(shell pwd)PS_WEB_DOCKER_TAG
+ROOT = $(shell pwd)
 DOCKER_REPO ?= icesat2sliderule
 PS_WEB_DOCKER_TAG ?= dev
 PS_NGINX_DOCKER_TAG ?= dev

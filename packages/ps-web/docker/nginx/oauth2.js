@@ -27,7 +27,7 @@ function introspectAccessToken(r) {
     //     authHeader = "Bearer " + r.variables.oauth_client_secret;
     // }
     let args = qs.parse(r.variables.original_uri.split('?')[1]);
-    r.log("args.org_name:"+args.org_name);
+    r.log("args.name:"+args.name);
     r.log("$original_uri:"+r.variables.original_uri);
     // Make the OAuth 2.0 Token Introspection request
     r.log("OAuth sending introspection request with token: " + r.variables.access_token)

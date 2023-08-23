@@ -246,10 +246,10 @@
                                               <i class="im im-edit"></i> Add
                                             </button>
                                         </form>                                        
-                                        <form method="POST" action="{% url 'clear-org-num-nodes-reqs' org.id %}" class="d-inline">
+                                        <form method="POST" action="{% url 'clear-num-nodes-reqs' org.id %}" class="d-inline">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-primary mt-1 me-1">
-                                                <i class="im im-edit"></i> Clear
+                                                <i class="im im-edit"></i> Clear Inactive
                                             </button>
                                             <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
                                         </form>
@@ -270,7 +270,7 @@
                                                         <td class="utc-time mx-1 my-1" data-utc-time="{{ onn.expiration.isoformat }}">Loading...</td>
                                                         <td>
                                                             {% if onn_objs|length == 1 %}
-                                                                <form method="POST" action="{% url 'clear-active-org-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
+                                                                <form method="POST" action="{% url 'clear-active-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
                                                                     {% csrf_token %}
                                                                     <div id="destroyWarningAlert" class="alert alert-warning d-none my-2">
                                                                     <p>Warning: Clearing the entire table when 'destroy when no nodes' is set and min node cap is 0 will bring down the cluster. This will trigger a Destroy of the cluster. Make sure "deploy by token" is selected if you wish it to automatically redeploy when a new desire num nodes request is received.</p>
@@ -279,7 +279,7 @@
                                                                         <p>Warning: Clearing the entire table when the 'min node cap' is > 0 will cause an update of cluster to min nodes.</p>
                                                                     </div>
                                                                     <button type="submit" class="btn btn-primary mt-1 me-1">
-                                                                        <i class="im im-edit"></i> Clear Last
+                                                                        <i class="im im-edit"></i> Clear Highest
                                                                     </button>
                                                                 </form>
                                                             {% endif %}

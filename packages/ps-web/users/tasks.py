@@ -129,7 +129,6 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
                .values_list('id', flat=True))
         string_ids = [str(id) for id in ids]  # Convert each UUID to string
         ids_list.extend(string_ids)
-
     # Sum up the highest nodes for all users within the OrgAccount
     num_nodes_to_deploy = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
     if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
@@ -138,7 +137,9 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
     if(int(num_nodes_to_deploy) > orgAccountObj.max_node_cap):
         #LOG.info(f"Clamped num_nodes_to_deploy to max_node_cap:{orgAccountObj.max_node_cap} from {num_nodes_to_deploy}")
         num_nodes_to_deploy = orgAccountObj.max_node_cap
-
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    clusterObj.cnnro_ids = ids_list
+    clusterObj.save(update_fields=['cnnro_ids'])
     return num_nodes_to_deploy, ids_list
 
 def cull_expired_entries(org,tm):
@@ -205,7 +206,7 @@ def check_provision_env_ready(orgAccountObj):
                 timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
                 rsp_gen = stub.SetUp(
                     ps_server_pb2.SetUpReq(
-                        org_name=orgAccountObj.name,
+                        name=orgAccountObj.name,
                         version=orgAccountObj.version,
                         is_public=orgAccountObj.is_public,
                         now=datetime.now(timezone.utc).strftime(FMT)),
@@ -272,7 +273,7 @@ def check_provision_env_ready(orgAccountObj):
                                 clusterObj = Cluster.objects.get(org=orgAccountObj)
                                 clusterObj.provision_env_ready = True
                                 ps_server_pb2.GetCurrentSetUpCfgRsp()
-                                rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(org_name=orgAccountObj.name))
+                                rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
                                 clusterObj.prov_env_version = rsp.setup_cfg.version
                                 clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
                                 if clusterObj.prov_env_version == '':
@@ -305,7 +306,7 @@ def check_provision_env_ready(orgAccountObj):
                 orgAccountObj.save(update_fields=['provisioning_suspended'])
     return clusterObj.provision_env_ready,setup_occurred       
 
-def process_org_num_node_table(orgAccountObj,prior_need_refresh):
+def process_num_node_table(orgAccountObj,prior_need_refresh):
     '''
     This routine is called in the main loop (high frequency).
     If the the OrgNumNode table changed and the highest num nodes desired 
@@ -346,10 +347,7 @@ def process_org_num_node_table(orgAccountObj,prior_need_refresh):
                         expire_time = onnTop.expiration
                         if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
                             deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
-                            clusterObj = Cluster.objects.get(org=orgAccountObj)
-                            clusterObj.cnnro_ids = cnnro_ids
-                            clusterObj.save(update_fields=['cnnro_ids'])
-                            LOG.info(f"{orgAccountObj.name} Using top entry sorted by num/exp_tm with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} onnTop.id:{onnTop.id} clusterObj.cnnro_ids:{clusterObj.cnnro_ids}")
+                            LOG.info(f"{orgAccountObj.name} Using top entries of each user sorted by num/exp_tm  with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} ")
                             try:
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                             except Exception as e:
@@ -451,17 +449,17 @@ def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
         orgNumNode = None
     return orgNumNode,redundant,msg
 
-def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_owner_ps_cmd):
+def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cmd):
     '''
         processes the APIs for setting desired num nodes
     '''
     try:
         jstatus = ''
-        LOG.info(f"process_org_num_nodes_api({org_name},{user},{desired_num_nodes},{expire_time})")
+        LOG.info(f"process_num_nodes_api({name},{user},{desired_num_nodes},{expire_time})")
         if int(desired_num_nodes) < 0:
             msg = f"desired_num_nodes:{desired_num_nodes} must be >= 0"
             raise ValidationError(msg)
-        orgAccountObj = OrgAccount.objects.get(name=org_name)
+        orgAccountObj = OrgAccount.objects.get(name=name)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if (not clusterObj.is_deployed) and (not orgAccountObj.allow_deploy_by_token):
             msg = f"Org {orgAccountObj.name} is not configured to allow deploy by token"
@@ -486,7 +484,7 @@ def process_org_num_nodes_api(org_name,user,desired_num_nodes,expire_time,is_own
             jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
             status = 200
         else:
-            emsg = f"FAILED to process request for {org_name} {user} {desired_num_nodes} {expire_time} - Server Error"
+            emsg = f"FAILED to process request for {name} {user} {desired_num_nodes} {expire_time} - Server Error"
             jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
             status = 500
     except ClusterDeployAuthError as e:
@@ -535,7 +533,7 @@ def get_current_cost_report(name, gran, time_now):
     with ps_client.create_client_channel("account") as channel:
         ac = ps_server_pb2_grpc.AccountStub(channel)
         rsp = ac.CurrentCost(
-            ps_server_pb2.CurrentCostReq(org_name=name, granularity=gran, tm=now_str))
+            ps_server_pb2.CurrentCostReq(name=name, granularity=gran, tm=now_str))
     #LOG.info("Sending rsp...")
     return MessageToJson(rsp), rsp
 
@@ -642,7 +640,7 @@ def update_cur_num_nodes(orgAccountObj):
             clusterObj = Cluster.objects.get(org=orgAccountObj) 
             ac = ps_server_pb2_grpc.AccountStub(channel)
             region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-            req = ps_server_pb2.NumNodesReq(org_name=clusterObj.org.name,version=clusterObj.org.version,region=region)
+            req = ps_server_pb2.NumNodesReq(name=clusterObj.org.name,version=clusterObj.org.version,region=region)
             #LOG.info(req)
             rsp = ac.NumNodes(req)
             clusterObj.cur_nodes = rsp.num_nodes
@@ -816,7 +814,7 @@ def reconcile_org(orgAccountObj):
             #  below is the Hourly for today
             #
             LOG.info(f"{orgAccountObj.name} now:{time_now_str} start_tm_str:{start_tm_str} end_tm_str:{end_tm_str}")
-            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(org_name=orgAccountObj.name, start_tm=start_tm_str, end_tm=end_tm_str))
+            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(name=orgAccountObj.name, start_tm=start_tm_str, end_tm=end_tm_str))
             if rsp.server_error:
                 LOG.error(f"{orgAccountObj.name} DailyHistCost got this error:{rsp.error_msg}")
                 raise Exception(f"ps server error caught:{rsp.error_msg}")            
@@ -844,7 +842,7 @@ def reconcile_org(orgAccountObj):
         #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} start_of_this_hour:{start_of_this_hour}")
         if orgAccountObj.most_recent_charge_time < start_of_this_hour:
             LOG.info(f"calling TodaysCost with {orgAccountObj.name} time_now_str:{time_now_str}")
-            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(org_name=orgAccountObj.name,tm=time_now_str))
+            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(name=orgAccountObj.name,tm=time_now_str))
             if rsp.server_error:
                 LOG.error(f"{orgAccountObj.name} TodaysCost got this error:{rsp.error_msg}")
                 raise Exception(f"ps server error caught:{rsp.error_msg}")            
@@ -1101,7 +1099,7 @@ def getConsoleHtml(orgAccountObj, rrsp):
             done=True, name=orgAccountObj.name, cli=failed_cli)
         return 500, ps_server_pb2.PS_AjaxResponseData(rsp=rrsp, console_html=console_html, web_error=True, web_error_msg='caught exception in web server')
 
-def remove_org_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
+def remove_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
     try:
         only_owned_by_user = only_owned_by_user or False
         LOG.info(f"{user.username} cleaning up OrgNumNode for {orgAccountObj.name} {f'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
@@ -1315,7 +1313,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                     LOG.info("Setting num_nodes_to_use to zero (i.e. deploy load balancer and monitor only)")
                 rsp_gen = stub.Update(
                     ps_server_pb2.UpdateRequest(
-                        org_name    = orgAccountObj.name,
+                        name    = orgAccountObj.name,
                         min_nodes   = int(deploy_values['min_node_cap']),
                         max_nodes   = int(deploy_values['max_node_cap']),
                         num_nodes   = int(deploy_values['desired_num_nodes']),
@@ -1365,7 +1363,7 @@ def process_Refresh_cmd(orgAccountObj, username=None, owner_ps_cmd=None):
             LOG.info(f"gRpc: Refresh {orgAccountObj.name} timeout:{timeout}")
             rsp_gen = stub.Refresh(
                 ps_server_pb2.RefreshRequest(
-                    org_name=orgAccountObj.name,
+                    name=orgAccountObj.name,
                     now=datetime.now(timezone.utc).strftime(FMT)),
                     timeout=timeout)
             process_rsp_generator(orgAccountObj=orgAccountObj, 
@@ -1405,7 +1403,7 @@ def process_Destroy_cmd(orgAccountObj, username=None, owner_ps_cmd=None):
             LOG.info(f"gRpc: 'Destroy {orgAccountObj.name} timeout:{timeout}")
             rsp_gen = stub.Destroy(
                 ps_server_pb2.DestroyRequest(
-                    org_name=orgAccountObj.name,
+                    name=orgAccountObj.name,
                     now=datetime.now(timezone.utc).strftime(FMT)),
                     timeout=timeout)
             process_rsp_generator(  orgAccountObj=orgAccountObj,
@@ -1508,7 +1506,7 @@ def  process_prov_sys_tbls(orgAccountObj):
                 num_cmds_processed += num_cmds_processed_this_time
             # check if at least one API called and/or onn expired and is not processed yet
             #LOG.info(f"clusterObj:{clusterObj.org.name} {Cluster.objects.count()} {clusterObj.org.id}")
-            process_org_num_node_table(orgAccountObj,(num_cmds_processed==0 and setup_occurred))
+            process_num_node_table(orgAccountObj,(num_cmds_processed==0 and setup_occurred))
     except Exception as e:
         LOG.exception(f'Exception caught for {orgAccountObj.name}')
         LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
@@ -1583,11 +1581,11 @@ def refresh_token_maintenance(self):
         return False
 
 @shared_task(name="forever_loop_main_task",bind=True) 
-def forever_loop_main_task(self,org_name,loop_count):
+def forever_loop_main_task(self,name,loop_count):
     '''
     This is the main loop for each org. 
     '''
-    orgAccountObj = OrgAccount.objects.get(name=org_name)
+    orgAccountObj = OrgAccount.objects.get(name=name)
     result = True
     task_idle = True
     redis_interface = None
@@ -1603,8 +1601,8 @@ def forever_loop_main_task(self,org_name,loop_count):
     #run again if  we have a redis connection and not disabled
     if redis_interface is not None and redis_interface.server_is_up():
         if get_PROVISIONING_DISABLED(redis_interface) == False: 
-            sleep(5)
-            LOG.error(f"slept 5... forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception because get_PROVISIONING_DISABLED is False!")
+            sleep(1)
+            LOG.info(f" forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception or PS_CMD because get_PROVISIONING_DISABLED is False!")
             forever_loop_main_task.apply_async((orgAccountObj.name,orgAccountObj.loop_count),queue=get_org_queue_name(orgAccountObj))
         else:
             LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because PROVISIONING_DISABLED is True!")

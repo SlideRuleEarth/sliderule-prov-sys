@@ -185,7 +185,6 @@ class Cluster(models.Model):
 
     version_query_log = models.TextField(editable=False, default="")
     cnnro_ids = JSONField(null=True, blank=True)  # This will store a list of UUIDs
-    org_num_node_req_pending = models.BooleanField(default=False)
     cur_nodes = models.IntegerField(default=0,editable=False)  # actual value seen from boto3
     cur_min_node_cap = models.IntegerField( editable=True,   # this field is actual cluster state
                                             blank=True,

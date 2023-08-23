@@ -21,7 +21,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env
-from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_org_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_org_num_nodes_api
+from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -201,7 +201,7 @@ def orgManageCluster(request, pk):
                     if ttl_minutes != int(add_onn_form.data['add_onn-ttl_minutes']):
                         msg = f"Clamped ttl_minutes! - "
                     expire_time = datetime.now(timezone.utc)+timedelta(minutes=ttl_minutes)
-                    jrsp,status = process_org_num_nodes_api(org_name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
+                    jrsp,status = process_num_nodes_api(name=orgAccountObj.name, user=request.user, desired_num_nodes=desired_num_nodes, expire_time=expire_time, is_owner_ps_cmd=False)
                     if status == 200:
                         msg += jrsp['msg']
                         messages.success(request,msg)
@@ -302,18 +302,22 @@ def orgDestroyCluster(request, pk):
                     owner_ps_cmd = OwnerPSCmd.objects.get(org=orgAccountObj, ps_cmd='Destroy')
                     msg = f" -- IGNORING -- Destroy {orgAccountObj.name} already queued for processing"
                 except OwnerPSCmd.DoesNotExist:
-                    jrsp = remove_org_num_node_requests(request.user,orgAccountObj)
+                    jrsp = remove_num_node_requests(request.user,orgAccountObj)
                     if jrsp['status'] == 'SUCCESS':
                         messages.info(request,jrsp['msg'])
                     else:
                         messages.error(request,jrsp['error_msg'])           
                     clusterObj = Cluster.objects.get(org=orgAccountObj)
-                    active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
-
-                    if active_onns is not None:
-                        for active_onn in active_onns:
-                            active_onn.delete()
-                        messages.info(request,"Successfully deleted active Org Num Node requests")
+                    if clusterObj.cnnro_ids is not None:
+                        active_onns = OrgNumNode.objects.filter(id__in=clusterObj.cnnro_ids)
+                        if active_onns.exists():
+                            try:
+                                for active_onn in active_onns:
+                                    active_onn.delete()
+                                messages.info(request,"Successfully deleted active Org Num Node requests")
+                            except Exception as e:
+                                LOG.exception("caught exception:")
+                                messages.error(request, 'Error deleting active Org Num Node requests')
                     owner_ps_cmd = OwnerPSCmd.objects.create(user=request.user, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
                     owner_ps_cmd.save()
                     msg = f"Destroy {orgAccountObj.name} queued for processing"
@@ -322,8 +326,7 @@ def orgDestroyCluster(request, pk):
             except Exception as e:
                 status = 500
                 LOG.exception("caught exception:")
-                emsg = "Caught exception:"+repr(e)
-                messages.error(request, emsg)
+                messages.error(request, 'Error destroying cluster')
         # GET just displays org_manage_cluster
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
@@ -341,7 +344,7 @@ def clearOrgNumNodesReqs(request, pk):
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':
-            jrsp = remove_org_num_node_requests(request.user,orgAccountObj)
+            jrsp = remove_num_node_requests(request.user,orgAccountObj)
             if jrsp['status'] == 'SUCCESS':
                 messages.info(request,jrsp['msg'])
             else:
@@ -357,15 +360,15 @@ def clearOrgNumNodesReqs(request, pk):
 
 @login_required(login_url='account_login')
 @verified_email_required
-def clearActiveOrgNumNodeReq(request, pk):
+def clearActiveNumNodeReq(request, pk):
     orgAccountObj = OrgAccount.objects.get(id=pk)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     LOG.info(f"{request.user.username} {request.method} {orgAccountObj.name} <owner:{orgAccountObj.owner.username}>")
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':
-            active_onns = OrgNumNode.objects.filter(id=clusterObj.cnnro_ids)
-            if active_onns is not None:
+            active_onns = OrgNumNode.objects.filter(id__in=clusterObj.cnnro_ids)
+            if active_onns.exists():
                 for active_onn in active_onns:
                     active_onn.delete()
                 messages.info(request,"Successfully deleted active Org Num Node requests")
@@ -398,7 +401,7 @@ def orgConfigure(request, pk):
                 else:
                     emsg = f"Input Errors:{config_form.errors.as_text}"
                     messages.warning(request, emsg)
-                    LOG.info(f"Did not save org_config for {orgAccountObj.name} {emsg}")
+                    LOG.info(f"Did not save cluster_config for {orgAccountObj.name} {emsg}")
                     LOG.info("These are the fields as submitted:")
                     for field, value in config_form.data.items():
                         LOG.info(f"Field: {field} - Value: {value}")            

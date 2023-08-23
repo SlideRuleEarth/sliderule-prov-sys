@@ -12,23 +12,23 @@ class JWTAccessToken( AccessToken,BlacklistMixin):
 
 class OrgRefreshToken(RefreshToken,BlacklistMixin):
 
-    def __init__(self, user_name, org_name, token=None, verify=True):
+    def __init__(self, user_name, name, token=None, verify=True):
         super().__init__(token=token,verify=verify)
         # Set up new token
         if token is None:
-            #LOG.info("initializing token %s %s",user_name,org_name)
-            self.org_name = org_name
-            self.set_org_name(org_name)
+            #LOG.info("initializing token %s %s",user_name,name)
+            self.name = name
+            self.set_name(name)
             self.set_user_name(user_name)
         else:
             LOG.info("OrgRefreshToken")
 
-    def set_org_name(self,org_name):
+    def set_name(self,name):
         """
-        Populates the org_name claim of a token 
+        Populates the name claim of a token 
 
         """
-        self.payload['org_name'] = org_name
+        self.payload['name'] = name
 
     def set_user_name(self,user_name):
         """
@@ -38,17 +38,17 @@ class OrgRefreshToken(RefreshToken,BlacklistMixin):
         self.payload['user_name'] = user_name
 
     @classmethod
-    def for_user(cls, user, org_name):
+    def for_user(cls, user, name):
         """
-        Returns an authorization token for the given user with an org_name claim that will be provided
+        Returns an authorization token for the given user with an name claim that will be provided
         after authenticating the user's credentials.
         """
-        LOG.info("%s %s",user,org_name)
+        LOG.info("%s %s",user,name)
         user_id = getattr(user, api_settings.USER_ID_FIELD)
         if not isinstance(user_id, int):
             user_id = str(user_id)
-        token = cls(user.username,org_name)
+        token = cls(user.username,name)
         token[api_settings.USER_ID_CLAIM] = user_id
-        token['org_name'] = org_name
+        token['name'] = name
 
         return token
