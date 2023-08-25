@@ -18,7 +18,7 @@ logger = logging.getLogger('django')
 from users.utils import FULL_FMT
 from users.utils import DAY_FMT
 from users.utils import MONTH_FMT
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,get_test_compute_cluster,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user
 
 class TasksTestWithPSServer(GlobalTestCase):
     '''

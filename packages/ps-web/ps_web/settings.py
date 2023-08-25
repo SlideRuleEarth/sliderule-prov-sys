@@ -367,14 +367,7 @@ CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'default'
 #CELERY_cache_backend = 'default'# django setting.
 
-# Run this one time to create the cache: 
-# $ python manage.py createcachetable
-# CACHES = {
-#     'default': {
-#         'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
-#         'LOCATION': 'my_cache_table',
-#     }
-# }
+
 DJANGO_CELERY_BEAT_TZ_AWARE = True
 CELERY_TASK_DEFAULT_QUEUE = 'default'
 CELERYBEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'

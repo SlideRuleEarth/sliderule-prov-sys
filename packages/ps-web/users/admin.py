@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 # Register your models here.
-from .models import User, OrgAccount, Membership, Cluster, OrgCost, OrgNumNode, PsCmdResult, OwnerPSCmd
+from .models import User, OrgAccount, Membership, Cluster, Cost, ClusterNumNode, PsCmdResult, OwnerPSCmd
 from .models import GranChoice,PsCmdResult
 from django.contrib.auth import get_user_model
 
@@ -40,14 +40,14 @@ class MembershipAdmin(admin.ModelAdmin):
 
 @admin.register(OrgAccount)
 class OrgAccountAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'allow_deploy_by_token', 'max_allowance', 'monthly_allowance',
+    list_display = ('name', 'owner', 'max_allowance', 'monthly_allowance',
                     'balance', 'max_hrly', 'cur_hrly', 'min_hrly', 'min_ddt', 'cur_ddt', 'max_ddt',
                     'node_mgr_fixed_cost', 'node_fixed_cost',
                     'desired_num_nodes', 'min_node_cap', 'max_node_cap', 'admin_max_node_cap',
                     'most_recent_charge_time', 'most_recent_credit_time',
                     'creation_date', 'modified_date', 'is_public', 'version', 'loop_count')
     list_display_links = ['name']
-    list_filter = ('name', 'owner', 'allow_deploy_by_token', 'max_allowance', 'monthly_allowance',
+    list_filter = ('name', 'owner', 'max_allowance', 'monthly_allowance',
                    'balance', 'max_hrly', 'cur_hrly', 'min_hrly', 'min_ddt', 'cur_ddt', 'max_ddt',
                    'node_mgr_fixed_cost', 'node_fixed_cost',
                    'desired_num_nodes', 'min_node_cap', 'max_node_cap', 'admin_max_node_cap',
@@ -59,24 +59,26 @@ class OrgAccountAdmin(admin.ModelAdmin):
 @admin.register(Cluster)
 class ClusterAdmin(admin.ModelAdmin):
     list_display = ('org', 'creation_date', 'modified_date','cur_min_node_cap','cur_max_node_cap','cur_version',
-                    'active_ps_cmd', 'mgr_ip_address', 'is_deployed', 'deployed_state')
+                    'active_ps_cmd', 'mgr_ip_address', 'is_deployed', 'deployed_state',
+                    'allow_deploy_by_token',)
 
     list_filter = ('org', 'creation_date', 'modified_date','cur_min_node_cap','cur_max_node_cap','cur_version',
-                   'active_ps_cmd', 'mgr_ip_address', 'is_deployed', 'deployed_state')
+                   'active_ps_cmd', 'mgr_ip_address', 'is_deployed', 'deployed_state',
+                    'allow_deploy_by_token',)
     list_display_links = ['org']
     readonly_fields = ['org','cur_nodes']
 
-@admin.register(OrgCost)
-class OrgCostAdmin(admin.ModelAdmin):
+@admin.register(Cost)
+class ClusterCostAdmin(admin.ModelAdmin):
     list_display = ('org', 'creation_date', 'modified_date',
                     'gran', 'tm', 'cost_refresh_time', 'cnt', 'avg', 'min', 'max', 'std')
     list_filter = ('org', 'creation_date', 'modified_date',
                    'gran', 'tm', 'cost_refresh_time', 'cnt', 'avg', 'min', 'max', 'std')
 
-@admin.register(OrgNumNode)
-class OrgNumNodeAdmin(admin.ModelAdmin):
-    list_display = ('org', 'desired_num_nodes', 'expiration', 'user')
-    list_filter = ('org', 'desired_num_nodes', 'expiration', 'user')
+@admin.register(ClusterNumNode)
+class ClusterNumNodeAdmin(admin.ModelAdmin):
+    list_display = ('cluster', 'desired_num_nodes', 'expiration', 'user')
+    list_filter = ('cluster', 'desired_num_nodes', 'expiration', 'user')
 
 # Hackalert use a data fixture to populate static data then remove this
 @admin.register(GranChoice)

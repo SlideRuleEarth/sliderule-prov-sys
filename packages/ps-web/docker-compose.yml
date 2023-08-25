@@ -15,7 +15,7 @@ services:
     image: postgres:13
     container_name: ps-db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_v4:/var/lib/postgresql/data
     env_file:
       - .env
     ports:
@@ -23,8 +23,11 @@ services:
   redis:
     image: "redis:alpine"
     container_name: redis
+    volumes:
+      - ./temp_redis_data:/data
   django-app:
     environment:
+      - RUN_MIGRATIONS=false
       - CELERY_BROKER_URL=redis://redis:6379/0   
       - TZ=America/New_York
       - SITE_ID=2
@@ -72,8 +75,7 @@ services:
     depends_on:
       - django-app
 volumes:
-  postgres_data:
+  postgres_data_v4:
 networks:
   default:
-#    external: true
     name: ps_dev_network

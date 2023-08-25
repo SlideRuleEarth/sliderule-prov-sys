@@ -102,7 +102,7 @@
                                                         </div>
                                                         {% if user_is_developer and debug %}
                                                         <dt>ProvSys Stats</dt>
-                                                        <dd>loop_count:{{ org.loop_count }} npc:{{ org.num_ps_cmd }} npcs:{{ org.num_ps_cmd_successful }} ops:{{ org.num_owner_ps_cmd }} onn:{{ org.num_onn }}</dd>
+                                                        <dd>loop_count:{{ org.loop_count }} npc:{{ org.num_ps_cmd }} npcs:{{ org.num_ps_cmd_successful }} ops:{{ org.num_owner_ps_cmd }} cnn:{{ org.num_onn }}</dd>
                                                     {% endif %}
                                             </div>
                                                 </div>
@@ -241,7 +241,7 @@
                                     <div class="container-fluid overflow-auto">
                                         <form method="POST" action="{% url 'org-manage-cluster' org.id %}" class="d-inline">
                                             {% csrf_token %}
-                                            {{ add_onn_form }}
+                                            {{ add_cnn_form }}
                                             <button type="submit" class="btn btn-primary mt-1 me-1" name="form_submit" value="add_onn">
                                               <i class="im im-edit"></i> Add
                                             </button>
@@ -263,13 +263,13 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {% for onn in onn_objs %}
-                                                    <tr class="{% if onn.id in cluster.cnnro_ids %}fw-bold{% endif %}">
-                                                        <td>{{ onn.user }}</td>
-                                                        <td>{{ onn.desired_num_nodes }}</td>
-                                                        <td class="utc-time mx-1 my-1" data-utc-time="{{ onn.expiration.isoformat }}">Loading...</td>
+                                                {% for cnn in cnn_objs %}
+                                                    <tr class="{% if cnn.id in cluster.cnnro_ids %}fw-bold{% endif %}">
+                                                        <td>{{ cnn.user }}</td>
+                                                        <td>{{ cnn.desired_num_nodes }}</td>
+                                                        <td class="utc-time mx-1 my-1" data-utc-time="{{ cnn.expiration.isoformat }}">Loading...</td>
                                                         <td>
-                                                            {% if onn_objs|length == 1 %}
+                                                            {% if cnn_objs|length == 1 %}
                                                                 <form method="POST" action="{% url 'clear-active-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
                                                                     {% csrf_token %}
                                                                     <div id="destroyWarningAlert" class="alert alert-warning d-none my-2">
