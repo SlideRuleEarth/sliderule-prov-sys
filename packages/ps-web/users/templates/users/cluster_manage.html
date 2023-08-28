@@ -30,7 +30,7 @@
                         <div class="accordian-item shadow">
                             <h2 class="accordian-header" id="mc_ah_{{org.name}}_state">
                                 <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_state" aria-expanded="true" aria-controls="collapse_{{org.name}}_state">
-                                    Cluster
+                                    {{cluster.name}} Cluster
                                 </button>
                             </h2>                                             
                             <div id="collapse_{{org.name}}_state" class="accordion-collapse collapse show my-1" aria-labelledby="mc_hd_{{org.name}}_state">
@@ -40,7 +40,7 @@
                                             <div class="col">
                                                 <div class="card shadow mx-auto my-1 h-100">
                                                     <h5 class="card-title mt-2">
-                                                        Current Cluster State
+                                                        Current {{cluster.name}} Cluster State
                                                     </h5>
                                                     <div class="card-body d-flex flex-column">
                                                         <dl>

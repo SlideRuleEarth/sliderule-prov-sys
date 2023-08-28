@@ -95,6 +95,10 @@
                 "value": "${rds_db_name}"
             },
             {
+                "name": "POSTGRES_DB_V4",
+                "value": "${rds_db_name_v4}"
+            },
+            {
                 "name": "POSTGRES_USER",
                 "value": "${rds_username}"
             },

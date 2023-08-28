@@ -231,22 +231,22 @@ WSGI_APPLICATION = 'ps_web.wsgi.application'
 
 
 # Database
-# NOTE sqllite3 is just the fallback!
 DATABASES = {
     "default": {
+        "ENGINE": os.environ.get("SQL_ENGINE"),
+        "NAME": os.environ.get("POSTGRES_DB_V4"),
+        "USER": os.environ.get("POSTGRES_USER"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+        "HOST": os.environ.get("SQL_HOST"),
+        "PORT": os.environ.get("SQL_PORT"),
+    },
+    "legacy_v3_db" : {
         "ENGINE": os.environ.get("SQL_ENGINE"),
         "NAME": os.environ.get("POSTGRES_DB"),
         "USER": os.environ.get("POSTGRES_USER"),
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
         "HOST": os.environ.get("SQL_HOST"),
         "PORT": os.environ.get("SQL_PORT"),
-        # migrating to and/or connecting to an aws db
-        #     "ENGINE": "django.db.backends.postgresql",
-        #     "NAME": "provsys",
-        #     "USER": "ps_admin",
-        #     "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "password"),
-        #     "HOST": "prov-sys.[hostname id here].[region].rds.amazonaws.com", ## this can change
-        #     "PORT": "[port number here]",
     }
 }
 

@@ -32,6 +32,7 @@ data "template_file" "prov-sys" {
     nginx_port                    = var.nginx_port
     redis_port                    = var.redis_port
     rds_db_name                   = local.provsys_creds.rds_db_name
+    rds_db_name_v4                = local.provsys_creds.rds_db_name_v4
     rds_username                  = local.provsys_creds.rds_username
     rds_password                  = local.provsys_creds.rds_password
     rds_port                      = local.provsys_creds.rds_port

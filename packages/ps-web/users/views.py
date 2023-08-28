@@ -503,9 +503,7 @@ def orgAccountForecast(request, pk):
     LOG.info("%s %s", request.method, orgAccountObj.name)
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         cost_accounting_org(orgAccountObj)
-        show_min_shutdown_date = (orgAccountObj.min_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
-        show_cur_shutdown_date = (orgAccountObj.cur_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
-        context = {'org': orgAccountObj, 'cluster':clusterObj, 'show_cur_shutdown_date': show_cur_shutdown_date, 'show_min_shutdown_date': show_min_shutdown_date}
+        context = {'org': orgAccountObj, 'cluster':clusterObj}
         LOG.info('rendering org_account_forecast')
         return render(request, 'users/org_account_forecast.html', context)
     else:

@@ -40,6 +40,7 @@ services:
       - PS_WEB_DOCKER_TAG=dev
       - PS_NGINX_DOCKER_TAG=dev
       - POSTGRES_DB=ps_postgres_db
+      - POSTGRES_DB_V4=ps_postgres_db_v4
       - POSTGRES_USER=ps_admin
       - POSTGRES_PASSWORD=ps1234
       - SQL_ENGINE=django.db.backends.postgresql

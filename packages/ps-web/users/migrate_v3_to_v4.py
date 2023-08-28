@@ -1,110 +1,113 @@
-from django.db import migrations, models
+from django.contrib.auth.models import Group, Permission
+from models import User,OrgAccount, Cluster, Membership
+from users.legacy.models import OrgAccount as LegacyOrgAccount, User as LegacyUser, Membership as LegacyMembership
+from django.db import transaction
+from allauth.account.models import EmailAddress, EmailConfirmation, EmailAddress
+from allauth.socialaccount.models import SocialAccount, SocialToken, SocialApp
 
 
-def copy_relations(apps, schema_editor):
-    '''
-        In the example below, this goes between the operations that add a temp field and remove the old field
-        This should accurately reflect the transition from a OneToOneField to a ForeignKey for the org field in the Cluster model. Again, apologies for the oversight, and thank you for pointing it out.
-        
-        We have to hack this in
 
+@transaction.atomic
+def migrate_users():
+    legacy_users = LegacyUser.objects.using('legacy_v3_db').all()
+    new_users = []
+    for legacy_user in legacy_users:
+        new_user = User(
+            username=legacy_user.username,
+            first_name=legacy_user.first_name,
+            last_name=legacy_user.last_name,
+            email=legacy_user.email,
+            password=legacy_user.password,  # assuming password hashing is consistent
+            is_staff=legacy_user.is_staff,
+            is_active=legacy_user.is_active,
+            is_superuser=legacy_user.is_superuser,
+            last_login=legacy_user.last_login,
+            date_joined=legacy_user.date_joined
+        )
+        new_users.append()
+    User.objects.bulk_create(new_users)
 
-            operations = [
-                migrations.AddField(
-                    model_name='cluster',
-                    name='org_temp',
-                    field=models.ForeignKey(...),
-                    ...
-                ),
+@transaction.atomic
+def migrate_orgaccounts():
+    legacy_orgaccounts = LegacyOrgAccount.objects.using('legacy_v3_db').all()
 
-                migrations.RunPython(copy_relations),
-                migrations.RunPython(migrate_data_forward),
-
-
-                migrations.RemoveField(
-                    model_name='cluster',
-                    name='org',
-                ),
-                migrations.RenameField(
-                    model_name='cluster',
-                    old_name='org_temp',
-                    new_name='org'
-                )
-            ]
-    '''
-    Cluster = apps.get_model('users', 'Cluster')
-    OrgAccount = apps.get_model('users', 'OrgAccount')
-    
-    for org_account in OrgAccount.objects.all():
+    for legacy_org in legacy_orgaccounts:
         try:
-            cluster = org_account.cluster
-            cluster.org = org_account
-            cluster.save()
-        except Cluster.DoesNotExist:
-            pass  # No associated Cluster for this OrgAccount
+            # Match the owner by username
+            new_owner = User.objects.get(username=legacy_org.owner.username)
+        except User.DoesNotExist:
+            print(f"Owner {legacy_org.owner.username} does not exist in new database.")
+            continue
 
+        new_orgaccount = OrgAccount(
+            id=legacy_org.id,
+            owner=new_owner,
+            name=legacy_org.name,
+            point_of_contact_name=legacy_org.point_of_contact_name,
+            email=legacy_org.email,
+            mfa_code=legacy_org.mfa_code,
+        )
+        new_orgaccount.save()
 
+@transaction.atomic
+def migrate_memberships():
+    legacy_memberships = LegacyMembership.objects.using('legacy_v3_db').all()
 
-def migrate_data_forward(apps, schema_editor):
-    OrgAccount = apps.get_model('users', 'OrgAccount')
-    Cluster = apps.get_model('users', 'Cluster')
+    for legacy_membership in legacy_memberships:
+        # Assuming that the User and OrgAccount models have been migrated already
+        try:
+            new_user = User.objects.get(username=legacy_membership.user.username)
+        except User.DoesNotExist:
+            print(f"User {legacy_membership.user.username} does not exist in new database.")
+            continue
 
-    for org_account in OrgAccount.objects.all():
-        # Assuming you have a ForeignKey from Cluster to OrgAccount
-        cluster = org_account.cluster_set.first()  # Get the first (i.e. only) Cluster associated with this OrgAccount
+        try:
+            new_org = OrgAccount.objects.get(id=legacy_membership.org.id)
+        except OrgAccount.DoesNotExist:
+            print(f"OrgAccount with id {legacy_membership.org.id} does not exist in new database.")
+            continue
 
-        if cluster:
-            # Copy data from OrgAccount to Cluster
-            cluster.max_allowance = org_account.max_allowance
-            cluster.monthly_allowance = org_account.monthly_allowance
-            cluster.balance = org_account.balance
-            cluster.fytd_accrued_cost = org_account.fytd_accrued_cost
-            cluster.creation_date = org_account.creation_date
-            cluster.modified_date = org_account.modified_date
-            cluster.node_mgr_fixed_cost = org_account.node_mgr_fixed_cost
-            cluster.node_fixed_cost = org_account.node_fixed_cost
-            cluster.desired_num_nodes = org_account.desired_num_nodes
-            cluster.max_hrly = org_account.max_hrly
-            cluster.cur_hrly = org_account.cur_hrly
-            cluster.min_hrly = org_account.min_hrly
-            cluster.min_ddt = org_account.min_ddt
-            cluster.cur_ddt = org_account.cur_ddt
-            cluster.max_ddt = org_account.max_ddt
-            cluster.fc_min_hourly = org_account.fc_min_hourly
-            cluster.fc_min_daily = org_account.fc_min_daily
-            cluster.fc_min_monthly = org_account.fc_min_monthly
-            cluster.fc_cur_hourly = org_account.fc_cur_hourly
-            cluster.fc_cur_daily = org_account.fc_cur_daily
-            cluster.fc_cur_monthly = org_account.fc_cur_monthly
-            cluster.fc_max_hourly = org_account.fc_max_hourly
-            cluster.fc_max_daily = org_account.fc_max_daily
-            cluster.fc_max_monthly = org_account.fc_max_monthly
-            cluster.version = org_account.version
-            cluster.admin_max_node_cap = org_account.admin_max_node_cap
-            cluster.time_to_live_in_mins = org_account.time_to_live_in_mins
-            cluster.allow_deploy_by_token = org_account.allow_deploy_by_token
-            cluster.destroy_when_no_nodes = org_account.destroy_when_no_nodes
-            cluster.is_public = org_account.is_public
-            cluster.pcqr_display_age_in_hours = org_account.pcqr_display_age_in_hours
-            cluster.pcqr_retention_age_in_days = org_account.pcqr_retention_age_in_days
-            cluster.loop_count = org_account.loop_count
-            cluster.num_owner_ps_cmd = org_account.num_owner_ps_cmd
-            cluster.num_ps_cmd = org_account.num_ps_cmd
-            cluster.num_ps_cmd_successful = org_account.num_ps_cmd_successful
-            cluster.num_onn = org_account.num_onn
-            cluster.provisioning_suspended = org_account.provisioning_suspended
-            cluster.num_setup_cmd = org_account.num_setup_cmd
-            cluster.num_setup_cmd_successful = org_account.num_setup_cmd_successful
+        new_membership = Membership(
+            id=legacy_membership.id,
+            user=new_user,
+            org=new_org,
+            active=legacy_membership.active,
+            creation_date=legacy_membership.creation_date,
+            modified_date=legacy_membership.modified_date,
+            delete_requested=legacy_membership.delete_requested,
+            activation_date=legacy_membership.activation_date,
+        )
+        new_membership.save()
 
-            cluster.save()
+@transaction.atomic
+def migrate_group():
+    # Migrate Group
+    legacy_group = Group.objects.using('legacy_v3_db').get(name="PS_Developer")
+    new_group = Group(name=legacy_group.name)
+    new_group.save()
 
-class Migration(migrations.Migration):
+    # Migrate Group Permissions
+    for legacy_permission in legacy_group.permissions.all():
+        try:
+            # Match permissions by codename as it should be unique and consistent
+            permission = Permission.objects.get(codename=legacy_permission.codename)
+            new_group.permissions.add(permission)
+        except Permission.DoesNotExist:
+            print(f"Permission {legacy_permission.codename} does not exist in new database. If this is a custom permission, you might need to handle it specially.")
 
-    dependencies = [
-        # ...
-    ]
+    # Migrate Group's Users
+    for legacy_user in legacy_group.user_set.all():
+        try:
+            user = User.objects.get(username=legacy_user.username)
+            user.groups.add(new_group)
+        except User.DoesNotExist:
+            print(f"User {legacy_user.username} not yet migrated or does not exist in the legacy database.")
 
-    operations = [
-        migrations.RunPython(migrate_data_forward),
-        # ... (other operations) ...
-    ]
+def run_migration():
+    migrate_users()
+    migrate_orgaccounts()
+    migrate_memberships()
+    migrate_group()  # Group migration after users to link them
+
+if __name__ == "__main__":
+    run_migration()
