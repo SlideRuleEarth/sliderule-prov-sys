@@ -123,12 +123,12 @@ variable "rds_restore_with_snapshot" {
 # Fargate
 variable "prov-sys-fargate-cpu" {
   description = "Fargate task CPU units to provision (1 vCPU = 1024 CPU units)"
-  default     = 1024
+  default     = 2048
 }
 
 variable "prov-sys-fargate-memory" {
   description = "Fargate task memory in MiB"
-  default     = 2048
+  default     = 4096
 }
 
 # containers
