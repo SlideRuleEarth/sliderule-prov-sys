@@ -275,7 +275,7 @@ class RemoveUserNumNodesReqsView(generics.UpdateAPIView):
         Removes all ClusterNumNode requests for the org from this user from the active pool of requests. 
     '''
     serializer_class = DummySerializer
-    def update(self, request, name, cluster_name *args, **kwargs):
+    def update(self, request, name, cluster_name, *args, **kwargs):
         LOG.info(f"{request.user.username} {name}")
         status = 200
         try:
@@ -296,7 +296,7 @@ class RemoveAllNumNodesReqsView(generics.UpdateAPIView):
         Removes all ClusterNumNode requests for the org from the active pool of requests.  Must be a developer or owner of the org to remove ALL the requests.
     '''
     serializer_class = DummySerializer
-    def update(self, request, name, cluster_name *args, **kwargs):
+    def update(self, request, name, cluster_name, *args, **kwargs):
         LOG.info(f"{request.user.username} {name}")
         status = 200
         try:

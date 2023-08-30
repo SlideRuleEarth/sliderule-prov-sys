@@ -90,11 +90,11 @@ def test_num_node_form_valid(caplog,client,create_TEST_USER,mock_email_backend,i
     assert form.is_valid()
 
 
-    form = ClusterNumNodeForm(min_nodes=2, max_nodes=OrgAccount.ABS_MAX_NODES)
+    form = ClusterNumNodeForm(min_nodes=2, max_nodes=ASGNodeLimits.ABS_MAX_NODES)
     assert form.fields['desired_num_nodes'].initial == 2
 
-    form = ClusterNumNodeForm(min_nodes=0, max_nodes=OrgAccount.ABS_MAX_NODES)
+    form = ClusterNumNodeForm(min_nodes=0, max_nodes=ASGNodeLimits.ABS_MAX_NODES)
     assert form.fields['desired_num_nodes'].initial == 1
 
-    form = ClusterNumNodeForm(min_nodes=10, max_nodes=OrgAccount.ABS_MAX_NODES)
+    form = ClusterNumNodeForm(min_nodes=10, max_nodes=ASGNodeLimits.ABS_MAX_NODES)
     assert form.fields['desired_num_nodes'].initial == 10  # min_nodes + 1

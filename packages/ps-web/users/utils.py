@@ -19,13 +19,13 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 import grpc
 from users import ps_client
-from .models import Cluster, GranChoice, Membership, OrgAccount, OrgCost, User, ClusterNumNode, PsCmdResult
+from .models import Cluster, Membership, OrgAccount, Cost
 import requests
 from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
 from django_celery_results.models import TaskResult
-from .tasks import get_ps_versions, get_cluster_queue_name_str, get_cluster_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface
+from .tasks import get_ps_versions, get_cluster_queue_name_str, get_cluster_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface, init_new_org_memberships
 from oauth2_provider.models import Application
 from users.global_constants import *
 
@@ -95,7 +95,7 @@ def get_db_cluster_cost(gran, clusterObj):
     granObj = getGranChoice(granularity=gran)
     LOG.info(f"{clusterObj} {granObj.granularity}")
     try:
-        orgCost_qs0 = ClusterCost.objects.filter(cluster=clusterObj)
+        orgCost_qs0 = Cost.objects.filter(object_id=clusterObj.id)
         # LOG.info(repr(orgCost_qs0))
         # LOG.info(orgCost_qs0[0].org.id)
         # LOG.info(orgCost_qs0[0].org.name)
@@ -229,56 +229,6 @@ def init_celery():
         except Exception as e:
             LOG.error(f"Caught an exception creating queues: {e}")
         LOG.info(f"forked subprocess--> {SHELL_CMD}")
-
-def get_ps_server_versions():
-    '''
-        This will call the ps_server and get GIT and sw versions then set env variable to use by views.py
-    '''
-    PS_SERVER_DOCKER_TAG="unknown"
-    PS_SERVER_GIT_VERSION="unknown"
-    try:
-        #LOG.info(f"{os.environ}")
-        EFILE=os.path.join('/tmp', '.ps_server_versions') # temporary file to store env vars
-        open(file=EFILE,mode='w').write(str(get_ps_versions()))
-        environ.Env.read_env(env_file=EFILE)
-        PS_SERVER_DOCKER_TAG = os.environ.get("PS_SERVER_DOCKER_TAG")
-        PS_SERVER_GIT_VERSION = os.environ.get("PS_SERVER_GIT_VERSION")
-        LOG.info("environ PS_SERVER_DOCKER_TAG:%s",PS_SERVER_DOCKER_TAG)
-        LOG.info("environ PS_SERVER_GIT_VERSION:%s",PS_SERVER_GIT_VERSION)
-    except Exception as e:
-        PS_SERVER_DOCKER_TAG ="unknown"
-        PS_SERVER_GIT_VERSION = "unknown"
-        LOG.exception("caught exception:")
-    #LOG.info(f"{os.environ}")
-    return PS_SERVER_DOCKER_TAG,PS_SERVER_GIT_VERSION
-
-def get_ps_server_versions_from_env():
-    '''
-        This will call the ps_server and get GIT and sw versions then set env variable to use by views.py
-    '''
-    PS_SERVER_DOCKER_TAG="unknown"
-    PS_SERVER_GIT_VERSION="unknown"
-    EFILE=os.path.join('/tmp', '.ps_server_versions') # temporary file to store env vars
-    try:
-        environ.Env.read_env(env_file=EFILE)
-        PS_SERVER_DOCKER_TAG = os.environ.get("PS_SERVER_DOCKER_TAG",'unknown')
-        PS_SERVER_GIT_VERSION = os.environ.get("PS_SERVER_GIT_VERSION",'unknown')
-        #LOG.info("environ PS_SERVER_DOCKER_TAG:%s",PS_SERVER_DOCKER_TAG)
-        #LOG.info("environ PS_SERVER_GIT_VERSION:%s",PS_SERVER_GIT_VERSION)
-    except FileNotFoundError:
-        LOG.info(f"{EFILE} does not exist;  calling ps_server to get versions")
-        try:
-            # This should only happen once after the web server is started. 
-            # The file is fetched in get_ps_server_versions() if it does not exist
-            get_ps_server_versions()            
-        except Exception as e:
-            LOG.exception("caught exception:")
-            raise
-    except Exception as e:
-        LOG.exception("caught exception:")
-
-    #LOG.info(f"{os.environ}")
-    return PS_SERVER_DOCKER_TAG,PS_SERVER_GIT_VERSION
 
 def get_memberships(request):
     membershipObjs = Membership.objects.filter(user=request.user,active=True)

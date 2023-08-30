@@ -257,10 +257,10 @@ class OrgNumNode(models.Model):
                             editable=False,
                             related_name='fk_org_onn')
     desired_num_nodes = models.IntegerField(editable=True,  # this field can be edited in admin panel by user with admin privileges
-                                            default=OrgAccount.MIN_NODES,
+                                            default=ASGNodeLimits.MIN_NODES,
                                             validators=[
-                                                MinValueValidator(OrgAccount.MIN_NODES),
-                                                MaxValueValidator(OrgAccount.ABS_MAX_NODES)])
+                                                MinValueValidator(ASGNodeLimits.MIN_NODES),
+                                                MaxValueValidator(ASGNodeLimits.ABS_MAX_NODES)])
     expiration = models.DateTimeField(editable=True,null=True,blank=True)
     has_active_ps_cmd = models.BooleanField(default=False)
 

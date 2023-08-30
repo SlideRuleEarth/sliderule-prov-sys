@@ -133,6 +133,8 @@ class OrgAccount(models.Model):
     budget = GenericRelation(Budget, related_query_name='org_budget', content_type_field='content_type', object_id_field='object_id', unique=True)
     # this is a summation of all the clusters auto scaling group node limits
     sum_asg = GenericRelation(ASGNodeLimits, related_query_name='sum_asg', content_type_field='content_type', object_id_field='object_id', unique=True)
+    creation_date = models.DateTimeField(auto_now_add=True)
+    modified_date = models.DateTimeField(auto_now=True)
 
 class Cluster(models.Model):
     def __str__(self):
@@ -145,7 +147,11 @@ class Cluster(models.Model):
                             null=False)
     org = models.ForeignKey(OrgAccount, 
                             on_delete=models.CASCADE,
-                            editable=False)
+                            null=False,
+                            blank=False)
+    node_mgr_fixed_cost = models.FloatField(editable=True,default=0.145,help_text="https://aws.amazon.com/ec2/pricing/on-demand/ for monitor and ilb")  # Overhead==> (monitor is c7g.large, ilb is c7g.large; .0725)
+    node_fixed_cost = models.FloatField(default=0.2016,help_text="https://aws.amazon.com/ec2/pricing/on-demand/ for node")  # Per Node (r6g.xlarge = 0.226)
+
     creation_date = models.DateTimeField(auto_now_add=True)
     modified_date = models.DateTimeField(auto_now=True)
     mgr_ip_address = models.GenericIPAddressField(default='0.0.0.0', editable=True)
@@ -179,7 +185,7 @@ class Cluster(models.Model):
     modified_date = models.DateTimeField(auto_now=True)
 
     cur_asg = GenericRelation(ASGNodeLimits, related_query_name='cluster_cur_asg', content_type_field='content_type', object_id_field='object_id', unique=True)
-    cfg_asg = GenericRelation(ASGNodeLimits, related_query_name='cluster_cfg_asg', content_type_field='content_type', object_id_field='object_id', unique=True)
+    cfg_asg = GenericRelation(ASGNodeLimits, related_query_name='cluster_cfg_asg', content_type_field='content_type', object_id_field='object_id', unique=True, editable=True)
     budget = GenericRelation(Budget, related_query_name='cluster_budget', content_type_field='content_type', object_id_field='object_id', unique=True)
 
 
@@ -187,8 +193,6 @@ class Cluster(models.Model):
     min_ddt = models.DateTimeField(editable=True,default=django.utils.timezone.now)
     cur_ddt = models.DateTimeField(editable=True,default=django.utils.timezone.now)
     max_ddt = models.DateTimeField(editable=True,default=django.utils.timezone.now)
-    node_mgr_fixed_cost = models.FloatField(default=0.153)  # Overhead==> (monitor is c6a.large, orchestrator is c6a.large;  c6a.large = 0.0765/hour)
-    node_fixed_cost = models.FloatField(default=0.226)  # Per Node (r5a.xlarge = 0.226)
     version = models.CharField( editable=True,   # includes the v if is a release like 'v1.4.1'
                                 max_length=16, 
                                 blank=False,
@@ -268,10 +272,10 @@ class ClusterNumNode(models.Model):
                                 editable=False,
                                 related_name='fk_cluster_cnn')
     desired_num_nodes = models.IntegerField(editable=True,  # this field can be edited in admin panel by user with admin privileges
-                                            default=OrgAccount.MIN_NODES,
+                                            default=ASGNodeLimits.MIN_NODES,
                                             validators=[
-                                                MinValueValidator(OrgAccount.MIN_NODES),
-                                                MaxValueValidator(OrgAccount.ABS_MAX_NODES)])
+                                                MinValueValidator(ASGNodeLimits.MIN_NODES),
+                                                MaxValueValidator(ASGNodeLimits.ABS_MAX_NODES)])
     expiration = models.DateTimeField(editable=True,null=True,blank=True)
     has_active_ps_cmd = models.BooleanField(default=False)
 

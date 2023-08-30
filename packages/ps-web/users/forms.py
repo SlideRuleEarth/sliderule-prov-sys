@@ -1,7 +1,7 @@
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm, UsernameField, UserChangeForm
-from .models import Membership, OrgAccount, Cluster, User, ClusterNumNode, ASGNodeLimits
+from .models import Membership, OrgAccount, Cluster, User, ClusterNumNode, ASGNodeLimits, Budget
 from captcha.fields import CaptchaField
 from datetime import datetime,timedelta
 from datetime import timezone
@@ -63,15 +63,6 @@ class UserProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-# def desired_num_nodes_validator(min_nodes,max_nodes):
-#     def _desired_num_nodes_validator(value):
-#         if min_nodes == 0:
-#             min = 1
-#         else:
-#             min = min_nodes
-#         if value < min or value > max_nodes:
-#             raise ValidationError(f'desired_num_nodes must be between {min} and {max_nodes}')
-#     return _desired_num_nodes_validator
 
 class ClusterNumNodeForm(forms.ModelForm):
     ttl_minutes = forms.IntegerField(required=True, min_value=0, label='TTL minutes')
@@ -107,14 +98,19 @@ class MembershipForm(forms.Form):
     active = forms.BooleanField(required=False)
     delete = forms.BooleanField(required=False)
 
+class BudgetForm(forms.ModelForm):
+    class Meta:
+        model = Budget
+        fields = ['max_allowance', 'monthly_allowance', 'balance']
 
 class ClusterForm(ModelForm):
     '''
-    For creating a new cluster
+        For creating a new cluster
     '''
     class Meta:
         model = Cluster
-        fields = ['org', 'max_allowance', 'monthly_allowance', 'balance']
+        fields = [ 'name', 'org', 'node_mgr_fixed_cost', 'node_fixed_cost']
+        readonly_fields = ['org']
 
 class ASGNodeLimitsForm(ModelForm):
     '''
@@ -144,8 +140,8 @@ class ClusterCfgForm(ModelForm):
             self.fields['version'].choices = [(v, v) for v in available_versions]
     class Meta:
         model = Cluster
-        fields = ['provisioning_suspended','is_public', 'version', 'min_node_cap', 'max_node_cap', 'allow_deploy_by_token', 'destroy_when_no_nodes' ]
-
+        fields = ['provisioning_suspended','is_public', 'version', 'allow_deploy_by_token', 'destroy_when_no_nodes' ]
+        readonly_fields = ['cfg_asg']
 
 class OrgProfileForm(ModelForm):
     class Meta:
@@ -155,7 +151,7 @@ class OrgProfileForm(ModelForm):
 class OrgAccountForm(ModelForm):
     class Meta:
         model = OrgAccount
-        fields = ['owner', 'name', 'point_of_contact_name', 'email', 'max_allowance', 'monthly_allowance', 'balance']
+        fields = ['owner', 'name', 'point_of_contact_name', 'email']
 
 class CustomLoginForm(LoginForm):
     def __init__(self, *args, **kwargs):
