@@ -61,7 +61,7 @@ def tasks_module():
 # def teardown_module(tasks_module):
 #     logger.info('---teardown complete---')
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_update_burn_rates(tasks_module,initialize_test_environ):
@@ -71,17 +71,34 @@ def test_update_burn_rates(tasks_module,initialize_test_environ):
 
     orgAccountObj = get_test_org()
     clusterObj = get_test_compute_cluster()
+    clusterObj.cur_asg.num = 1
+    clusterObj.cur_asg.min = 0
+    clusterObj.cur_asg.max = 100
+    clusterObj.budget.balance = 100000.0 # test a large number
+    clusterObj.budget.monthly_allowance = 1000.0
+    clusterObj.budget.max__allowance = 100000.0
+    clusterObj.budget.save()
 
     assert(orgAccountObj.name == TEST_ORG_NAME)
     init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1)
 
     assert(orgAccountObj.owner.username == OWNER_USER)
-    forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly = update_burn_rates(orgAccountObj)
+    forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly = update_burn_rates(clusterObj)
     logger.info(f"{clusterObj.cfg_asg.min}/{clusterObj.cur_asg.num}/{clusterObj.cfg_asg.max}")
     logger.info(f"{forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
     assert(pytest_approx(forecast_min_hrly,0.0001))
     assert(pytest_approx(forecast_cur_hrly,0.379))
     assert(pytest_approx(forecast_max_hrly,2.413))
+
+    clusterObj.budget.balance = 100000.0 # test a large number
+    clusterObj.budget.monthly_allowance = 1000.0
+    clusterObj.budget.max__allowance = 100000.0
+    clusterObj.budget.save()
+    forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly = update_burn_rates(clusterObj)
+    logger.info(f"{clusterObj.cfg_asg.min}/{clusterObj.cur_asg.num}/{clusterObj.cfg_asg.max}")
+    logger.info(f"{forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
+    assert False # TBD add checks here
+
 
 #@pytest.mark.dev
 @pytest.mark.django_db

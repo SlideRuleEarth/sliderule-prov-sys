@@ -643,6 +643,21 @@ def update_cur_num_nodes(clusterObj):
             LOG.error(f"FAILED: caught exception on NumNodesReq")
             raise
 
+def clamp_time(hours):
+    days = 0
+    if hours < 0:
+        hours = 0
+    else:
+        if hours > 24:
+            days = int(hours/24)
+            if days < 365*5:
+                hours = hours - days*24
+            else:
+                days = 365*5
+                hours = 0
+    return days,hours
+
+
 def update_burn_rates(clusterObj):
     global FMT
     try:
@@ -669,21 +684,22 @@ def update_burn_rates(clusterObj):
         clusterObj.save(update_fields=['min_hrly','cur_hrly','max_hrly'])
         #LOG.info(f"{clusterObj.org.name} forecast min/cur/max hrly burn rate {forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
 
-        min_hrs_left = float(clusterObj.balance)/forecast_min_hrly
+        min_days_left,min_hrs_left = clamp_time(float(clusterObj.balance)/forecast_min_hrly)
         # LOG.info("%s = %s/%s    min_hrs_left = balance/forecast_min_hrly (assuming no allowance) ",
         #          min_hrs_left, clusterObj.balance, forecast_min_hrly)
-        min_ddt = datetime.now(timezone.utc)+timedelta(hours=min_hrs_left)
+        clusterObj.min_ddt = datetime.now(timezone.utc)+timedelta(days=min_days_left,hours=min_hrs_left)
 
-        cur_hrs_left = float(clusterObj.balance)/forecast_cur_hrly
+        cur_days_left,cur_hrs_left = clamp_time(float(clusterObj.balance)/forecast_cur_hrly)
         # LOG.info("%s = %s/%s    cur_hrs_left = balance/forecast_cur_hrly  (assuming no allowance) ",
         #          cur_hrs_left, clusterObj.balance, forecast_cur_hrly)
-        cur_ddt = datetime.now(timezone.utc)+timedelta(hours=cur_hrs_left)
+        clusterObj.cur_ddt = datetime.now(timezone.utc)+timedelta(days=cur_days_left,hours=cur_hrs_left)
 
-        max_hrs_left = float(clusterObj.balance)/forecast_max_hrly
+        max_days_left,max_hrs_left = clamp_time(float(clusterObj.balance)/forecast_max_hrly)
         # LOG.info("%s = %s/%s    max_hrs_left = balance/forecast_max_hrly  (assuming no allowance) ",
         #          max_hrs_left, clusterObj.balance, forecast_max_hrly)
-        max_ddt = datetime.now(timezone.utc)+timedelta(hours=max_hrs_left)
+        clusterObj.max_ddt = datetime.now(timezone.utc)+timedelta(days=max_days_left,hours=max_hrs_left)
 
+        clusterObj.save(update_fields=['min_ddt','cur_ddt','max_ddt'])
         # LOG.info("Assuming no allowance.... min_ddt: %s cur_ddt: %s max_ddt: %s",
         #          datetime.strftime(min_ddt, FMT),
         #          datetime.strftime(cur_ddt, FMT),
