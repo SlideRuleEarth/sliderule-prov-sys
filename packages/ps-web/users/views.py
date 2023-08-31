@@ -790,9 +790,10 @@ def browse(request):
             any_ownerships = False
             user_is_developer = request.user.groups.filter(name='PS_Developer').exists()
             clusters = NodeGroup.objects.all()
-            for clusterObj in clusters:
+            org_accounts = OrgAccount.objects.all()
+            for orgAccountObj in org_accounts:
                 try:
-                    o = clusterObj.org
+                    o = orgAccountObj
                     if o.name == 'uninitialized':
                         LOG.error(f"IGNORING org:{o.name}")
                         LOG.error(f"DELETING org:{o.name}")
@@ -826,7 +827,7 @@ def browse(request):
                     'is_member_of_org': is_member_of_org,
                     'org_by_name': org_by_name,
                     'org_pending': org_pending,
-                    'clusters': clusters,
+                    'org_accounts': org_accounts,
                     'org_show_shutdown_date': org_show_shutdown_date,
                     'is_developer': request.user.groups.filter(name='PS_Developer').exists(),
                     'user_is_owner': user_is_owner,

@@ -10,6 +10,7 @@ from django.urls import path
 from . import views
 from django.conf import settings
 from django.views.generic.base import TemplateView
+from django.contrib.sites.models import Site
 
 import os
 import logging
@@ -57,4 +58,10 @@ LOG.info("settings.ALLOWED_HOSTS:%s",settings.ALLOWED_HOSTS)
 LOG.info("settings.CSRF_TRUSTED_ORIGINS:%s",settings.CSRF_TRUSTED_ORIGINS)
 LOG.info("settings.LOGGING.handlers.console.level:%s",settings.LOGGING['handlers']['console']['level'])
 LOG.info(f"settings.SITE_ID:{settings.SITE_ID} {type(settings.SITE_ID)} must match one of the following site[n].id ...")
- 
+ndx = 0
+try:
+     for site in Site.objects.all():
+          LOG.info(f"site[{ndx}] id:{site.id} {type(site.id)} name:{site.name} domain:{site.domain}")
+          ndx = ndx+1
+except Exception as e:
+     LOG.exception("caught exception:")
