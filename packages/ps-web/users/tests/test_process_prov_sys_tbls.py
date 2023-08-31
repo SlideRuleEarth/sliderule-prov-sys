@@ -11,7 +11,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,get_test_compute_cluster,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership,initialize_test_org,log_CNN,fake_sync_clusterObj_to_orgAccountObj,call_SetUp
-from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,Cluster,PsCmdResult
+from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,NodeGroup,PsCmdResult
 from users.forms import ClusterCfgForm
 from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_ClusterNumNodes,sort_CNN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
 from users.views import add_org_cluster_orgcost
@@ -261,7 +261,7 @@ def test_org_CNN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
     orgAccountObj.refresh_from_db()
-    assert(Cluster.objects.count()==1)
+    assert(NodeGroup.objects.count()==1)
     assert(ClusterNumNode.objects.count()==1)
     assert(OwnerPSCmd.objects.count()==0)
     json_data = json.loads(response.content)
@@ -340,7 +340,7 @@ def test_org_CNN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
     orgAccountObj.refresh_from_db() # The client.put above updated the DB so we need this
-    assert(Cluster.objects.count()==1)
+    assert(NodeGroup.objects.count()==1)
     assert(ClusterNumNode.objects.count()==1)
     json_data = json.loads(response.content)
     assert(json_data['status']=='QUEUED')   
@@ -446,7 +446,7 @@ def test_org_CNN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     assert (response.status_code == 200) 
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
     orgAccountObj.refresh_from_db() # The client.put above updated the DB so we need this
-    assert(Cluster.objects.count()==1)
+    assert(NodeGroup.objects.count()==1)
     assert(ClusterNumNode.objects.count()==1)
     assert(OwnerPSCmd.objects.count()==0)
     json_data = json.loads(response.content)
@@ -614,7 +614,7 @@ def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_o
     orgAccountObj.save()
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(clusterObj)
     clusterObj.cfg_asg.num = sum_of_all_users_dnn # quiencent state
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
     clusterObj.is_deployed = is_deployed
     clusterObj.cur_version = clusterObj.version+'a' if version_changes else clusterObj.version
     clusterObj.is_public = not clusterObj.is_public if is_public_changes else clusterObj.is_public
@@ -891,7 +891,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert('Owner TestUser (ownertestuser) now owns new org/cluster:test_create' in msg)
     assert(call_SetUp(orgAccountObj))
     assert(fake_sync_clusterObj_to_orgAccountObj(orgAccountObj))
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
     logger.info(f"org:{orgAccountObj.name} provision_env_ready:{clusterObj.provision_env_ready} clusterObj.cur_version:{clusterObj.cur_version} clusterObj.version:{clusterObj.version} ")       
     assert clusterObj.cur_version == clusterObj.version
     log_CNN()

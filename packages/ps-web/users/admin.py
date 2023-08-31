@@ -6,7 +6,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 # Register your models here.
-from .models import User, OrgAccount, Membership, Cluster, Cost, ClusterNumNode, PsCmdResult, OwnerPSCmd
+from .models import User, OrgAccount, Membership, NodeGroup, Cost, ClusterNumNode, PsCmdResult, OwnerPSCmd
 from .models import GranChoice,PsCmdResult
 from django.contrib.auth import get_user_model
 
@@ -46,7 +46,7 @@ class OrgAccountAdmin(admin.ModelAdmin):
     #readonly_fields = ('id')
 
 
-@admin.register(Cluster)
+@admin.register(NodeGroup)
 class ClusterAdmin(admin.ModelAdmin):
     list_display = ('name', 'org', 'cur_asg', 'node_mgr_fixed_cost', 'node_fixed_cost', 'creation_date', 'modified_date','cur_version',
                     'active_ps_cmd', 'mgr_ip_address', 'is_deployed', 'deployed_state',

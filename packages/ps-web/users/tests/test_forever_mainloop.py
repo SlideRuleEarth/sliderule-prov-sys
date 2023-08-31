@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
 from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,process_onn_expires,process_owner_ps_cmd,process_owner_ps_Destroy_cmd,process_owner_ps_Refresh_cmd,process_owner_ps_Update_cmd
-from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,Cluster
+from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,NodeGroup
 from users.forms import ClusterCfgForm
 from users.tasks import loop_iter,init_new_org_memberships,init_new_org_memberships,process_prov_sys_tbls,get_cluster_queue_name,get_or_create_ClusterNumNodes
 from django.contrib import messages
@@ -100,7 +100,7 @@ def simple_test_onn_api(client,
     else:
         logger.info(f"json_data:{json_data}")
 
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
     clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
     orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
     logger.info(f"{response.status_code} == {expected_status} ?")
@@ -335,7 +335,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         orgAccountObj = get_test_org()
         owner_access_token = login_owner_user(orgAccountObj=orgAccountObj,client=client)
 
-        clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+        clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
         
         assert(OwnerPSCmd.objects.count()==0)
         assert(ClusterNumNode.objects.count()==0)
@@ -539,7 +539,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         orgAccountObj = get_test_org()
 #         owner_access_token = login_owner_user(orgAccountObj=orgAccountObj,client=client)
 
-#         clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+#         clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
         
 #         assert(OwnerPSCmd.objects.count()==0)
 #         assert(ClusterNumNode.objects.count()==0)
@@ -652,7 +652,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #     caplog.set_level(logging.DEBUG)
 #     orgAccountObj = get_test_org()
 
-#     clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+#     clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
 
 #     assert(client.login(username=OWNER_USER,password=OWNER_PASSWORD))
 #     loop_count = 0

@@ -7,7 +7,7 @@ import json
 from importlib import import_module
 from decimal import *
 from django.urls import reverse
-from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,Cluster
+from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,NodeGroup
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,get_test_compute_cluster,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user
 from users.tasks import loop_iter
 # Import the fixtures

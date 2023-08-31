@@ -1,23 +1,7 @@
 #!/bin/bash
 set -eo pipefail
 
-echo "CREATE_DB_V4: $CREATE_DB_V4"
-if [ "$CREATE_DB_V4" == "True" ]; then
-    echo "Creating database with: postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$SQL_HOST:$SQL_PORT/postgres "
-    # Check if the database exists
-    psql "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$SQL_HOST:$SQL_PORT/postgres" -t -c "SELECT 1 FROM pg_database WHERE datname='$POSTGRES_DB_V4'" | grep -q 1 || DATABASE_EXISTS="false"
 
-    # If it doesn't exist, create it using Django's manage.py dbshell
-    if [ "$DATABASE_EXISTS" != "true" ]; then
-        echo "Database $POSTGRES_DB_V4 does not exist. Creating..."
-        psql "postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$SQL_HOST:$SQL_PORT/postgres" -c "CREATE DATABASE $POSTGRES_DB_V4;"
-        echo "Database created."
-    else
-        echo "Database $POSTGRES_DB_V4 already exists. Skipping creation..."
-    fi
-else
-    echo "Skipping database creation..."
-fi
 
 # Check if RUN_MIGRATIONS variable is set to "true"
 echo "RUN_MIGRATIONS: $RUN_MIGRATIONS"

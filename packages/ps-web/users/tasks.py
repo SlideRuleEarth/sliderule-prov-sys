@@ -1,7 +1,7 @@
 from celery import shared_task,Task, app
 from users.models import PsCmdResult,OwnerPSCmd
 from django_celery_results.models import TaskResult
-from users.models import OrgAccount,PsCmdResult, Cluster, GranChoice, OrgAccount, Cost, User, ClusterNumNode, PsCmdResult, Membership
+from users.models import OrgAccount,PsCmdResult, NodeGroup, GranChoice, OrgAccount, Cost, User, ClusterNumNode, PsCmdResult, Membership
 from django.core.exceptions import ValidationError
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import grpc
@@ -450,9 +450,9 @@ def process_num_nodes_api(org_name,cluster_name,user,desired_num_nodes,expire_ti
         if int(desired_num_nodes) < 0:
             msg = f"desired_num_nodes:{desired_num_nodes} must be >= 0"
             raise ValidationError(msg)
-        clusterObj = Cluster.objects.get(name=cluster_name)
+        clusterObj = NodeGroup.objects.get(name=cluster_name)
         if (not clusterObj.is_deployed) and (not clusterObj.allow_deploy_by_token):
-            msg = f"Cluster {clusterObj} is not configured to allow deploy by token"
+            msg = f"NodeGroup {clusterObj} is not configured to allow deploy by token"
             raise ClusterDeployAuthError(msg)
         if(not clusterObj.is_deployed):
             msg = f"Deploying {clusterObj.org.name} cluster"
@@ -512,7 +512,7 @@ def get_ps_versions():
         LOG.exception("caught exception:")
 
 def perform_cost_accounting_for_all_clusters():
-    c_qs = Cluster.objects.all()
+    c_qs = NodeGroup.objects.all()
     LOG.info("orgs_qs:%s", repr(c_qs))
     for c in c_qs:
         cost_accounting(c)
@@ -735,7 +735,7 @@ def get_utc_tm(tm,tm_fmt_to_use):
 
 def calculate_account_bal_and_fytd_bal(obj,rsp):
     '''
-    This routine does not and should not change obj (i.e. the OrgAccount object or Cluster object)
+    This routine does not and should not change obj (i.e. the OrgAccount object or NodeGroup object)
     It is READ ONLY
     '''
     new_fytd_accrued_cost = obj.budget.fytd_accrued_cost
@@ -791,7 +791,7 @@ def reconcile_org(orgAccountObj):
     reconcile the budget for each cluster in the org
     then reconcile the org budget
     '''
-    clusters_qs = Cluster.objects.filter(org=orgAccountObj)
+    clusters_qs = NodeGroup.objects.filter(org=orgAccountObj)
     LOG.info("clusters_qs:%s", repr(clusters_qs))
     for c in clusters_qs:
         reconcile_budget(c.budget)
@@ -810,10 +810,10 @@ def reconcile_budget(budgetObj):
     if isinstance(budgetObj,OrgAccount):
         org_name = parent_name
         LOG.info(f"reconcile_budget for OrgAccount:{parent_name}")
-    elif isinstance(budgetObj,Cluster):
+    elif isinstance(budgetObj,NodeGroup):
         org_name = budgetObj.org.name
         cluster_name = budgetObj.name
-        LOG.info(f"reconcile_budget for Cluster:{parent_name}")
+        LOG.info(f"reconcile_budget for NodeGroup:{parent_name}")
         parent_name = budgetObj.org.name
     time_now,time_now_str = get_tm_now_tuple()
     global FMT, FMT_Z, FMT_DAILY
@@ -1095,7 +1095,7 @@ def create_all_forecasts(clusterObj):
 
 def cost_accounting_org(orgAccountObj):
     try:
-        qs = Cluster.objects.filter(org=orgAccountObj)
+        qs = NodeGroup.objects.filter(org=orgAccountObj)
         for c in qs:
             cost_accounting_cluster(c)
             #sum all clusters for org
@@ -1118,7 +1118,7 @@ def cost_accounting_cluster(clusterObj):
         LOG.exception("Error in cost_accounting: %s", repr(e))
 
 def find_broke_clusters():
-    qs = Cluster.objects.all()
+    qs = NodeGroup.objects.all()
     LOG.info("orgs_qs:%s", repr(qs))
     broke_clusters = []
     for c in qs:
@@ -1561,7 +1561,7 @@ def  process_prov_sys_tbls(clusterObj):
                 setup_occurred = setup_occurred or setup_occurred_this_time
                 num_cmds_processed += num_cmds_processed_this_time
             # check if at least one API called and/or cnn expired and is not processed yet
-            #LOG.info(f"clusterObj:{clusterObj.org.name} {Cluster.objects.count()} {clusterObj.org.id}")
+            #LOG.info(f"clusterObj:{clusterObj.org.name} {NodeGroup.objects.count()} {clusterObj.org.id}")
             process_num_node_table(clusterObj,(num_cmds_processed==0 and setup_occurred))
     except Exception as e:
         LOG.exception(f'Exception caught for {clusterObj.org.name}')

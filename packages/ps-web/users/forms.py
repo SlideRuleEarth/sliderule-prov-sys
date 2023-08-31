@@ -1,7 +1,7 @@
 from django import forms
 from django.forms import ModelForm
 from django.contrib.auth.forms import UserCreationForm, UsernameField, UserChangeForm
-from .models import Membership, OrgAccount, Cluster, User, ClusterNumNode, ASGNodeLimits, Budget
+from .models import Membership, OrgAccount, NodeGroup, User, ClusterNumNode, ASGNodeLimits, Budget
 from captcha.fields import CaptchaField
 from datetime import datetime,timedelta
 from datetime import timezone
@@ -108,7 +108,7 @@ class ClusterForm(ModelForm):
         For creating a new cluster
     '''
     class Meta:
-        model = Cluster
+        model = NodeGroup
         fields = [ 'name', 'org', 'node_mgr_fixed_cost', 'node_fixed_cost']
         readonly_fields = ['org']
 
@@ -117,7 +117,7 @@ class ASGNodeLimitsForm(ModelForm):
         For creating an Auto Scaling Group node limits object
     '''
     def __init__(self, *args, **kwargs):
-        max_value = Cluster.ABS_MAX_NODES
+        max_value = NodeGroup.ABS_MAX_NODES
         width = len(str(max_value))
         self.fields['min_node_cap'].widget = NumberInput(attrs={'style': f'width: {width}em'})
         self.fields['max_node_cap'].widget = NumberInput(attrs={'style': f'width: {width}em'})
@@ -139,7 +139,7 @@ class ClusterCfgForm(ModelForm):
         if available_versions:
             self.fields['version'].choices = [(v, v) for v in available_versions]
     class Meta:
-        model = Cluster
+        model = NodeGroup
         fields = ['provisioning_suspended','is_public', 'version', 'allow_deploy_by_token', 'destroy_when_no_nodes' ]
         readonly_fields = ['cfg_asg']
 

@@ -48,9 +48,9 @@ resource "aws_db_instance" "prov-sys" {
 resource "aws_db_instance" "prov-sys-v4" {
   identifier                = var.rds_id
   db_name                   = local.provsys_creds.rds_db_name_v4
-  username                  = local.provsys_creds.rds_username
-  password                  = local.provsys_creds.rds_password
-  port                      = "5432"
+  username                  = local.provsys_creds.rds_username_v4
+  password                  = local.provsys_creds.rds_password_v4
+  port                      = local.provsys_creds.rds_port_v4
   engine                    = "postgres"
   instance_class            = var.rds_instance_class
   allocated_storage         = "20"

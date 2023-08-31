@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,get_test_compute_cluster,get_test_compute_cluster,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server
-from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,Cluster,PsCmdResult
+from users.models import Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,NodeGroup,PsCmdResult
 from users.forms import ClusterCfgForm
 from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting_cluster,check_provision_env_ready
 from time import sleep
@@ -537,7 +537,7 @@ def test_process_Update_cmd_when_exception_occurs_ON_OWNER_PS_CMD(create_TEST_US
     assert str(NEG_TEST_ERROR_MSG) in str(error.value)
 
 def setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED):
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
     clusterObj.is_deployed = IS_DEPLOYED
     clusterObj.is_public = False
     clusterObj.cur_version = 'v1.0.0'
@@ -574,12 +574,12 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
                     ONN_IS_EMPTY:           Boolean indicating if the ClusterNumNode table is empty
                     DESTROY_WHEN_NO_NODES:  Boolean indicating if the OrgAccount.destroy_when_no_nodes is True
                     MIN_NODE_CAP:           The OrgAccount.min_node_cap
-                    WAS_DEPLOYED:           Boolean indicating if the Cluster.is_deployed is True
+                    WAS_DEPLOYED:           Boolean indicating if the NodeGroup.is_deployed is True
         we assume in setup that onnTop.desired_num_nodes != clusterObj.cfg_asg.num: 
     '''
 
     orgAccountObj.refresh_from_db()
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
     logger.info(f"orgAccountObj.max_ddt:{orgAccountObj.max_ddt}")
     logger.info(f"timedelta(hours=MIN_HRS_TO_LIVE_TO_START):{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
     assert ClusterNumNode.objects.count() == 0 # on exception we remove the entry
@@ -786,7 +786,7 @@ def test_get_current_version_after_setup(tasks_module,initialize_test_environ,ve
     
     orgAccountObj = get_test_org()
     clusterObj = get_test_compute_cluster()
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute')
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute')
     clusterObj.provision_env_ready = False
     clusterObj.save()
     env_ready,setup_occurred = check_provision_env_ready(orgAccountObj)
@@ -812,7 +812,7 @@ def test_provision_env_ready(tasks_module_to_import,developer_TEST_USER,initiali
     clusterObj.version = 'v3'
     clusterObj.is_public = False
     orgAccountObj.save()
-    clusterObj = Cluster.objects.get(org=orgAccountObj,name='compute') # get the cluster object
+    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name='compute') # get the cluster object
     clusterObj.provision_env_ready = False # forces a SetUp to occur
     clusterObj.save()
     logger.info(f"{orgAccountObj.name} v:{clusterObj.version} ip:{clusterObj.is_public} clusterObj.provision_env_ready:{clusterObj.provision_env_ready}")

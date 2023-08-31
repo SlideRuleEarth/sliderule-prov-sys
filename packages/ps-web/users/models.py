@@ -50,6 +50,10 @@ class Membership(models.Model):
             return ':' + self.user.username
 
 class Budget(models.Model):
+    id = models.UUIDField(default=uuid.uuid4,
+                          unique=True,
+                          primary_key=True,
+                          editable=False)
     content_type = models.ForeignKey(ContentType,on_delete=models.CASCADE)
     object_id = models.UUIDField()
     content_object = GenericForeignKey('content_type', 'object_id')
@@ -86,7 +90,10 @@ class ASGNodeLimits(models.Model):
     ABS_MAX_NODES = 1000 # can be changed via ecs task template
 
     content_type = models.ForeignKey(ContentType,on_delete=models.CASCADE)
-    object_id = models.UUIDField()
+    object_id = models.UUIDField(default=uuid.uuid4,
+                          unique=True,
+                          primary_key=True,
+                          editable=False)
     content_object = GenericForeignKey('content_type', 'object_id')
     num = models.IntegerField(  editable=True,  # this field can be edited in admin panel by user with admin privileges
                                 default=MIN_NODES,
@@ -136,10 +143,14 @@ class OrgAccount(models.Model):
     creation_date = models.DateTimeField(auto_now_add=True)
     modified_date = models.DateTimeField(auto_now=True)
 
-class Cluster(models.Model):
+class NodeGroup(models.Model): 
     def __str__(self):
         return str(self.org.name) + "-" + str(self.name)
 
+    id = models.UUIDField(default=uuid.uuid4,
+                          unique=True,
+                          primary_key=True,
+                          editable=False)
 
     name = models.CharField(max_length=200,
                             default='compute',
@@ -233,6 +244,10 @@ class GranChoice(models.Model):
 
 
 class Cost(models.Model):  # Wrapper for Cost Explorer API
+    id = models.UUIDField(default=uuid.uuid4,
+                          unique=True,
+                          primary_key=True,
+                          editable=False)
     content_type = models.ForeignKey(ContentType,on_delete=models.CASCADE)
     object_id = models.UUIDField()
     content_object = GenericForeignKey('content_type', 'object_id')
@@ -265,7 +280,7 @@ class ClusterNumNode(models.Model):
                              on_delete=models.CASCADE,
                              editable=False,
                              related_name='fk_user_cnn')
-    cluster = models.ForeignKey('Cluster',
+    cluster = models.ForeignKey('NodeGroup',
                                 on_delete=models.CASCADE,
                                 null=True,
                                 blank=True,
@@ -284,7 +299,7 @@ class PsCmdResult(models.Model):
                           unique=True,
                           primary_key=True,
                           editable=False)
-    cluster = models.ForeignKey('Cluster',
+    cluster = models.ForeignKey('NodeGroup',
                                 null=True,
                                 on_delete=models.CASCADE,
                                 blank=True,
@@ -316,7 +331,7 @@ class OwnerPSCmd(models.Model):
                              on_delete=models.CASCADE,
                              editable=False,
                              related_name='fk_user_opscmd')
-    cluster = models.ForeignKey('Cluster',
+    cluster = models.ForeignKey('NodeGroup',
                                 on_delete=models.CASCADE,
                                 null=True,
                                 blank=True,

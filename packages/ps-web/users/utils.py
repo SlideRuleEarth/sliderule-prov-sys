@@ -19,7 +19,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 import grpc
 from users import ps_client
-from .models import Cluster, Membership, OrgAccount, Cost
+from .models import NodeGroup, Membership, OrgAccount, Cost
 import requests
 from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
@@ -206,7 +206,7 @@ def init_celery():
     LOG.info(f"subprocess--> {SHELL_CMD}")
     subprocess.Popen(SHELL_CMD)
 
-    clusters_qs = Cluster.objects.all()
+    clusters_qs = NodeGroup.objects.all()
     LOG.info("clusters_qs:%s", repr(clusters_qs))
     for clusterObj in clusters_qs:
         try:
@@ -239,7 +239,7 @@ def get_memberships(request):
     return memberships
 def add_obj_cost(f):
     '''
-        This adds an OrgAccount or Cluster object and the associated Cost objects
+        This adds an OrgAccount or NodeGroup object and the associated Cost objects
     '''
     emsg=''
     msg=''

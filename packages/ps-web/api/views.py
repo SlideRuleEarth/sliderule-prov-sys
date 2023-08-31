@@ -13,7 +13,7 @@ from rest_framework.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from datetime import datetime, timezone, timedelta
-from users.models import Membership, OrgAccount, User, Cluster, ClusterNumNode
+from users.models import Membership, OrgAccount, User, NodeGroup, ClusterNumNode
 from users.ps_errors import ClusterDeployAuthError
 import logging
 from rest_framework.permissions import IsAuthenticated
@@ -224,7 +224,7 @@ class DesiredNumNodesTTLView(generics.CreateAPIView):
                         jrsp = {'status': "FAILED","error_msg":f"TTL mins must be greater than or equal to 15 and less than or equal to {MAX_TTL} (i.e. ({max_ttl_hrs} hrs)"}
                     else:
                         orgAccountObj = OrgAccount.objects.get(name=name)
-                        clusterObj = Cluster.objects.get(org=orgAccountObj,name=cluster_name)
+                        clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
                         if ttl is None:
                             ttl_exp_tm = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=MIN_TTL)
                         else:
@@ -255,7 +255,7 @@ class OrgIpAdrView(generics.RetrieveAPIView):
             if http_status == status.HTTP_200_OK:
                 if active:
                     orgAccountObj = OrgAccount.objects.get(name=name)
-                    clusterObj = Cluster.objects.get(org=orgAccountObj,name=cluster_name)
+                    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
                     if clusterObj.is_deployed:
                         jrsp = {'status': "SUCCESS",'ip_address':clusterObj.mgr_ip_address}
                         http_status = status.HTTP_200_OK
@@ -286,7 +286,7 @@ class RemoveUserNumNodesReqsView(generics.UpdateAPIView):
         jrsp,status,active,user,token_expire_date = get_token_org_active_membership(request,name)
         if status == 200:
             if active:
-                clusterObj = Cluster.objects.get(org=orgAccountObj,name=cluster_name)
+                clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
                 jrsp = remove_num_node_requests(request.user,clusterObj,only_owned_by_user=True)
         return Response(jrsp,status = status)
 
@@ -309,7 +309,7 @@ class RemoveAllNumNodesReqsView(generics.UpdateAPIView):
             if active:
                 jrsp,status,user_in_token = get_user_in_token(request)
                 if user_in_token is not None:
-                    clusterObj = Cluster.objects.get(org=orgAccountObj,name=cluster_name)
+                    clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
                     if user_in_token.groups.filter(name='PS_Developer').exists() or clusterObj.owner==user_in_token:
                         jrsp = remove_num_node_requests(request.user,clusterObj,only_owned_by_user=False)
                     else:
@@ -336,7 +336,7 @@ class ClusterConfigView(generics.UpdateAPIView):
         LOG.info(f"{request.user.username} {org_name} {cluster_name} min:{min_nodes} max:{max_nodes}")
 
         try:
-            clusterObj = Cluster.objects.get(name=cluster_name,org_name=org_name)
+            clusterObj = NodeGroup.objects.get(name=cluster_name,org_name=org_name)
             orgAccountObj = clusterObj.org
         except:
             jrsp = {'status': "FAILED","error_msg":f"Unknown :{org_name} {cluster_name}"}
@@ -347,7 +347,7 @@ class ClusterConfigView(generics.UpdateAPIView):
             if active:
                 if user is not None:
                     if user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner==user:
-                        clusterObj = Cluster.objects.get(org=orgAccountObj,name=cluster_name)
+                        clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
                         LOG.info(f'configuring min-max nodes for {clusterObj} {user.username} ')
                         error_msg = ''
                         if max_nodes > 0 and max_nodes <= clusterObj.admin_max_node_cap:
@@ -385,7 +385,7 @@ class NumNodesView(generics.RetrieveAPIView):
     def get(self, request, name, cluster_name, *args, **kwargs):
         try:
             orgAccountObj = OrgAccount.objects.get(name=name)
-            clusterObj = Cluster.objects.get(org=orgAccountObj,name=cluster_name)
+            clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
         except:
             jrsp = {'status': "FAILED","error_msg":f"Unknown org:{name}"}
             return Response(jrsp, status=status.HTTP_400_BAD_REQUEST)        

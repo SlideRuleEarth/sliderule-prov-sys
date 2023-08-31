@@ -8,7 +8,7 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core import mail
 from users.forms import ClusterCfgForm,OrgAccountForm
-from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,Cluster
+from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,ClusterNumNode,NodeGroup
 from users.views import add_org_cost,add_cluster_cost
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
@@ -278,7 +278,7 @@ def get_test_cluster(org_name=None,cluster_name=None):
     name = name or TEST_ORG_NAME
     cluster_name = cluster_name or 'compute'
     orgAccountObj = OrgAccount.objects.get(name=org_name)
-    return Cluster.objects.get(org=orgAccountObj,cluster_name=cluster_name)
+    return NodeGroup.objects.get(org=orgAccountObj,cluster_name=cluster_name)
 
 def get_test_compute_cluster(org_name=None):
     return get_test_cluster(org_name=org_name,cluster_name='compute')
@@ -368,7 +368,7 @@ def init_test_environ(  name=None,
     this_logger.info("calling call_SetUp")
     assert(call_SetUp(new_orgAccountObj))
     assert(fake_sync_clusterObj_to_orgAccountObj(new_orgAccountObj))
-    clusterObj = Cluster.objects.get(org=new_orgAccountObj)
+    clusterObj = NodeGroup.objects.get(org=new_orgAccountObj)
     this_logger.info(f"org:{new_orgAccountObj.name} provision_env_ready:{clusterObj.provision_env_ready} clusterObj.cur_version:{clusterObj.cur_version} clusterObj.version:{new_clusterObj.version} ")       
     assert clusterObj.cur_version == new_clusterObj.version
     return new_orgAccountObj,new_orgAccountObj.owner

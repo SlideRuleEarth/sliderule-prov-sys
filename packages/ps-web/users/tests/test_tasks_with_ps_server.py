@@ -10,7 +10,7 @@ from django.test import tag
 import ps_server_pb2
 import ps_server_pb2_grpc
 from users import ps_client
-from users.models import Cluster
+from users.models import NodeGroup
 import time
 from users.global_constants import *
 import logging

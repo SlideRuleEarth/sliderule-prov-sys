@@ -12,7 +12,7 @@ from django.urls import reverse,resolve
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,get_test_compute_cluster,initialize_test_org
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER,OWNER_USER,OWNER_PASSWORD,OWNER_EMAIL
 
-from users.models import Membership,Cluster,OrgAccount
+from users.models import Membership,NodeGroup,OrgAccount
 from users.tasks import init_new_org_memberships
 
 module_name = 'views'

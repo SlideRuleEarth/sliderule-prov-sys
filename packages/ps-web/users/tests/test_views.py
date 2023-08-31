@@ -9,7 +9,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_user,process_onn_api,process_cluster_configure,log_CNN,create_active_membership,verify_api_user_makes_onn_ttl,get_test_compute_cluster
 from users.tasks import loop_iter
-from users.models import OwnerPSCmd,ClusterNumNode,OrgAccount,PsCmdResult,Cluster
+from users.models import OwnerPSCmd,ClusterNumNode,OrgAccount,PsCmdResult,NodeGroup
 from django.urls import reverse
 import time_machine
 import json

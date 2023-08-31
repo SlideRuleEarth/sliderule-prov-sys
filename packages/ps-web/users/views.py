@@ -18,7 +18,7 @@ from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.transaction import get_autocommit
-from .models import Cluster, GranChoice, OrgAccount, Cost, Membership, User, ClusterNumNode, PsCmdResult, OwnerPSCmd, Budget
+from .models import NodeGroup, GranChoice, OrgAccount, Cost, Membership, User, ClusterNumNode, PsCmdResult, OwnerPSCmd, Budget
 from .forms import MembershipForm, ClusterCfgForm, ClusterForm, OrgAccountForm, OrgProfileForm, UserProfileForm,ClusterNumNodeForm,BudgetForm
 from .utils import get_db_cluster_cost,add_org_cost,add_cluster_cost
 from .tasks import get_versions, update_burn_rates, getGranChoice, sort_CNN_by_nn_exp,forever_loop_main_task,get_cluster_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
@@ -108,7 +108,7 @@ def send_activation_email(request, orgname, user):
 @login_required(login_url='account_login')
 @verified_email_required
 def orgManageMembers(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     orgAccountObj = clusterObj.org
     LOG.info(f"{request.method} {orgAccountObj.name}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
@@ -158,7 +158,7 @@ def orgManageMembers(request, pk):
 @verified_email_required
 def clusterManage(request, pk):
     #LOG.info("%s %s",request.method,pk)
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     orgAccountObj = clusterObj.org
     LOG.info(f"{request.method} {clusterObj} loop_count:{clusterObj.loop_count} ps:{clusterObj.num_ps_cmd} ops:{clusterObj.num_owner_ps_cmd} cnn:{clusterObj.num_onn} autocommit:{get_autocommit()}")
     clusterNumNodeObjs = sort_CNN_by_nn_exp(clusterObj)
@@ -240,7 +240,7 @@ def clusterManage(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def clusterRefresh(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     orgAccountObj = clusterObj.org
     LOG.info("%s %s",request.method,orgAccountObj.name)
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
@@ -325,7 +325,7 @@ def clusterDestroy(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def clearNumNodesReqs(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     LOG.info(f"{request.user.username} {request.method} {clusterObj} <owner:{clusterObj.org.owner.username}>")
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or clusterObj.org.owner == request.user:
@@ -347,7 +347,7 @@ def clearNumNodesReqs(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def clearActiveNumNodeReq(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     LOG.info(f"{request.user.username} {request.method} {clusterObj} <owner:{clusterObj.org.owner.username}>")
     LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{clusterObj.org.owner == request.user}")
     if request.user.groups.filter(name='PS_Developer').exists() or clusterObj.org.owner == request.user:
@@ -367,7 +367,7 @@ def clearActiveNumNodeReq(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def clusterConfigure(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     orgAccountObj = clusterObj.org
     LOG.info(f"{request.method} {clusterObj}")
     updated = False
@@ -432,7 +432,7 @@ def orgAccountHistory(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def clusterAccountHistory(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     orgAccountObj = clusterObj.org
     LOG.info(f"{request.method} {clusterObj}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
@@ -472,7 +472,7 @@ def ajaxOrgAccountHistory(request):
 @login_required(login_url='account_login')
 @verified_email_required
 def ajaxClusterAccountHistory(request):
-    clusterObj = Cluster.objects.get(pk=request.GET.get("cluster_uuid", None))
+    clusterObj = NodeGroup.objects.get(pk=request.GET.get("cluster_uuid", None))
     orgAccountObj = clusterObj.org
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if(request.headers.get('x-requested-with') == 'XMLHttpRequest') and (request.method == 'GET'):
@@ -500,7 +500,7 @@ def ajaxClusterAccountHistory(request):
 @verified_email_required
 def orgAccountForecast(request, pk):
     orgAccountObj = OrgAccount.objects.get(pk)
-    clusterObj = Cluster.objects.get(org__name=orgAccountObj.name)
+    clusterObj = NodeGroup.objects.get(org__name=orgAccountObj.name)
     LOG.info("%s %s", request.method, orgAccountObj.name)
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         cost_accounting_org(orgAccountObj)
@@ -514,7 +514,7 @@ def orgAccountForecast(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def clusterAccountForecast(request, pk):
-    clusterObj = Cluster.objects.get(id=pk)
+    clusterObj = NodeGroup.objects.get(id=pk)
     orgAccountObj = clusterObj.org
     LOG.info(f"{request.method} {clusterObj}")
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
@@ -579,7 +579,7 @@ def ajaxOrgAccountForecast(request):
 @verified_email_required
 def ajaxClusterAccountForecast(request):
     if(request.headers.get('x-requested-with') == 'XMLHttpRequest') and (request.method == 'GET'):
-        clusterObj = Cluster.objects.get(id=request.GET.get("cluster_uuid", None))
+        clusterObj = NodeGroup.objects.get(id=request.GET.get("cluster_uuid", None))
         LOG.info(f"{request.method} {clusterObj} {request.GET.get('granularity', 'undefined')}")
         gran = request.GET.get("granularity", "undefined")
         if gran == 'HOURLY':
@@ -789,7 +789,7 @@ def browse(request):
             any_memberships = False
             any_ownerships = False
             user_is_developer = request.user.groups.filter(name='PS_Developer').exists()
-            clusters = Cluster.objects.all()
+            clusters = NodeGroup.objects.all()
             for clusterObj in clusters:
                 try:
                     o = clusterObj.org
@@ -870,7 +870,7 @@ def memberships(request):  # current session user
         if m.user.username.strip() == active_user.username.strip():
             displayed_memberships.append(m)
             o = OrgAccount.get(name=m.org.name)
-            clusterObj = Cluster.objects.get(org__name=o.name)
+            clusterObj = NodeGroup.objects.get(org__name=o.name)
             org_cluster_deployed_state.update({o.name: clusterObj.deployed_state})
             org_cluster_active_ps_cmd.update({o.name: clusterObj.active_ps_cmd})
             user_is_owner.update({o.name: (o.owner == request.user)})
