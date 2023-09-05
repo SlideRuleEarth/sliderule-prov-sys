@@ -68,7 +68,7 @@ def test_org_token(caplog,client,mock_email_backend,initialize_test_environ):
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':TEST_ORG_NAME})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':TEST_ORG_NAME})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -93,7 +93,7 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -166,7 +166,7 @@ def test_org_ONN(caplog,client,mock_email_backend,initialize_test_environ):
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
