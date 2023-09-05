@@ -58,7 +58,7 @@ def test_config_org(caplog,client,mock_email_backend,initialize_test_environ):
 
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)
@@ -71,19 +71,19 @@ def test_config_org(caplog,client,mock_email_backend,initialize_test_environ):
         'Accept': 'application/json'  # Specify JSON response
     }
     # negative test POST
-    url = reverse('cluster-cfg',args=[get_test_org().name,0,5])
+    url = reverse('org-cfg',args=[get_test_org().name,0,5])
     response = client.post(url)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     assert (response.status_code == 405)  
 
     # negative test no Token
-    url = reverse('cluster-cfg',args=[get_test_org().name,0,5])
+    url = reverse('org-cfg',args=[get_test_org().name,0,5])
     response = client.put(url)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     assert (response.status_code == 400)  
 
     # now test config with valid values
-    url = reverse('cluster-cfg',args=[get_test_org().name,0,5])
+    url = reverse('org-cfg',args=[get_test_org().name,0,5])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     orgAccountObj.refresh_from_db()
@@ -92,7 +92,7 @@ def test_config_org(caplog,client,mock_email_backend,initialize_test_environ):
     assert(orgAccountObj.max_node_cap == 5)
 
     # now test config with valid values
-    url = reverse('cluster-cfg',args=[get_test_org().name,0,orgAccountObj.admin_max_node_cap])
+    url = reverse('org-cfg',args=[get_test_org().name,0,orgAccountObj.admin_max_node_cap])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     orgAccountObj.refresh_from_db()
@@ -101,13 +101,13 @@ def test_config_org(caplog,client,mock_email_backend,initialize_test_environ):
     assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
 
     # now test config with INVALID: max is 0
-    url = reverse('cluster-cfg',args=[get_test_org().name,0,0])
+    url = reverse('org-cfg',args=[get_test_org().name,0,0])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     assert (response.status_code == 400)
 
     # now test config with INVALID: max is max_admin + 1
-    url = reverse('cluster-cfg',args=[get_test_org().name,0,orgAccountObj.max_node_cap+1])
+    url = reverse('org-cfg',args=[get_test_org().name,0,orgAccountObj.max_node_cap+1])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     assert (response.status_code == 400)
@@ -117,13 +117,13 @@ def test_config_org(caplog,client,mock_email_backend,initialize_test_environ):
     min_nodes = -1  # Provide an invalid value for min_nodes
     max_nodes = 5
     # Manually construct the URL with an invalid value for min_nodes
-    url = f"/cluster_config/{name}/{min_nodes}/{max_nodes}/"
+    url = f"/org_config/{name}/{min_nodes}/{max_nodes}/"
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 404)
 
     # now test config with INVALID: max < min
-    url = reverse('cluster-cfg',args=[get_test_org().name,2,1])
+    url = reverse('org-cfg',args=[get_test_org().name,2,1])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
     assert (response.status_code == 400)
@@ -140,7 +140,7 @@ def test_membership_status(caplog,client,mock_email_backend,initialize_test_envi
 
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)

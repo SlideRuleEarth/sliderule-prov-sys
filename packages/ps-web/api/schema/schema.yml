@@ -47,7 +47,7 @@ paths:
     put:
       operationId: cluster_config_update
       description: |-
-        Takes an name min_nodes and max_nodes and updates the cluster's min and max nodes.
+        Takes an org_name min_nodes and max_nodes and updates the cluster's min and max nodes.
         These are the limits that regular users can request.
         NOTE: Must be a developer or owner of the org to update the config.
       parameters:
@@ -78,7 +78,7 @@ paths:
     patch:
       operationId: cluster_config_partial_update
       description: |-
-        Takes an name min_nodes and max_nodes and updates the cluster's min and max nodes.
+        Takes an org_name min_nodes and max_nodes and updates the cluster's min and max nodes.
         These are the limits that regular users can request.
         NOTE: Must be a developer or owner of the org to update the config.
       parameters:
@@ -110,7 +110,7 @@ paths:
     put:
       operationId: desired_num_nodes_update
       description: |-
-        Takes an name and desired_num_nodes and creates an OrgNumNode request for the org.
+        Takes an org_name and desired_num_nodes and creates an OrgNumNode request for the org.
         This will go into the pool of requests for the org.
         This request will expire when the token expires (one hour).
         The msg field of the JSON response will contain the this expiration date/time.
@@ -139,7 +139,7 @@ paths:
     patch:
       operationId: desired_num_nodes_partial_update
       description: |-
-        Takes an name and desired_num_nodes and creates an OrgNumNode request for the org.
+        Takes an org_name and desired_num_nodes and creates an OrgNumNode request for the org.
         This will go into the pool of requests for the org.
         This request will expire when the token expires (one hour).
         The msg field of the JSON response will contain the this expiration date/time.
@@ -169,7 +169,7 @@ paths:
     post:
       operationId: desired_num_nodes_ttl_create
       description: |-
-        Takes an name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
+        Takes an org_name, desired_num_nodes and ttl ("time to live" in minutes) and creates an OrgNumNode request for the org.
         NOTE: If the ttl is not provided, the time to live will be set the the minimum (15 minutes). The maximum ttl is 720 minutes (i.e. 12 hours).
         This request will go into the pool of requests for the org.
         The msg field of the JSON response will contain the this expiration date/time.
@@ -204,9 +204,9 @@ paths:
     get:
       operationId: membership_status_retrieve
       description: |-
-        Takes an name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
+        Takes an org_name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
         Users membership is controlled by the organization's admins.
-        NOTE: the name passed as a parameter must match the organization of the claim in the token that is used for authorization.
+        NOTE: the org_name passed as a parameter must match the organization of the claim in the token that is used for authorization.
       parameters:
       - in: path
         name: name
@@ -225,8 +225,8 @@ paths:
   /api/num_nodes/{name}/:
     get:
       operationId: num_nodes_retrieve
-      description: Takes an name and returns the min-current-max number of nodes and
-        the version from the cluster for the org.
+      description: Takes an org_name and returns the min-current-max number of nodes
+        and the version from the cluster for the org.
       parameters:
       - in: path
         name: name
@@ -245,7 +245,7 @@ paths:
   /api/org_ip_adr/{name}/:
     get:
       operationId: org_ip_adr_retrieve
-      description: Takes an name and returns the IP address of the cluster manager
+      description: Takes an org_name and returns the IP address of the cluster manager
         for the org.
       parameters:
       - in: path
@@ -573,6 +573,7 @@ components:
       properties:
         username:
           type: string
+          writeOnly: true
         password:
           type: string
           writeOnly: true
@@ -598,6 +599,7 @@ components:
       properties:
         refresh:
           type: string
+          writeOnly: true
       required:
       - refresh
   securitySchemes:

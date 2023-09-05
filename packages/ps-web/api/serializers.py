@@ -55,28 +55,28 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
             super().__init__(*args, **kwargs)
             #LOG.info(args)
             #LOG.info(kwargs)
-            self.fields['name'] = serializers.CharField()
+            self.fields['org_name'] = serializers.CharField()
 
         except KeyError:
             LOG.exception('reading kwargs')
             pass
 
     @classmethod
-    def get_token(cls, user, user_name, name):
-        return cls.token_class.for_user(user, name)
+    def get_token(cls, user, user_name, org_name):
+        return cls.token_class.for_user(user, org_name)
 
     def validate(self, attrs):
         #LOG.info(attrs)
         username = attrs['username']
-        name = attrs['name']
-        LOG.info(f"{username} {name}")
+        org_name = attrs['org_name']
+        LOG.info(f"{username} {org_name}")
         data = super(TokenObtainPairSerializer,self).validate(attrs) # skip a level
-        LOG.info(f"{username} {name} PASSED base validation")
+        LOG.info(f"{username} {org_name} PASSED base validation")
         user = User.objects.get(username=username)
         try:
-            orgAccountObj = OrgAccount.objects.get(name=name)
+            orgAccountObj = OrgAccount.objects.get(name=org_name)
         except (OrgAccount.DoesNotExist):
-            msg = f"{name} is NOT a valid organization name"
+            msg = f"{org_name} is NOT a valid organization name"
             LOG.info(msg)
             raise PermissionDenied(msg)
         try:
@@ -90,7 +90,7 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
         #LOG.info('serializer_data:%s',serializer.data)
         LOG.info(f"active:{serializer.data['active']}")
         if serializer.data['active']:
-            refresh = self.get_token(self.user, username, attrs['name'])
+            refresh = self.get_token(self.user, username, attrs['org_name'])
             valid_data = TokenBackend(algorithm='HS256').decode(str(refresh.access_token), verify=False)         
             #LOG.info("exp:%s",datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT))
             data["exp"] = datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT)
@@ -100,7 +100,7 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
             data["access"] = str(refresh.access_token)
             #LOG.info(data)
         else:
-            msg = f"{username} is NOT an active Member of {name}"
+            msg = f"{username} is NOT an active Member of {org_name}"
             LOG.info(msg)
             raise PermissionDenied(msg) 
         LOG.info("returning data")
@@ -125,10 +125,10 @@ class OrgTokenRefreshSerializer(TokenRefreshSerializer):
 
         user = get_user_model().objects.get(username=data['user_name'])
         try:
-            orgAccountObj = OrgAccount.objects.get(name=data['name'])
+            orgAccountObj = OrgAccount.objects.get(name=data['org_name'])
             LOG.info(f"Refresh token for {user.username} {orgAccountObj.name}")
         except (OrgAccount.DoesNotExist):
-            msg = f"{data['name']} is NOT a valid organization name"
+            msg = f"{data['org_name']} is NOT a valid organization name"
             LOG.info(msg)
             raise PermissionDenied(msg)
         try:
@@ -146,7 +146,7 @@ class OrgTokenRefreshSerializer(TokenRefreshSerializer):
             # these will throw exception if refresh is invalid expired or blacklisted
             super(TokenRefreshSerializer,self).validate(attrs) # throw exception if invalid or blacklisted
             TokenRefreshSerializer.token_class(attrs["refresh"]).blacklist()
-            refresh = self.get_token(user=user, user_name=data['user_name'], name=data['name'])
+            refresh = self.get_token(user=user, user_name=data['user_name'], name=data['org_name'])
             valid_data = TokenBackend(algorithm='HS256').decode(str(refresh.access_token), verify=False)         
             #LOG.info("exp:%s",datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT))
             returned_data["exp"] = datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT)
@@ -156,7 +156,7 @@ class OrgTokenRefreshSerializer(TokenRefreshSerializer):
             returned_data["access"] = str(refresh.access_token)
             #LOG.info(data)
         else:
-            msg = f"{data['user_name']} is NOT an active Member of {data['name']}"
+            msg = f"{data['user_name']} is NOT an active Member of {data['org_name']}"
             LOG.info(msg)
             raise PermissionDenied(msg) 
 

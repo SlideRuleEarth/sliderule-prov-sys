@@ -172,14 +172,14 @@ def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num
     '''
     logged_in = client.login(username=user.username, password=password)
     assert logged_in
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':user.username,'password':password, 'name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':user.username,'password':password, 'org_name':orgAccountObj.name})
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-num-nodes-ttl',
+                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,desired_num_nodes,ttl_minutes],
                                 access_token=access_token,
                                 data=None,
