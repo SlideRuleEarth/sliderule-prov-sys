@@ -179,7 +179,7 @@ def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num
     loop_count,response = process_onn_api(client,
                                 orgAccountObj,
                                 datetime.now(timezone.utc),
-                                view_name='post-num-nodes-ttl',
+                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,desired_num_nodes,ttl_minutes],
                                 access_token=access_token,
                                 data=None,
