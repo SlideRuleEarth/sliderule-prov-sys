@@ -43,7 +43,7 @@ def setup_module(tasks_module):
 def teardown_module(tasks_module):
     logger.info('---teardown complete---')
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_org_form_create_uri(tasks_module):

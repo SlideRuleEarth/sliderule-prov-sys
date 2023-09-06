@@ -71,9 +71,9 @@ def get_user_in_token(request):
     LOG.info(f" returns status:{status} jrsp:{jrsp} user_in_token:{user_in_token.username if user_in_token is not None else None}")
     return jrsp,status,user_in_token
 
-def get_token_org_active_membership(request,name):
+def get_token_org_active_membership(request,org_name):
     try:
-        #LOG.info(f"{name} {request}")
+        #LOG.info(f"{org_name} {request}")
         status = 200
         msg = ''
         active = False
@@ -87,9 +87,9 @@ def get_token_org_active_membership(request,name):
             return jrsp,status,active,user_in_token,token_expire_date
 
         try:
-            orgAccountObj = OrgAccount.objects.get(name=name)
+            orgAccountObj = OrgAccount.objects.get(name=org_name)
         except (OrgAccount.DoesNotExist):
-            msg = f"Unknown org:{name}"
+            msg = f"Unknown org:{org_name}"
             LOG.warning(msg)
             jrsp = {'status': "FAILED","error_msg":msg}
             return jrsp,400,False,'',token_expire_date
@@ -117,7 +117,7 @@ def get_token_org_active_membership(request,name):
             status=400
         else:
             LOG.info(f"token_expire_time: {datetime.strftime(datetime.fromtimestamp(token_expires,tz=timezone.utc), FMT)}")
-            name_in_token = valid_data['name']
+            org_name_in_token = valid_data['org_name']
             user_id_in_token = valid_data['user_id']
             try:
                 user_in_token = User.objects.get(id=user_id_in_token)
@@ -134,7 +134,7 @@ def get_token_org_active_membership(request,name):
                 status=400
                 return jrsp,status,False,'',token_expire_date   
             try:
-                if name == name_in_token:
+                if org_name == org_name_in_token:
                     serializer  = MembershipSerializer(membership, many=False)
                     #LOG.info('serializer_data:%s',serializer.data)
                     active = serializer.data['active']
@@ -143,7 +143,7 @@ def get_token_org_active_membership(request,name):
                     status = 200
                 else:
                     jrsp = {'active': "false"}
-                    emsg = f"Token claim org:{name_in_token} does not match organization given:{name} "
+                    emsg = f"Token claim org:{org_name_in_token} does not match organization given:{org_name} "
                     LOG.warning(emsg)
                     jrsp = {'status': "FAILED","error_msg":emsg}
                     status=400
@@ -168,13 +168,13 @@ def get_token_org_active_membership(request,name):
 
 class MembershipStatusView(generics.RetrieveAPIView):
     '''
-        Takes an name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
+        Takes an org_name and returns the membership status ("Active": True/False ) of the user in organization contained in the claims of the token.
         Users membership is controlled by the organization's admins.
-        NOTE: the name passed as a parameter must match the organization of the claim in the token that is used for authorization.
+        NOTE: the org_name passed as a parameter must match the organization of the claim in the token that is used for authorization.
     '''
     serializer_class = DummySerializer
-    def get(self, request, name, *args, **kwargs):
-        jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
+    def get(self, request, org_name, *args, **kwargs):
+        jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
         return Response(jrsp, status=http_status)   
 
 class DesiredNumNodesView(generics.UpdateAPIView):
@@ -189,7 +189,7 @@ class DesiredNumNodesView(generics.UpdateAPIView):
     serializer_class = DummySerializer
     def update(self, request, name, cluster_name, desired_num_nodes, *args, **kwargs):
         try:
-            jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
+            jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
             if http_status == status.HTTP_200_OK:
                 if active:
                     LOG.info(f"type(token_expire_date):{type(token_expire_date)}")
@@ -215,7 +215,7 @@ class DesiredNumNodesTTLView(generics.CreateAPIView):
     serializer_class = DummySerializer
     def create(self, request, name, cluster_name, desired_num_nodes, ttl=None, *args, **kwargs):
         try:
-            jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
+            jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
             if http_status == status.HTTP_200_OK:
                 if active:
                     if ttl is not None and (int(ttl) < MIN_TTL or int(ttl) > MAX_TTL):
@@ -237,7 +237,7 @@ class DesiredNumNodesTTLView(generics.CreateAPIView):
                             http_status = status.HTTP_503_SERVICE_UNAVAILABLE
                 else:
                     http_status = status.HTTP_401_UNAUTHORIZED
-                    jrsp = {'status': "FAILED","error_msg":f"{user.username} is Not an Active Member of {name}"}           
+                    jrsp = {'status': "FAILED","error_msg":f"{user.username} is Not an Active Member of {org_name}"}           
         except Exception as e:
             LOG.exception("caught exception:")
             jrsp = {'status': "FAILED","error_msg":"Server Error"}
@@ -246,12 +246,12 @@ class DesiredNumNodesTTLView(generics.CreateAPIView):
 
 class OrgIpAdrView(generics.RetrieveAPIView):
     '''
-        Takes an name and returns the IP address of the cluster manager for the org.
+        Takes an org_name and returns the IP address of the cluster manager for the org.
     '''
     serializer_class = DummySerializer
     def get(self, request, name, cluster_name, *args, **kwargs):
         try:
-            jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
+            jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
             if http_status == status.HTTP_200_OK:
                 if active:
                     orgAccountObj = OrgAccount.objects.get(name=name)
@@ -279,11 +279,11 @@ class RemoveUserNumNodesReqsView(generics.UpdateAPIView):
         LOG.info(f"{request.user.username} {name}")
         status = 200
         try:
-            orgAccountObj = OrgAccount.objects.get(name=name)
+            orgAccountObj = OrgAccount.objects.get(name=org_name)
         except:
-            jrsp = {'status': "FAILED","error_msg":f"Unknown org:{name}"}
+            jrsp = {'status': "FAILED","error_msg":f"Unknown org:{org_name}"}
             status=400
-        jrsp,status,active,user,token_expire_date = get_token_org_active_membership(request,name)
+        jrsp,status,active,user,token_expire_date = get_token_org_active_membership(request,org_name)
         if status == 200:
             if active:
                 clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
@@ -300,11 +300,11 @@ class RemoveAllNumNodesReqsView(generics.UpdateAPIView):
         LOG.info(f"{request.user.username} {name}")
         status = 200
         try:
-            orgAccountObj = OrgAccount.objects.get(name=name)
+            orgAccountObj = OrgAccount.objects.get(name=org_name)
         except:
-            jrsp = {'status': "FAILED","error_msg":f"Unknown org:{name}"}
+            jrsp = {'status': "FAILED","error_msg":f"Unknown org:{org_name}"}
             status=400
-        jrsp,status,active,user,token_expire_date = get_token_org_active_membership(request,name)
+        jrsp,status,active,user,token_expire_date = get_token_org_active_membership(request,org_name)
         if status == 200:
             if active:
                 jrsp,status,user_in_token = get_user_in_token(request)
@@ -314,13 +314,13 @@ class RemoveAllNumNodesReqsView(generics.UpdateAPIView):
                         jrsp = remove_num_node_requests(request.user,clusterObj,only_owned_by_user=False)
                     else:
                         status = 400
-                        jrsp = {'status': "FAILED","error_msg":f"{user_in_token.username} is not an admin of {name}"}
+                        jrsp = {'status': "FAILED","error_msg":f"{user_in_token.username} is not an admin of {org_name}"}
                 else:
                     status = 400
                     jrsp = {'status': "FAILED","error_msg":"Invalid Token (invalid user in token)"}
             else:
                 status = 401
-                jrsp = {'status': "FAILED","error_msg":f"{user.username} is Not an Active Member of {name}"}
+                jrsp = {'status': "FAILED","error_msg":f"{user.username} is Not an Active Member of {org_name}"}
         return Response(jrsp,status = status)
 
 class ClusterConfigView(generics.UpdateAPIView):
@@ -342,7 +342,7 @@ class ClusterConfigView(generics.UpdateAPIView):
             jrsp = {'status': "FAILED","error_msg":f"Unknown :{org_name} {cluster_name}"}
             return Response(jrsp, status=status.HTTP_400_BAD_REQUEST)
 
-        jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
+        jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
         if http_status == status.HTTP_200_OK:
             if active:
                 if user is not None:
@@ -367,13 +367,13 @@ class ClusterConfigView(generics.UpdateAPIView):
                             jrsp = {'status': "FAILED","error_msg":f"{error_msg}"}
                     else:
                         http_status = status.HTTP_400_BAD_REQUEST
-                        jrsp = {'status': "FAILED","error_msg":f"{user.username} is not an admin of {name}"}
+                        jrsp = {'status': "FAILED","error_msg":f"{user.username} is not an admin of {org_name}"}
                 else:
                     http_status = status.HTTP_400_BAD_REQUEST
                     jrsp = {'status': "FAILED","error_msg":f"Invalid user"}
             else:
                 http_status = status.HTTP_400_BAD_REQUEST
-                jrsp = {'status': "FAILED","error_msg":f"{user.username} is not an active member of {name}"}
+                jrsp = {'status': "FAILED","error_msg":f"{user.username} is not an active member of {org_name}"}
         return Response(jrsp, status=http_status)
     
 
@@ -387,9 +387,9 @@ class NumNodesView(generics.RetrieveAPIView):
             orgAccountObj = OrgAccount.objects.get(name=name)
             clusterObj = NodeGroup.objects.get(org=orgAccountObj,name=cluster_name)
         except:
-            jrsp = {'status': "FAILED","error_msg":f"Unknown org:{name}"}
+            jrsp = {'status': "FAILED","error_msg":f"Unknown org:{org_name}"}
             return Response(jrsp, status=status.HTTP_400_BAD_REQUEST)        
-        jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, name)
+        jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
         if http_status == status.HTTP_200_OK:
             if active:
                 try:

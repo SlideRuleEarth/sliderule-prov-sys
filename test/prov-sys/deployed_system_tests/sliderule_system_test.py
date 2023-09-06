@@ -57,7 +57,7 @@ def test_provisioning(setup_logging, domain, organization, desired_nodes):
 [
     ('testsliderule.org','UofMDTest'),
 ])
-def test_authenticate(setup_logging, domain, organization):
+def test_authenticate_p(setup_logging, domain, organization):
     logger = setup_logging
     sliderule.set_url(domain)
     status = sliderule.authenticate(organization)
@@ -70,7 +70,7 @@ def test_authenticate(setup_logging, domain, organization):
 [
     ('testsliderule.org','UofMDTest'),
 ])
-def test_num_nodes_update(setup_logging, domain, organization):
+def test_num_nodes_update_p(setup_logging, domain, organization):
     logger = setup_logging
     sliderule.set_url(domain)
     status = sliderule.authenticate(organization)

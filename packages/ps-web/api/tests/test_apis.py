@@ -58,7 +58,7 @@ def test_config_cluster(caplog,client,mock_email_backend,initialize_test_environ
 
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)
@@ -77,6 +77,7 @@ def test_config_cluster(caplog,client,mock_email_backend,initialize_test_environ
     assert (response.status_code == 405)  
 
     # negative test no Token
+
     url = reverse('cluster-cfg',args=[get_test_org().name,clusterObj.name,0,5])
     response = client.put(url)
     logger.info(f"status:{response.status_code} response:{response.json()}")
@@ -93,6 +94,7 @@ def test_config_cluster(caplog,client,mock_email_backend,initialize_test_environ
     assert(clusterObj.cfg_asg.max == 5)
 
     # now test config with valid values
+
     url = reverse('cluster-cfg',args=[get_test_org().name,clusterObj.name,0,clusterObj.admin_max_node_cap])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
@@ -103,6 +105,7 @@ def test_config_cluster(caplog,client,mock_email_backend,initialize_test_environ
     assert(clusterObj.cfg_asg.max == clusterObj.admin_max_node_cap)
 
     # now test config with INVALID: max is 0
+
     url = reverse('cluster-cfg',args=[get_test_org().name,clusterObj.name,0,0])
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code} response:{response.json()}")
@@ -119,7 +122,7 @@ def test_config_cluster(caplog,client,mock_email_backend,initialize_test_environ
     min_nodes = -1  # Provide an invalid value for min_nodes
     max_nodes = 5
     # Manually construct the URL with an invalid value for min_nodes
-    url = f"/cluster_config/{name}/{min_nodes}/{max_nodes}/"
+    url = f"/org_config/{name}/{min_nodes}/{max_nodes}/"
     response = client.put(url,headers=headers)
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 404)
@@ -142,7 +145,7 @@ def test_membership_status(caplog,client,mock_email_backend,initialize_test_envi
 
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)

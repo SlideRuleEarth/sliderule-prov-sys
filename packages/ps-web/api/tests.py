@@ -55,6 +55,7 @@ def test_no_token(caplog,client,mock_email_backend,initialize_test_environ):
     orgAccountObj = get_test_org()
     clusterObj = get_test_compute_cluster()
     url = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,clusterObj.name,3,15])
+
     response = client.post(url)
     assert (response.status_code == 400)   # no token was provided
 
@@ -69,7 +70,7 @@ def test_org_token(caplog,client,mock_email_backend,initialize_test_environ):
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':TEST_ORG_NAME})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':TEST_ORG_NAME})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -94,7 +95,7 @@ def test_org_CNN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -112,6 +113,7 @@ def test_org_CNN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     clusterObj.save()
 
     url = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,clusterObj.name,3,15])    
+
     response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)
@@ -162,7 +164,7 @@ def test_org_CNN(caplog,client,mock_email_backend,initialize_test_environ):
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -180,7 +182,7 @@ def test_org_CNN(caplog,client,mock_email_backend,initialize_test_environ):
     clusterObj.save()
 
     url = reverse('put-num-nodes',args=[orgAccountObj.name,clusterObj.name,3])
-    
+  
     response = client.put(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)

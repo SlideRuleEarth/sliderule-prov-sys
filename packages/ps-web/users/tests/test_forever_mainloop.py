@@ -74,7 +74,7 @@ def test_login(client):
 
 def login_owner_user(orgAccountObj,client):
     url = reverse('org-token-obtain-pair')
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert(OwnerPSCmd.objects.count()==0)
     json_data = json.loads(response.content)
@@ -116,7 +116,7 @@ def test_apis_simple_case(caplog,client,verified_TEST_USER,mock_email_backend,in
     '''
     caplog.set_level(logging.DEBUG)
     orgAccountObj=get_test_org()
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
@@ -141,19 +141,19 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
     orgAccountObj=get_test_org()
 
     # test invalid name in token
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':'bad_org'})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':'bad_org'})
     assert(response.status_code == 403) 
 
     # invalid user
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':"bad_username",'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':"bad_username",'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     assert(response.status_code == 401)    
 
     # bad password
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':"bad_passw", 'name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':"bad_passw", 'org_name':orgAccountObj.name})
     assert(response.status_code == 401)    
 
     # Now good parms for token
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     assert(response.status_code == 200)    
     access_token = json.loads(response.content)['access']   
 
@@ -228,7 +228,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
     fake_time_now = datetime.now(timezone.utc) - timedelta(seconds=timeshift)
     with time_machine.travel(fake_time_now,tick=False):
         orgAccountObj = get_test_org()        
-        response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+        response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
         assert(response.status_code == 200)   
         json_data = json.loads(response.content)
         access_token = json_data['access'] 
@@ -554,7 +554,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
 #                                     current_fake_tm,
-#                                     'post-num-nodes-ttl',
+#                                     'post-org-num-nodes-ttl',
 #                                     [orgAccountObj.name,3,15],
 #                                     owner_access_token,
 #                                     loop_count,
@@ -570,7 +570,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
 #                                     current_fake_tm,
-#                                     'post-num-nodes-ttl',
+#                                     'post-org-num-nodes-ttl',
 #                                     [orgAccountObj.name,4,16],
 #                                     owner_access_token,
 #                                     loop_count,
@@ -581,7 +581,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
 #                                     current_fake_tm,
-#                                     'post-num-nodes-ttl',
+#                                     'post-org-num-nodes-ttl',
 #                                     [orgAccountObj.name,2,17],
 #                                     owner_access_token,
 #                                     loop_count,

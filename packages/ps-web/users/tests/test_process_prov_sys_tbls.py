@@ -191,7 +191,7 @@ def test_org_token(caplog,client,mock_email_backend,initialize_test_environ):
     orgAccountObj = get_test_org()
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -245,7 +245,7 @@ def test_org_CNN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -255,7 +255,7 @@ def test_org_CNN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')
     access_token = json_data['access']   
-    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -270,7 +270,6 @@ def test_org_CNN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
     
-
     url_ttl = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,clusterObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -324,7 +323,7 @@ def test_org_CNN_remove(caplog,client,mock_email_backend,initialize_test_environ
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -334,7 +333,7 @@ def test_org_CNN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')
     access_token = json_data['access']   
-    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -360,7 +359,6 @@ def test_org_CNN_remove(caplog,client,mock_email_backend,initialize_test_environ
     assert(ClusterNumNode.objects.count()==3)
     assert(OwnerPSCmd.objects.count()==0)
 
-
     url_remove = reverse('remove-user-num-nodes-reqs',args=[orgAccountObj.name,clusterObj.name])
     response = client.put(url_remove,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -382,7 +380,7 @@ def test_orgNumNodes(caplog,client,mock_email_backend,initialize_test_environ):
     clusterObj.save()
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)
@@ -430,7 +428,7 @@ def test_org_CNN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     
     url = reverse('org-token-obtain-pair')
 
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     assert (OwnerPSCmd.objects.count()==0)
@@ -440,7 +438,7 @@ def test_org_CNN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')
     access_token = json_data['access']   
-    url = reverse('put-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
     
     response = client.put(url,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -455,7 +453,6 @@ def test_org_CNN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
     
-
     url_ttl = reverse('post-num-nodes-ttl',args=[orgAccountObj.name,clusterObj.name,3,15])
     response = client.post(url_ttl,headers={'Authorization': f"Bearer {access_token}"})
     assert (response.status_code == 200) 
@@ -503,7 +500,7 @@ def test_sort_CNN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     orgAccountObj = get_test_org()
     clusterObj = get_test_compute_cluster()
     
-    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
@@ -834,7 +831,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
 
     #   First configure the default test org
     url = reverse('org-token-obtain-pair')
-    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'name':orgAccountObj.name})
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)
