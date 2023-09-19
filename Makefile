@@ -7,12 +7,13 @@ PS_NGINX_SOURCE_DIR = $(ROOT)/packages/ps-web # nginx docker is built in web dir
 
 VERSION ?= latest
 VERSION_TOKENS := $(subst ., ,$(lastword $(VERSION)))
+DOMAIN ?= testsliderule.org
+REGION ?= us-west-2
 REPO ?= $(shell aws secretsmanager get-secret-value --secret-id $(DOMAIN)/secrets | jq -r '.SecretString' | jq -r '.prov_sys_repo')
 ACCT_ID ?= $(shell aws secretsmanager get-secret-value --secret-id $(DOMAIN)/secrets | jq -r '.SecretString' | jq -r '.aws_account_id')
 NOW = $(shell /bin/date +"%Y%m%d%H%M%S")
 ENVVER = $(shell git --git-dir .git --work-tree . describe --abbrev --dirty --always --tags --long)
 MFA_CODE ?= $(shell read -p "Enter MFA code: " code; echo $$code)
-DOMAIN ?= testsliderule.org
 DOMAIN_ROOT = $(firstword $(subst ., ,$(DOMAIN)))
 DOMAIN_NAME = $(subst .,-,$(DOMAIN))
 DB_FINAL_SNAPSHOT_NAME = $(DOMAIN_NAME)-tf-applied-${NOW}
@@ -59,7 +60,8 @@ dump-params-used:
 # aws_secret_access_key
 # aws_session_token
 aws-repo-docker-login: ## This authenticates the Docker CLI to use the aws ECR ( the asw container registry )
-	aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $(REPO)
+#	aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $(REPO)
+	@echo "Now using Docker Credential Helper for ECR authentication"
 
 docker-login: ## login to docker command line to access Docker container registery
 	docker login
