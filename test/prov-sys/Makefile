@@ -344,7 +344,7 @@ db-restore-SCHEMA-FROM-sql-file:  ## restore the test db SCHEMA e.g. make db-res
 	$(DB_BACKUP_DIR)/$(DB_FILE) | docker exec -i ps-db psql --username=ps_admin -d ps_postgres_db 
 	docker compose -f docker-compose-prov-sys-db-only.yml down 
 
-db-restore-FULL-from-sql-gz:  ## restore the test db e.g. make db-restore-FULL VERSION=v2.0.4 NOTE:This restores to a BLANK! db named: ps_postgres_db from file /sliderule-postgres-backup-FULL-DEV-$(VERSION).sql.gz
+db-restore-FULL-from-sql-gz:  ## restore the test db e.g. make db-restore-FULL NOTE:This restores into a BLANK! db named: ps_postgres_db from file $(FILE)
 	docker compose -f docker-compose-prov-sys-db-only.yml down 
 	docker compose -f docker-compose-prov-sys-db-only.yml up --detach && \
 	gunzip < $(DB_BACKUP_DIR)/$(FILE) | docker exec -i ps-db psql --username=ps_admin -d ps_postgres_db 
