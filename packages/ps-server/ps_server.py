@@ -647,6 +647,18 @@ def get_last_part_of_prefix(prefix):
     #LOG.info(f"get_last_part_of_prefix: prefix:{prefix} parts:{parts}")
     return parts[-1] if parts else None
 
+def sort_versions(versions):
+    sorted_versions = sorted(versions, reverse=True)
+    # Move 'latest' to the first position
+    if 'latest' in sorted_versions:
+        sorted_versions.remove('latest')
+        sorted_versions.insert(0, 'latest')
+    # Move 'unstable' to the last position
+    if 'unstable' in sorted_versions:
+        sorted_versions.remove('unstable')
+        sorted_versions.append('unstable')
+    return sorted_versions
+
 
 def get_versions_for_org(s3_client, org_to_check):
     permitted_prefixes = []
@@ -682,7 +694,6 @@ def get_versions_for_org(s3_client, org_to_check):
                 LOG.error(f"Error decoding JSON for prefix: {prefix}")
             except Exception as e:
                 LOG.error(f"Error processing file {file_key}: {repr(e)}")
-
     except botocore.exceptions.NoCredentialsError:
         LOG.error("No AWS credentials found.")
     except botocore.exceptions.PartialCredentialsError:
@@ -1650,14 +1661,8 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             This is the list of versions of terraform files available in s3
         '''
         versions = get_versions_for_org(get_s3_client(),request.name)
-        LOG.info(f'GetVersions {request.name} versions:{versions}')
-        sorted_versions = sorted(versions,reverse=True)
-        #LOG.info(f"sorted_versions:{sorted_versions}")
-        # Move 'latest' to the first position
-        if 'latest' in sorted_versions:
-            sorted_versions.remove('latest')
-            sorted_versions.insert(0, 'latest')
-        return ps_server_pb2.GetVersionsRsp(versions=versions)
+        sorted_versions = sort_versions(versions)
+        return ps_server_pb2.GetVersionsRsp(versions=sorted_versions)
 
     def GetCurrentSetUpCfg(self,request,context):
         '''

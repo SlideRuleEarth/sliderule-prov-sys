@@ -12,7 +12,7 @@ import pprint
 from unittest.mock import patch
 from google.protobuf.text_format import MessageToString
 from google.protobuf import json_format
-from ps_server import ps_server_pb2,upload_current_tf_files_to_s3,get_terraform_dir,download_s3_folder,delete_folder_from_s3,get_versions,SETUP_JSON_FILE,get_cluster_root_dir
+from ps_server import ps_server_pb2,upload_current_tf_files_to_s3,get_terraform_dir,download_s3_folder,delete_folder_from_s3,get_versions_for_org,sort_versions,SETUP_JSON_FILE,get_cluster_root_dir
 from test_utils import run_subprocess_command, bucket_exists, s3_folder_exist,process_rsp_generator,terraform_teardown 
 
 # discover the src directory to import the file being tested
@@ -126,7 +126,8 @@ def test_get_versions(setup_logging, s3, test_name, root_dir, get_S3_BUCKET,loca
     s3_folder = f'prov-sys/cluster_tf_versions/latest'
     assert s3_folder_exist(logger, s3_client, s3_bucket, s3_folder)
 
-    sorted_versions = get_versions(s3_client)
+    versions = get_versions_for_org(s3_client, test_name)
+    sorted_versions = sort_versions(versions)
     logger.info(f'sorted_versions:{sorted_versions}')
     assert False if sorted_versions is None else True
     assert len(sorted_versions) > 0

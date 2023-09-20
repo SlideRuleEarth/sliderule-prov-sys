@@ -21,7 +21,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env
-from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
+from .tasks import get_versions_for_org, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -217,7 +217,7 @@ def orgManageCluster(request, pk):
             add_onn_form = OrgNumNodeForm(min_nodes=orgAccountObj.min_node_cap,max_nodes=OrgAccount.admin_max_node_cap,prefix = 'add_onn')
         LOG.info(f"{orgAccountObj.name} cluster current_version:{clusterObj.cur_version} provision_env_ready:{clusterObj.provision_env_ready}")
         #LOG.info(f"about to get versions")
-        versions = get_versions(orgAccountObj.name)
+        versions = get_versions_for_org(orgAccountObj.name)
         config_form = OrgAccountCfgForm(instance=orgAccountObj,available_versions=versions)
 
         domain = os.environ.get("DOMAIN")
@@ -389,7 +389,7 @@ def orgConfigure(request, pk):
         if request.method == 'POST':
             try:
                 # USING an Unbound form and setting the object explicitly one field at a time!
-                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions())
+                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions_for_org(orgAccountObj.name))
                 emsg = ''
                 if(config_form.is_valid()):
                     for field, value in config_form.cleaned_data.items():

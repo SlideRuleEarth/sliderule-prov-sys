@@ -69,7 +69,7 @@ ps-server-test-stub-stage : ps-server-test-stub-clean-stage # stage the files fo
 	cp docker/ps-server-test-stub/docker-entrypoint.sh docker/ps-server-test-stub/stage/
 	cp docker/ps-server-test-stub/requirements.txt docker/ps-server-test-stub/stage/
 	cp ps_server_test_stub/ps_server.py docker/ps-server-test-stub/stage/ps_server.py
-	cp -R protos docker/ps-server-test-stub/stage/
+	cp -R ../ps-server/protos docker/ps-server-test-stub/stage/
 	mkdir -p docker/ps-server-test-stub/stage/users/tests
 	cp ../../packages/ps-web/users/global_constants.py docker/ps-server-test-stub/stage/users/global_constants.py
 	cp ../../packages/ps-web/users/tests/global_test_constants.py docker/ps-server-test-stub/stage/users/tests/global_test_constants.py

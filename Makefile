@@ -55,14 +55,6 @@ dump-params-used:
 # Docker Utility Targets
 ############################
 
-# logins for aws and docker expect ~/.asw/credentials [default] profile to contain valid entries for:
-# aws_access_key_id
-# aws_secret_access_key
-# aws_session_token
-aws-repo-docker-login: ## This authenticates the Docker CLI to use the aws ECR ( the asw container registry )
-#	aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $(REPO)
-	@echo "Now using Docker Credential Helper for ECR authentication"
-
 docker-login: ## login to docker command line to access Docker container registery
 	docker login
 

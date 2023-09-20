@@ -11,7 +11,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from google.protobuf.json_format import MessageToJson
-from ps_server import ps_server_pb2,get_sorted_tm_cost,merge_ccrs,get_ps_versions,get_versions,read_SetUpCfg
+from ps_server import ps_server_pb2,get_sorted_tm_cost,merge_ccrs,get_ps_versions,get_versions_for_org,read_SetUpCfg
 
 # module_name = 'ps_server'
 # # discover the src directory to import the file being tested
@@ -231,9 +231,9 @@ def test_get_ps_versions(setup_logging):
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('v3',False),('latest',True)], indirect=True)
-def test_get_versions(setup_logging,terraform_env,s3):
+def test_get_versions(setup_logging,terraform_env,s3,test_name):
     logger = setup_logging
-    versions = get_versions(s3_client=s3)
+    versions = get_versions_for_org(s3_client=s3,org_to_check=test_name)
     logger.info(f'ps_versions:{versions}')
     assert ('latest' in versions)
     assert ('v3' in versions)
