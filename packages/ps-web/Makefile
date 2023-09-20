@@ -40,9 +40,6 @@ ps-web-clean-stage : # clean ps docker stage directory
 ps-nginx-clean-stage : # clean ps docker stage directory
 	rm -rf docker/nginx/stage
 
-ps-web-update-proto:   ## grab latest proto file from ps-server
-	rm -rf protos/; cp -r ../ps-server/protos/ ../protos/
-
 ps-web-stage : ps-web-clean-stage
 	mkdir -p docker/ps-web/stage
 	echo DOCKER_TAG=$(PS_WEB_DOCKER_TAG) >> docker/ps-web/stage/.versions
@@ -57,7 +54,7 @@ ps-web-stage : ps-web-clean-stage
 	cp -R api docker/ps-web/stage/
 	cp -R templates docker/ps-web/stage/
 	cp -R users docker/ps-web/stage/
-	cp -R protos docker/ps-web/stage/
+	cp -R ../ps-server/protos docker/ps-web/stage/
 
 ps-server-test-stub-clean-stage : # clean docker stage directory
 	rm -rf docker/ps-server-test-stub/stage

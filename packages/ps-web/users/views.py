@@ -888,8 +888,24 @@ def provSysAdmin(request):
 @verified_email_required
 def disableProvisioning(request):    
     if request.user.groups.filter(name='PS_Developer').exists():
-        set_PROVISIONING_DISABLED(redis_interface,'True')
-        messages.warning(request, 'You have disabled provisioning!')
+        try:
+            with ps_client.create_client_channel("shutdown") as channel:
+                stub = ps_server_pb2_grpc.ShutdownServiceStub(channel)
+                timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
+                req_msg = f"User:{request.user.username} requested shutdown"
+                LOG.critical(f"{req_msg}")
+                rsp = stub.Shutdown(ps_server_pb2.ShutdownReq(message=req_msg),timeout=timeout)
+                rsp_msg = f"ps-server ShutDown response:{rsp}"
+                messages.warning(request, rsp_msg)
+                LOG.critical(rsp_msg)  
+                set_PROVISIONING_DISABLED(redis_interface,'True')
+                msg = f"User:{request.user.username} has disabled provisioning!"
+                messages.warning(request, msg)
+                LOG.critical(msg)
+        except Exception as e:
+            error_msg = f"Caught Exception in requested shutdown"
+            messages.error(request, error_msg) 
+            LOG.exception(f"{error_msg}")
     else:
         LOG.warning(f"User {request.user.username} attempted to disable provisioning")
         messages.error(request, 'You are not a PS_Developer')

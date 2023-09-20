@@ -28,7 +28,36 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Provisioning System server """
+"""
+Provisioning System server 
+-----------------------------
+
+This module is responsible for initializing and running a gRPC server with various services. It supports both secure (TLS) and insecure connections. 
+
+Features:
+    - Configurable host and port via command-line arguments.
+    - Support for both TLS and non-TLS connections.
+    - Integrated logging for monitoring and debugging.
+    - Special handling for localhost environments, including localstack status polling.
+    - Interacts with AWS S3 to manage specific folder downloads.
+    - Provides a shutdown service to gracefully terminate the server on demand.
+
+Usage:
+    To run the server with default parameters, simply execute this script.
+    For specific configurations, use the command-line arguments:
+        --host: The listening host. Default is "[::]".
+        --port: The listening port. Default is 50051.
+        --use_tls: Whether to use TLS for secure connections. Default is "False".
+
+Dependencies:
+    - Requires and defines various helper functions and configurations, such as get_domain_env, get_ps_versions, and others.
+    - Uses gRPC for server operations and service definitions.
+
+Note:
+    It's important to ensure the necessary credentials are available if TLS is enabled, and the appropriate environment variables are set for domain and other configurations.
+
+"""
+
 import argparse
 from concurrent import futures
 import contextlib
@@ -45,6 +74,7 @@ from statistics import mean, fmean, stdev
 from collections import OrderedDict
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
+from concurrent import futures
 
 import pytz
 from datetime import datetime, timezone, timedelta
@@ -1625,6 +1655,17 @@ def idempotent_migration():
     # this can be removed after a successful migration and deploy to production servers
     update_key_in_dir(local_dir=get_root_dir(), target_filename="SetUp.json", old_key="orgName", new_key="name")
 
+class ShutdownServiceServicer(ps_server_pb2_grpc.ShutdownServiceServicer):
+
+    def __init__(self, server):
+        self.server = server
+
+    def Shutdown(self, request, context):
+        LOG.critical("Shutdown request received. Server will shut down...")
+        LOG.critical(f"Shutdown request:{MessageToString(request)}")
+        self.server.stop(0)
+        return ps_server_pb2.ShutdownRsp(message="ps-server will shut down.")
+
 
 @contextlib.contextmanager
 def run_server(host, port, use_tls):
@@ -1634,6 +1675,7 @@ def run_server(host, port, use_tls):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     ps_server_pb2_grpc.add_ControlServicer_to_server(Control(), server)
     ps_server_pb2_grpc.add_AccountServicer_to_server(Account(), server)
+    ps_server_pb2_grpc.add_ShutdownServiceServicer_to_server(ShutdownServiceServicer(server), server)
     if use_tls == "True":
         # We use this in development so we test the ps-web client with tls certs
         SERVER_CERTIFICATE = _load_credential_from_file("credentials/ps-server.crt")
@@ -1649,10 +1691,7 @@ def run_server(host, port, use_tls):
         port = server.add_insecure_port(hoststring)
 
     server.start()
-    try:
-        yield server, host, port, use_tls
-    finally:
-        server.stop(0)
+    yield server, host, port, use_tls
 
 def main():
     os.environ['TZ'] = 'UTC'
@@ -1718,7 +1757,14 @@ def main():
             LOG.info(f"---------- Server is READY listening at {host}:{port} use_tls?:{use_tls} domain:{get_domain_env()} terraform_cli:{get_terraform_cli()}----------"
             )
             LOG.handlers[0].flush()
-            server.wait_for_termination()
+            try:
+                server.wait_for_termination()
+            except KeyboardInterrupt:
+                LOG.info("KeyboardInterrupt?")
+                pass
+            finally:
+                LOG.info("Shutting down server")
+                server.stop(0)
 
     except HTTPError as http_err:
         LOG.error(f"HTTP error occurred getting Org names from website: {http_err}")

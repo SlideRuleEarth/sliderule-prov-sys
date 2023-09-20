@@ -200,3 +200,16 @@ service Account {
   rpc CurrentCost(CurrentCostReq) returns (CostAndUsageRsp);
   rpc NumNodes(NumNodesReq) returns (NumNodesRsp);
 }
+
+
+message ShutdownReq {
+  string message = 1;
+}
+
+message ShutdownRsp {
+    string message = 1;
+}
+
+service ShutdownService {
+  rpc Shutdown(ShutdownReq) returns (ShutdownRsp);
+}
