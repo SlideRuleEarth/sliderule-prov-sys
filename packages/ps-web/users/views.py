@@ -217,7 +217,7 @@ def orgManageCluster(request, pk):
             add_onn_form = OrgNumNodeForm(min_nodes=orgAccountObj.min_node_cap,max_nodes=OrgAccount.admin_max_node_cap,prefix = 'add_onn')
         LOG.info(f"{orgAccountObj.name} cluster current_version:{clusterObj.cur_version} provision_env_ready:{clusterObj.provision_env_ready}")
         #LOG.info(f"about to get versions")
-        versions = get_versions()
+        versions = get_versions(orgAccountObj.name)
         config_form = OrgAccountCfgForm(instance=orgAccountObj,available_versions=versions)
 
         domain = os.environ.get("DOMAIN")

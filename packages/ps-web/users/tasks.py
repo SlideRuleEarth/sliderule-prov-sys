@@ -502,11 +502,11 @@ def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cm
     LOG.info(f"status:{status} jrsp['status']:{jrsp['status']} msg:'{jrsp['msg']}' error_msg:'{jrsp['error_msg']}' ")
     return jrsp,status
 
-def get_versions():
+def get_versions(name):
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
-            versions_rsp = stub.GetVersions(ps_server_pb2.GetVersionsReq())
+            versions_rsp = stub.GetVersions(ps_server_pb2.GetVersionsReq(name=name))
             #LOG.info(f"versions_rsp:{versions_rsp}")
             return versions_rsp.versions
     except Exception as e:
