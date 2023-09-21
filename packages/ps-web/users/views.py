@@ -449,9 +449,9 @@ def orgAccountHistory(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def ajaxOrgAccountHistory(request):
+    orgAccountObj = get_orgAccountObj(request.GET.get("org_uuid", None))
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if(request.headers.get('x-requested-with') == 'XMLHttpRequest') and (request.method == 'GET'):
-            orgAccountObj = get_orgAccountObj(request.GET.get("org_uuid", None))
             gran = request.GET.get("granularity", "undefined")
             LOG.info("%s %s %s", orgAccountObj.name,request.method, request.GET.get("granularity", "undefined"))
             got_data, orgCostObj = get_db_org_cost(gran, orgAccountObj)
@@ -581,8 +581,8 @@ def orgProfile(request, pk):
 # atomic ensures org and cluster and orgCost are always created together
 def orgAccountCreate(request):
     try:
-        # User must be in the PS_Developer group or the owner to modify the profile
-        if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
+        # User must be in the PS_Developer group
+        if request.user.groups.filter(name='PS_Developer').exists():
             if request.method == 'POST':
                 form = OrgAccountForm(request.POST)
                 new_org,msg,emsg,p = add_org_cluster_orgcost(form,True)
