@@ -41,12 +41,12 @@ class Membership(models.Model):
     # print("created: ",creation_date)
     activation_date = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):  # TBD add validators
-        if self.org is not None:
-            return str(self.org.name.replace(" ", "_") + ':' + self.user.username)
-        else:
-            return ':' + self.user.username
-
+def __str__(self):  # TBD add validators
+    username = self.user.username if self.user else 'N/A'
+    
+    if self.org:
+        return f"{self.org.name.replace(' ', '_')}:{username}"
+    return f"NoOrg?:{username}"
 
 class OrgAccount(models.Model):
     # Validators limits:

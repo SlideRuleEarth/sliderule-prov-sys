@@ -31,7 +31,10 @@ class MembershipAdmin(admin.ModelAdmin):
     list_filter = ('user', 'org', 'active', 'creation_date', 'modified_date')
     search_fields = ('user__username','user__first_name','user__last_name')
     def user_full_name(self, obj):
-        return obj.user.get_full_name()
+        if obj.user:
+            return obj.user.get_full_name()
+        else:
+            return 'No user set?'
     user_full_name.short_description = 'User Full Name'
 
     def user_username(self, obj):
