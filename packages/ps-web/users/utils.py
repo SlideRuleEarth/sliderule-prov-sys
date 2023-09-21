@@ -294,3 +294,8 @@ def user_in_one_of_these_groups(user,groups):
         if user.groups.filter(name=group).exists():
             return True
     return False
+
+def has_admin_privilege(user,orgAccountObj):
+    has_privilege = user_in_one_of_these_groups(user,[f'{orgAccountObj.name}_Admin','PS_Developer']) or (user == orgAccountObj.owner)
+    LOG.info(f"has_admin_privilege: {has_privilege} user:{user} orgAccountObj.owner:{orgAccountObj.owner} orgAccountObj.name:{orgAccountObj.name}")
+    return has_privilege

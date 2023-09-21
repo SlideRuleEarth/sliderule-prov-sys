@@ -17,18 +17,31 @@
                             <dd><span>requested {{membership.creation_date | date:"DATETIME_FORMAT"}}</span></dd>
                         </dl>
                     {% else %}
-                        <div class="mm-btn-group my-4 mx-4">
-                            {% if is_developer or user_is_owner  %}
-                                <a class="btn btn-outline-primary"  href="{% url 'org-manage-cluster' membership.org.id %}">Manage</a> 
-                            {% else %}
-                                <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
-                            {% endif %}
+                        <div mx-2>
+                            <dl class="border border-0">
+                            </dl>
                         </div>
                         <div my-4 mx-2>
                             <dl class="border border-0">
-                                {% with active_ps_cmd=this_active_ps_cmd deployed_state=this_deployed_state is_deployed=this_is_deployed cur_nodes=cur_nodes cur_version=cur_version connection_status=this_connection_status %}
+                                {% if user_is_org_admin %}
+                                    <dt>Admin</dt>
+                                {% elif is_developer %}
+                                    <dt>Developer</dt>
+                                {% else %} 
+                                    <dt>Member</dt>       
+                                {% endif %}
+                                <dd>
+                                    <div class="mm-btn-group">
+                                        {% if is_developer or user_is_owner or user_is_org_admin %}
+                                            <a class="btn btn-outline-primary"  href="{% url 'org-manage-cluster' membership.org.id %}">Manage</a> 
+                                        {% else %}
+                                            <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
+                                        {% endif %}
+                                    </div>
+                                </dd>
                                 <dt> Cluster State</dt>
                                 <dd>
+                                    {% with active_ps_cmd=this_active_ps_cmd deployed_state=this_deployed_state is_deployed=this_is_deployed cur_nodes=cur_nodes cur_version=cur_version connection_status=this_connection_status %}
                                     {% include 'users/cluster_state.html' %}
                                 </dd>
                                 {% endwith %}
