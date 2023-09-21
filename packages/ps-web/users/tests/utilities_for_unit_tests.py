@@ -57,10 +57,15 @@ DEV_TEST_USER='devtestuser2'
 TEST_ORG_NAME='test_org'
 
 TEST_ADMIN_NODE_CAP=10
+S3_BUCKET = os.environ.get("S3_BUCKET",'unit-test-bucket')
+ORGS_PERMITTED_JSON_FILE = 'OrgsPermitted.json'
 
 alphabet = string.ascii_lowercase + string.digits
 def random_choice():
     return ''.join(random.choices(alphabet, k=8))
+
+def have_same_elements(list1, list2):
+    return set(list1) == set(list2)
 
 def mock_django_email_backend(mocker):
     # Use Django's locmem email backend for testing
@@ -801,3 +806,55 @@ def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
     clusterObj.cur_version = orgAccountObj.version
     clusterObj.save()
     return True
+
+def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key):
+    """
+    Uploads a JSON string to an S3 bucket.
+
+    Args:
+        s3_client: boto3 s3 client instance
+        s3_bucket: the name of the s3 bucket
+        json_string: the JSON string you wish to upload
+        s3_key: the key (path including filename) in the s3 bucket where the data should be stored
+    """
+
+    try:
+        # Convert JSON string to bytes
+        json_bytes = json_string.encode('utf-8')
+
+        # Upload the JSON bytes to S3 with content type set as JSON
+        s3_client.put_object(Bucket=s3_bucket, Key=s3_key, Body=json_bytes, ContentType='application/json')
+        
+        logger.info(f"Successfully uploaded JSON to {s3_key} in bucket {s3_bucket}")
+
+    except Exception as e:
+        logger.error(f"Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
+
+def verify_upload(s3_client, s3_bucket, s3_key, original_json_string):
+    """
+    Verifies the uploaded JSON string in an S3 bucket.
+
+    Args:
+        s3_client: boto3 s3 client instance
+        s3_bucket: the name of the s3 bucket
+        s3_key: the key (path including filename) in the s3 bucket
+        original_json_string: the original JSON string you uploaded
+
+    Returns:
+        bool: True if the uploaded JSON matches the original, False otherwise
+    """
+
+    try:
+        response = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
+        uploaded_json_string = response['Body'].read().decode('utf-8')
+        
+        if original_json_string == uploaded_json_string:
+            logger.info(f"Verification successful for {s3_key} in bucket {s3_bucket}")
+            return True
+        else:
+            logger.warning(f"Verification failed for {s3_key} in bucket {s3_bucket}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to verify JSON at {s3_key} in bucket {s3_bucket}. Error: {e}")
+        return False

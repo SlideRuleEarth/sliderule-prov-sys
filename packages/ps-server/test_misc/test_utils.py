@@ -401,7 +401,7 @@ def upload_file_to_s3(s3_client, bucket_name, local_file, s3_folder, logger):
     
     return uploaded
 
-def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key):
+def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key,logger):
     """
     Uploads a JSON string to an S3 bucket.
 
@@ -416,12 +416,13 @@ def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key):
         # Convert JSON string to bytes
         json_bytes = json_string.encode('utf-8')
 
-        # Upload the JSON bytes to S3
-        s3_client.put_object(Bucket=s3_bucket, Key=s3_key, Body=json_bytes)
-        print(f"Successfully uploaded JSON to {s3_key} in bucket {s3_bucket}")
+        # Upload the JSON bytes to S3 with content type set as JSON
+        s3_client.put_object(Bucket=s3_bucket, Key=s3_key, Body=json_bytes, ContentType='application/json')
+        
+        logger.info(f"Successfully uploaded JSON to {s3_key} in bucket {s3_bucket}")
 
     except Exception as e:
-        print(f"Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
+        logger.error(f"Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
 
 def have_same_elements(list1, list2):
     return set(list1) == set(list2)

@@ -273,7 +273,8 @@ def test_read_PermittedOrg_included(setup_logging,s3,terraform_env,test_name):
     upload_json_string_to_s3(s3_client=s3,
                              s3_bucket=S3_BUCKET,
                              s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
-                             json_string=f'["{test_name}", "unit-test-private"]')
+                             json_string=f'["{test_name}", "unit-test-private"]',
+                             logger=logger)
     versions_for_org = get_versions_for_org(s3_client=s3,org_to_check=test_name)
     logger.info(f'versions_for_org:{versions_for_org}')
     all_versions = get_all_versions(s3_client=s3)
@@ -290,7 +291,8 @@ def test_read_PermittedOrg_excluded(setup_logging,s3,terraform_env,test_name):
     upload_json_string_to_s3(s3_client=s3,
                              s3_bucket=S3_BUCKET,
                              s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
-                             json_string=f'["{test_name}"]') # test_name is unit-test-org
+                             json_string=f'["{test_name}"]', # test_name is unit-test-org
+                             logger=logger)
     versions_for_org = get_versions_for_org(s3_client=s3,org_to_check='unit-test-private')
     logger.info(f'versions_for_org:{versions_for_org}')
     all_versions = get_all_versions(s3_client=s3)

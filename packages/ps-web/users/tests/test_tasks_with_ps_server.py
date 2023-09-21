@@ -1,16 +1,17 @@
 import unittest
 import pytest
+from django.urls import reverse,resolve
 
 from users.tests.global_test import GlobalTestCase
-from users.tasks import get_current_cost_report
+from users.tasks import get_current_cost_report,get_versions_for_org
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
-from users.tests.utilities_for_unit_tests import init_test_environ,process_rsp_gen,call_SetUp
+from users.tests.utilities_for_unit_tests import init_test_environ,process_rsp_gen,call_SetUp,upload_json_string_to_s3,verify_upload,S3_BUCKET,ORGS_PERMITTED_JSON_FILE,have_same_elements
 from django.test import tag
 import ps_server_pb2
 import ps_server_pb2_grpc
 from users import ps_client
-from users.models import Cluster
+from users.models import Cluster,OrgAccount
 import time
 from users.global_constants import *
 import logging
@@ -142,3 +143,43 @@ def test_SetUp(initialize_test_environ,setup_logging):
     logger = setup_logging
     orgAccountObj = get_test_org()
     assert(call_SetUp(orgAccountObj))
+
+@pytest.mark.real_ps_server
+@pytest.mark.dev
+@pytest.mark.django_db
+def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ):
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(orgAccountObj.version == 'latest') 
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    upload_json_string_to_s3(s3_client=s3,
+                             s3_bucket=S3_BUCKET,
+                             s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                             json_string=f'["{test_name}"]') # test_name is unit-test-org
+    assert verify_upload(s3_client=s3,
+                         s3_bucket=S3_BUCKET,
+                         s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                         original_json_string=f'["{test_name}"]')                     
+    versions_for_org = get_versions_for_org(name='unit-test-private')
+    logger.info(f'versions_for_org:{versions_for_org}')
+    all_versions = get_versions_for_org(name='') # a blank org here means all versions
+    logger.info(f'all_versions:{all_versions}')
+    assert(not have_same_elements(versions_for_org,all_versions))
+    assert ('latest' in all_versions)
+    assert ('latest' not in versions_for_org) ## excluded because it is not in permitted_orgs.json
+    assert ('v3' in all_versions)
+    assert ('v3' in versions_for_org)
+    assert ('unstable' in versions_for_org)
+    assert ('unstable' in all_versions)
+
+    # get the url
+    url = reverse('org-configure', args=[org_account_id])
+    # send the GET request
+    response = client.get(url)
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert response.status_code == 200 or response.status_code == 302

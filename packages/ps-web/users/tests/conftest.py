@@ -1,4 +1,6 @@
 import pytest
+import boto3
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER,create_test_user
@@ -40,6 +42,18 @@ def setup_logging():
     # After the test session, remove the handler to avoid logging duplicate messages
     logger.removeHandler(console_handler)
 
+
+@pytest.fixture(scope="session")
+def s3(setup_logging):
+    logger = setup_logging
+    # uses localstack
+    s3_client = boto3.client('s3', region_name='us-west-2',endpoint_url="http://localstack:4566")
+    yield s3_client
+    logger.info(f'verify teardown of localstack s3 with s3_client:{s3_client} ')
+
+@pytest.fixture(scope='session', autouse=True)
+def test_name():
+    return 'unit-test-org' 
 
 @pytest.fixture(autouse=True)
 def set_test_site(django_db_setup, django_db_blocker):

@@ -383,7 +383,7 @@ def clearActiveNumNodeReq(request, pk):
 @verified_email_required
 def orgConfigure(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
-    LOG.info("%s %s",request.method,orgAccountObj.name)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
     updated = False
     if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
         if request.method == 'POST':

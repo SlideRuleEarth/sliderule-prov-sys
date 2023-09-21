@@ -700,7 +700,7 @@ def get_versions_for_org(s3_client, org_to_check):
         LOG.error(f"AWS Client Error ({error_code}): {error_message}")
     except Exception as e:
         LOG.exception(f"get_versions_for_org caught exception: {repr(e)}") 
-
+    LOG.info(f"org_to_check:{org_to_check} permitted_prefixes:{permitted_prefixes}")
     return permitted_prefixes
 
 
@@ -1656,7 +1656,10 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         '''
             This is the list of versions of terraform files available in s3
         '''
-        versions = get_versions_for_org(get_s3_client(),request.name)
+        if request.name is None or request.name == "":
+            versions = get_all_versions(get_s3_client())
+        else:
+            versions = get_versions_for_org(get_s3_client(),request.name)
         sorted_versions = sort_versions(versions)
         return ps_server_pb2.GetVersionsRsp(versions=sorted_versions)
 
