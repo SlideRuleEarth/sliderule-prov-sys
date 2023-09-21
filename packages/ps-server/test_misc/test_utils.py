@@ -15,6 +15,7 @@ import requests
 
 import subprocess
 
+
 def get_root_dir():
     return '/ps_server'
 
@@ -363,3 +364,64 @@ def terraform_teardown(ps_server_cntrl, s3_client, s3_bucket, name, logger):
     logger.info(f'Done teardown: terraform_env org:{name}')
     assert exception_cnt==0
     return True
+
+
+def upload_file_to_s3(s3_client, bucket_name, local_file, s3_folder, logger):
+    """
+    Uploads a local file to an S3 bucket.
+    
+    Args:
+        s3_client: boto3 s3 client instance
+        bucket_name: the name of the s3 bucket
+        local_file: path to the local file you wish to upload
+        s3_folder: the folder path in the s3 bucket
+    """
+    
+    logger.info(f"Uploading {local_file} to bucket {bucket_name} in folder {s3_folder}")
+    uploaded = False
+    try:
+        relative_path = os.path.basename(local_file)
+        s3_file = os.path.join(s3_folder, relative_path)
+
+        s3_client.upload_file(local_file, bucket_name, s3_file)
+        uploaded = True
+        logger.info(f"Uploaded {local_file} to {s3_file} in bucket {bucket_name}")
+
+    except NoCredentialsError:
+        logger.error("No AWS credentials found")
+        uploaded = False
+    except Exception as e:
+        logger.exception(f"FAILED to upload {local_file} to bucket {bucket_name} in folder {s3_folder}")
+        uploaded = False
+
+    if uploaded:
+        logger.info(f"Finished uploading {local_file} to bucket {bucket_name} in folder {s3_folder}")
+    else:
+        logger.error(f"FAILED to upload {local_file} to bucket {bucket_name} in folder {s3_folder}")
+    
+    return uploaded
+
+def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key):
+    """
+    Uploads a JSON string to an S3 bucket.
+
+    Args:
+        s3_client: boto3 s3 client instance
+        s3_bucket: the name of the s3 bucket
+        json_string: the JSON string you wish to upload
+        s3_key: the key (path including filename) in the s3 bucket where the data should be stored
+    """
+
+    try:
+        # Convert JSON string to bytes
+        json_bytes = json_string.encode('utf-8')
+
+        # Upload the JSON bytes to S3
+        s3_client.put_object(Bucket=s3_bucket, Key=s3_key, Body=json_bytes)
+        print(f"Successfully uploaded JSON to {s3_key} in bucket {s3_bucket}")
+
+    except Exception as e:
+        print(f"Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
+
+def have_same_elements(list1, list2):
+    return set(list1) == set(list2)

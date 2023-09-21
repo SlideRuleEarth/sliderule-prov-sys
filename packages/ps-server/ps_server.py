@@ -89,9 +89,6 @@ import os
 import subprocess
 import time
 import requests
-
-# import re
-# import io
 from time import sleep
 from inspect import currentframe, getframeinfo
 from collections import defaultdict
@@ -608,8 +605,7 @@ def read_orgs_permitted(name):
     LOG.info(f"{orgs_permitted} from {orgs_permitted_json_file_path}")
     return orgs_permitted
 
-def get_all_versions(s3_client,name=None):
-    LOG.info(f"get_all_versions: name:{name}")
+def get_all_versions(s3_client):
     versions = []
     try:
         result = s3_client.list_objects(Bucket=S3_BUCKET,
