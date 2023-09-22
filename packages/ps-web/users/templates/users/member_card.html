@@ -9,7 +9,7 @@
             <div class="container-fluid">
                 <div class="card text-center mb-2 border-0">
                     {% if not membership.active %}
-                        <div class="mm-btn-group my-4 mx-4">
+                        <div class="btn-group my-4 mx-4">
                             <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
                         </div>
                         <dl>
@@ -17,22 +17,24 @@
                             <dd><span>requested {{membership.creation_date | date:"DATETIME_FORMAT"}}</span></dd>
                         </dl>
                     {% else %}
-                        <div mx-2>
+                        <div class="container my-4 mx-2">
                             <dl class="border border-0">
-                            </dl>
-                        </div>
-                        <div my-4 mx-2>
-                            <dl class="border border-0">
-                                {% if user_is_org_admin %}
-                                    <dt>Admin</dt>
-                                {% elif is_developer %}
-                                    <dt>Developer</dt>
+                                {% if user_is_developer %}
+                                    {% if user_is_owner %}
+                                        <dt>Owner (Developer)</dt>
+                                    {% else %}
+                                        <dt>Member (Developer)</dt>
+                                    {% endif %}
+                                {% elif user_is_owner %}
+                                    <dt>Owner</dt>
+                                {% elif user_is_org_admin %}
+                                    <dt>Member (Admin)</dt>
                                 {% else %} 
                                     <dt>Member</dt>       
                                 {% endif %}
                                 <dd>
-                                    <div class="mm-btn-group">
-                                        {% if is_developer or user_is_owner or user_is_org_admin %}
+                                    <div class="btn-group my-1 mx-1">
+                                        {% if user_is_developer or user_is_owner or user_is_org_admin %}
                                             <a class="btn btn-outline-primary"  href="{% url 'org-manage-cluster' membership.org.id %}">Manage</a> 
                                         {% else %}
                                             <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
@@ -65,6 +67,13 @@
                                 {% endif %}
                                 <dt>Member Since</dt>
                                 <dd><p>{{membership.activation_date | date:"DATETIME_FORMAT"}}</p></dd>
+                            
+                                {% if user_is_org_admin %}
+                                    <dt></dt>
+                                    <dd>
+                                        <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
+                                    </dd>
+                                {% endif %}
                             </dl>
                         </div>
                     {% endif %}

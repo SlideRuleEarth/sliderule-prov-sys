@@ -660,7 +660,6 @@ def browse(request):
             org_show_shutdown_date = {}
             user_is_org_admin = {}
             unaffiliated = 0
-            any_owner = False
             any_memberships = False
             any_ownerships = False
             for o in orgs:
