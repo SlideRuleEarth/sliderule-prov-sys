@@ -101,8 +101,8 @@ disable_provisioning:  ## disable provisioning for DOMAIN. Once you do this you 
 	@echo "Disabling provisioning for domain: $(DOMAIN)"
 	@read -p "Enter MFA code: " code; \
 	python3 $(ROOT)/scripts/disable_provisioning.py --domain $(DOMAIN) --mfa_code $$code	
-	
-deploy:  # deploy prov-sys docker container tagged $(VERSION) (which defaults to latest) in terraform workspace $(DOMAIN) e.g. 'make deploy VERSION=v0.0.1 DOMAIN='testsliderule.org' SITE_TITLE='SlideRule Test''
+
+deploy: disable_provisioning # deploy prov-sys docker container tagged $(VERSION) (which defaults to latest) in terraform workspace $(DOMAIN) e.g. 'make deploy VERSION=v0.0.1 DOMAIN='testsliderule.org' SITE_TITLE='SlideRule Test''
 	mkdir -p terraform/prov-sys && cd terraform/prov-sys && terraform init && terraform workspace select $(DOMAIN)-prov-sys || terraform workspace new $(DOMAIN)-prov-sys && \
 	terraform apply -var docker_image_url_ps-web=$(REPO)/sliderule-ps-web:$(VERSION) -var docker_image_url_ps-nginx=$(REPO)/sliderule-ps-nginx:$(VERSION)  -var docker_image_url_ps-server=$(REPO)/sliderule-ps-server:$(VERSION) -var rds_id=$(DOMAIN_NAME) -var rds_final_snapshot=$(DB_FINAL_SNAPSHOT_NAME) -var domain=$(DOMAIN) -var domain_root=$(DOMAIN_ROOT) -var ps_server_host=localhost -var ps_version=$(VERSION) -var ps_site_title='$(SITE_TITLE)' -var ps_bld_envver=$(ENVVER) -var site_id=$($(SITE_ID))
 	@echo SITE_ID:$(SITE_ID)
