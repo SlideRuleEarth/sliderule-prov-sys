@@ -97,8 +97,10 @@ docker-push:
 	docker push $(REPO)/sliderule-ps-server:$(VERSION)
 	@echo VERSION:$(VERSION)
 
-disable_provisioning: ## disable provisioning for DOMAIN. Once you do this you MUST deploy something
-	python3 $(ROOT)/scripts/disable_provisioning.py --domain $(DOMAIN) --mfa_code $(MFA_CODE)
+disable_provisioning:  ## disable provisioning for DOMAIN. Once you do this you MUST deploy something
+	@echo "Disabling provisioning for domain: $(DOMAIN)"
+	@read -p "Enter MFA code: " code; \
+	python3 $(ROOT)/scripts/disable_provisioning.py --domain $(DOMAIN) --mfa_code $$code	
 	
 deploy:  # deploy prov-sys docker container tagged $(VERSION) (which defaults to latest) in terraform workspace $(DOMAIN) e.g. 'make deploy VERSION=v0.0.1 DOMAIN='testsliderule.org' SITE_TITLE='SlideRule Test''
 	mkdir -p terraform/prov-sys && cd terraform/prov-sys && terraform init && terraform workspace select $(DOMAIN)-prov-sys || terraform workspace new $(DOMAIN)-prov-sys && \

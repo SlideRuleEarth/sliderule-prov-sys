@@ -44,14 +44,13 @@ def main(domain, mfa_code):
                 rqst = {"username": ps_username, "password": ps_password, "mfa_code": mfa_code}
                 headers = {'Content-Type': 'application/json'}
                 if domain == 'localhost':
-                    host = "http://localhost:8080/api/disable_provisioning/"
+                    host = "http://localhost/api/disable_provisioning/"
                 else:
                     host = "https://ps." + domain + "/api/disable_provisioning/"
                 rsps = session.put(host, data=json.dumps(rqst), headers=headers, timeout=request_timeout)
                 logger.info(' Provisioning system returned => {}'.format(rsps))
                 try:
                     rsps_body = rsps.json()
-                    logger.info(' Provisioning system returned => {}'.format(rsps_body))
                 except json.JSONDecodeError:
                     logger.error(f' Failed to decode JSON response')
                     return 1

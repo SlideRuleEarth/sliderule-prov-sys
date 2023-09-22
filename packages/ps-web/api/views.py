@@ -418,7 +418,7 @@ class DisableProvisioningSerializer(serializers.Serializer):
 )
 class DisableProvisioningView(generics.UpdateAPIView):
     '''
-    USED FOR PROVISIONING SYSTEM DEVELOPMENT ONLY!
+    USED BY PROVISIONING SYSTEM DEVELOPERS ONLY!
     Takes a username, password and mfa_code and disables provisioning for ALL clusters in the domain.
     This is used when provisioning a new Provisioining System cluster.
     This can only be done by a PS_Developer. 
@@ -430,6 +430,7 @@ class DisableProvisioningView(generics.UpdateAPIView):
         username = request.data.get('username')
         password = request.data.get('password')
         mfa_code = request.data.get('mfa_code')
+        LOG.info(f"{username} is attempting to disable provisioning")
 
         if not all([username, password, mfa_code]):
             return Response({'status': "FAILED","error_msg":"Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
@@ -439,7 +440,7 @@ class DisableProvisioningView(generics.UpdateAPIView):
             if user.groups.filter(name='PS_Developer').exists():
                 login(request, user)
                 try:
-                    if mfa_code == os.environ.get('MFA_CODE'):
+                    if mfa_code == os.environ.get('MFA_PLACEHOLDER'):
                         set_PROVISIONING_DISABLED(redis_interface,'True')
                     else:
                         return Response({'status': "FAILED","error_msg":"Invalid MFA code"}, status=status.HTTP_400_BAD_REQUEST)
