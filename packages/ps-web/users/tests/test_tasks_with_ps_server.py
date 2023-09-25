@@ -145,7 +145,7 @@ def test_SetUp(initialize_test_environ,setup_logging):
     assert(call_SetUp(orgAccountObj))
 
 @pytest.mark.real_ps_server
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ):
     org_account_id = get_test_org().id

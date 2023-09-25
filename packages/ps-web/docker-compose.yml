@@ -54,6 +54,7 @@ services:
       - GRPC_TIMEOUT_SECS=1800
       - COOLOFF_SECS=0
       - REDIS_HOST=redis
+      - MFA_PLACEHOLDER=123456
     expose:
       - 8000
     image: ${DOCKER_REPO}/sliderule-ps-web:${PS_WEB_DOCKER_TAG}

@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from users.models import Membership, OrgAccount, User, Cluster, OrgNumNode
 from users.ps_errors import ClusterDeployAuthError
 import logging
+import json
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -25,6 +26,8 @@ from users.global_constants import *
 from oauth2_provider.views.generic import ProtectedResourceView
 from django.http import JsonResponse
 from django.contrib.auth import authenticate, login
+from django.conf import settings
+
 
 LOG = logging.getLogger('django')
 JWT_authenticator = JWTAuthentication()
@@ -431,15 +434,27 @@ class DisableProvisioningView(generics.UpdateAPIView):
         password = request.data.get('password')
         mfa_code = request.data.get('mfa_code')
         LOG.info(f"{username} is attempting to disable provisioning")
+        LOG.info(f"request.data: {request.data}")
+        LOG.info(f"request: {request}")
+        #LOG.info(f"Raw request body: {request.body.decode('utf-8')}")  # Decoding bytes to string
+        LOG.info(f"Request data: {request.data}")
+        LOG.info(f"HTTP Method: {request.method}")
+        LOG.info(f"Path Info: {request.path_info}")
+        if request.user.is_authenticated:
+            LOG.info(f"Authenticated User: {request.user.username}")
+        else:
+            LOG.info("User not authenticated.")
+        LOG.info(f"Query Parameters: {request.query_params}")
 
         if not all([username, password, mfa_code]):
             return Response({'status': "FAILED","error_msg":"Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
-
+        LOG.info(f"authenicating username:{username}")
         user = authenticate(request, username=username, password=password)
         if user is not None:
             if user.groups.filter(name='PS_Developer').exists():
                 login(request, user)
                 try:
+                    LOG.info(f"mfa_code:{mfa_code} MFA_PLACEHOLDER:{os.environ.get('MFA_PLACEHOLDER')} DOMAIN:{os.environ.get('DOMAIN')} TZ={os.environ.get('TZ')}")
                     if mfa_code == os.environ.get('MFA_PLACEHOLDER'):
                         set_PROVISIONING_DISABLED(redis_interface,'True')
                     else:

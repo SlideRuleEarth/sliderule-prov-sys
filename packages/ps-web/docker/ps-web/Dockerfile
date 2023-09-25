@@ -31,6 +31,7 @@ COPY --chown=reg_user:reg_user ./stage/api                  /home/reg_user/ps/ap
 COPY --chown=reg_user:reg_user ./stage/templates            /home/reg_user/ps/templates/
 COPY --chown=reg_user:reg_user ./stage/users                /home/reg_user/ps/users/
 COPY --chown=reg_user:reg_user ./stage/.versions            .versions
+COPY --chown=reg_user:reg_user ./stage/scripts              scripts
 
 COPY --chown=reg_user:reg_user . .
 

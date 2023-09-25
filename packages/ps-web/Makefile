@@ -55,6 +55,7 @@ ps-web-stage : ps-web-clean-stage
 	cp -R templates docker/ps-web/stage/
 	cp -R users docker/ps-web/stage/
 	cp -R ../ps-server/protos docker/ps-web/stage/
+	cp -R ../../scripts docker/ps-web/stage/
 
 ps-server-test-stub-clean-stage : # clean docker stage directory
 	rm -rf docker/ps-server-test-stub/stage

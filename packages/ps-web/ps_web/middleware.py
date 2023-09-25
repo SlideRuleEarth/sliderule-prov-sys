@@ -29,3 +29,25 @@ class OAuthToolkitGroupProtectionMiddleware:
             if not (request.user.is_authenticated and (request.user.is_superuser or request.user.groups.filter(name=allowed_group_name).exists())):
                 LOG.critical(f"Forbade access to user:{request.user} for view_class:{view_class}")
                 return HttpResponseForbidden()
+
+class EarlyLoggingMiddleware:
+    '''
+    used in conjuction with the SETTINGS MIDDLEWARE section entry : 
+    ps_web.middleware.EarlyLoggingMiddleware to log a request before 
+    it is processed by the rest of the middleware
+    '''
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        for attribute in dir(request):
+            value = getattr(request, attribute, None)
+            LOG.info(f"{attribute}: {value}")
+        
+        response = self.get_response(request)
+        return response
+
+
+        response = self.get_response(request)
+        return response
+

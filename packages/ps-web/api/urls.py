@@ -20,7 +20,7 @@ urlpatterns = [
     path('remove_user_org_num_nodes_reqs/<str:org_name>/', views.RemoveUserNumNodesReqsView.as_view(), name='remove-user-org-num-nodes-reqs'),
     path('remove_all_org_num_nodes_reqs/<str:org_name>/', views.RemoveAllNumNodesReqsView.as_view(), name='remove-all-org-num-nodes-reqs'),
     path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
-    path('disable_provisioning/', views.DisableProvisioningView.as_view(), name='disable-provisioning'),
+    path('disable_provisioning/', views.DisableProvisioningView.as_view(), name='api-disable-provisioning'),
     re_path(r'^oauth2/', include('oauth2_provider.urls', namespace='oauth2_provider')),
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
