@@ -958,6 +958,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 
     response = client.post(url,HTTP_ACCEPT='application/json')
     assert((response.status_code == 200) or (response.status_code == 302))
+    assert(is_in_messages(response, "ownertestuser cleaned all PENDING org node reqs for test_org",logger))
     assert OrgNumNode.objects.count() == 1
 
     # now clear the active one
@@ -967,6 +968,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 
     response = client.post(url,HTTP_ACCEPT='application/json')
     assert((response.status_code == 200) or (response.status_code == 302))
+    assert(is_in_messages(response, "Successfully deleted active Org Num Node requests",logger))
     assert OrgNumNode.objects.count() == 0
 
 

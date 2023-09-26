@@ -214,7 +214,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
     assert((f'Updating {orgAccountObj.name} cluster' in json_data['msg']) or (f'Deploying {orgAccountObj.name} cluster' in json_data['msg']))
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize_test_environ):

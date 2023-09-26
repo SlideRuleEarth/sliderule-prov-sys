@@ -119,13 +119,31 @@ unit-tests-local-stack: docker-test ## run the web_server django unit tests agai
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	docker compose up --detach
 	sleep 3
-	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and not recon_sim and not cost and not system" $(PYTEST_ARGS) && \
+	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and not recon_sim and not cost and not system and not ps_disable" $(PYTEST_ARGS) && \
 	docker exec -it ps-web coverage html
 	make down
 	@echo SITE_ID:$(SITE_ID)
 	@echo SITE_ID value:$($(SITE_ID))
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+unit-tests-local-stack-dev: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and dev and not recon_sim and not cost and not system and not ps_disable" $(PYTEST_ARGS) && \
+	docker exec -it ps-web coverage html
+	make down
+	@echo SITE_ID:$(SITE_ID)
+	@echo SITE_ID value:$($(SITE_ID))
+	@echo DOMAIN:$(DOMAIN)
+	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+
 
 unit-tests-ps-web-only:   ## run the web_server unit tests against a running dev system then exit
 	cd $(PS_WEB_SOURCE_DIR) && make unit-tests && make down

@@ -14,6 +14,7 @@ from users.views import add_org_cluster_orgcost
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
+from django.contrib.messages import get_messages
 
 from users.tasks import init_new_org_memberships,loop_iter,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,RedisInterface,set_PROVISIONING_DISABLED
 from django.core import serializers
@@ -91,6 +92,18 @@ def create_test_user(first_name,last_name, email, username, password, verify=Non
     if verify:
         assert verify_user(new_user)
     return new_user
+
+def is_in_messages(response,string_to_check,logger):
+    messages = list(get_messages(response.wsgi_request))
+    for message in messages:
+        logger.info(f"message:{message}")   
+    # since we can get a 302 on success or failure lets check for the message
+    retStatus = any(string_to_check in str(message) for message in messages)
+    if retStatus:
+        logger.info(f"retStatus:{retStatus} for:{string_to_check}")
+    else:
+        logger.error(f"retStatus:{retStatus} for:{string_to_check}")
+    return retStatus
 
 def log_ONN():
     # Order by org, then by owner (username), and finally by desired_num_nodes (descending)
@@ -860,3 +873,4 @@ def verify_upload(s3_client, s3_bucket, s3_key, original_json_string):
     except Exception as e:
         logger.error(f"Failed to verify JSON at {s3_key} in bucket {s3_bucket}. Error: {e}")
         return False
+    

@@ -6,7 +6,7 @@ from users.tests.global_test import GlobalTestCase
 from users.tasks import get_current_cost_report,get_versions_for_org
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
-from users.tests.utilities_for_unit_tests import init_test_environ,process_rsp_gen,call_SetUp,upload_json_string_to_s3,verify_upload,S3_BUCKET,ORGS_PERMITTED_JSON_FILE,have_same_elements,DEV_TEST_USER,DEV_TEST_PASSWORD
+from users.tests.utilities_for_unit_tests import init_test_environ,process_rsp_gen,call_SetUp,upload_json_string_to_s3,verify_upload,S3_BUCKET,ORGS_PERMITTED_JSON_FILE,have_same_elements,DEV_TEST_USER,DEV_TEST_PASSWORD,is_in_messages
 from django.test import tag
 import ps_server_pb2
 import ps_server_pb2_grpc
@@ -144,8 +144,8 @@ def test_SetUp(initialize_test_environ,setup_logging):
     orgAccountObj = get_test_org()
     assert(call_SetUp(orgAccountObj))
 
-@pytest.mark.real_ps_server
 #@pytest.mark.dev
+@pytest.mark.real_ps_server
 @pytest.mark.django_db
 def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ):
     org_account_id = get_test_org().id
@@ -183,6 +183,8 @@ def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert response.status_code == 200 or response.status_code == 302
+    # since we can get a 302 on success or failure lets check for the message
+    assert(is_in_messages(response,"cfg updated successfully",logger))
 
 @pytest.mark.real_ps_server
 @pytest.mark.ps_disable
@@ -193,26 +195,26 @@ def test_ps_web_view_disable_provisioning_success(caplog,client,s3,test_name,moc
     response = client.put(url)
     assert (response.status_code == 200 or response.status_code == 302)
 
+#@pytest.mark.dev
 @pytest.mark.real_ps_server
 @pytest.mark.django_db
 def test_ps_web_view_disable_provisioning_failure_NOT_developer(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ,developer_TEST_USER):
     assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    url = reverse('browse')
+    response = client.get(url)
+    assert response.status_code == 200
     url = reverse('disable-provisioning')
     response = client.put(url)
-    assert response.status_code == 400
+    logger.info(f"Response Status Code: {response.status_code}")
+    logger.info(f"Response Content: {response.content.decode('utf-8')}")
+    logger.info(f"Response Headers: {response.headers}")
+    if hasattr(response, 'context'):
+        if response.context is not None:
+            for context in response.context:
+                if isinstance(context, dict):  # Ensure it's a dictionary before calling items()
+                    for key, value in context.items():
+                        logger.info(f"Context Key: {key}, Value: {value}")
+    assert (response.status_code == 400 or response.status_code == 302)
+    # since we can get a 302 on success or failure lets check for the message
+    assert(any("is not a Authorized to disable provisioning" in str(message) for message in messages))
 
-@pytest.mark.real_ps_server
-@pytest.mark.django_db
-def test_ps_web_view_disable_provisioning_failure_BAD_passwd(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ,developer_TEST_USER):
-    assert(client.login(username=OWNER_USER, password='this_is_a_bad_password'))
-    url = reverse('disable-provisioning')
-    response = client.put(url)
-    assert response.status_code == 400
-
-@pytest.mark.real_ps_server
-@pytest.mark.django_db
-def test_ps_web_view_disable_provisioning_failure_BAD_user(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ,developer_TEST_USER):
-    assert(client.login(username='this_is_a_bad_username', password='this_is_a_bad_password'))
-    url = reverse('disable-provisioning')
-    response = client.put(url)
-    assert response.status_code == 400

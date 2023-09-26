@@ -349,8 +349,10 @@ def clearOrgNumNodesReqs(request, pk):
             jrsp = remove_num_node_requests(request.user,orgAccountObj)
             if jrsp['status'] == 'SUCCESS':
                 messages.info(request,jrsp['msg'])
+                LOG.info(jrsp['msg'])
             else:
-                messages.error(request,jrsp['error_msg'])           
+                messages.error(request,jrsp['error_msg']) 
+                LOG.error(jrsp['error_msg'])          
         # GET just displays org_manage_cluster
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
@@ -427,6 +429,7 @@ def orgConfigure(request, pk):
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
             handler.flush()
+        messages.info(request,f'org {orgAccountObj.name} cfg updated successfully')
         return redirect('org-manage-cluster',pk=orgAccountObj.id)
     else:
         messages.error(request,"Unauthorized access")

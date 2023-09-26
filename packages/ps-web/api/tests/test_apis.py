@@ -245,7 +245,7 @@ def test_disable_provisioning_idempotent(caplog,client,mock_email_backend,develo
     assert response.status_code == 200 
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
 def test_disable_provisioning_failure_NOT_developer(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
@@ -259,16 +259,30 @@ def test_disable_provisioning_failure_NOT_developer(caplog,client,mock_email_bac
     json_str = json.dumps(data)
     logger.info(json_str)
     response = client.put(url,json=data,content_type= 'application/json', accept= 'application/json')
+
+    logger.info(f"Response Status Code: {response.status_code}")
+    logger.info(f"Response Content: {response.content.decode('utf-8')}")
+    logger.info(f"Response Headers: {response.headers}")
+    if hasattr(response, 'context'):
+        if response.context is not None:
+            for context in response.context:
+                if isinstance(context, dict):  # Ensure it's a dictionary before calling items()
+                    for key, value in context.items():
+                        logger.info(f"Context Key: {key}, Value: {value}")
+
+
     logger.info(f"status:{response.status_code}")
     if response.content:
         json_data = json.loads(response.content)
         logger.info(f"rsp:{json_data}")
     else:
         logger.info(f"response:{response}")
+
+
     assert response.status_code == 400 # User is not developer  
  
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
 def test_disable_provisioning_failure_WRONG_mfa(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
@@ -291,7 +305,7 @@ def test_disable_provisioning_failure_WRONG_mfa(caplog,client,mock_email_backend
     assert response.status_code == 400 # wrong mfa code 
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
 def test_disable_provisioning_failure_WRONG_password(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
