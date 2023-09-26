@@ -58,6 +58,10 @@ redis_interface = RedisInterface()
 
 def set_PROVISIONING_DISABLED(redis_interface,val):
     try:
+        if val == 'True':
+            LOG.critical(f"set_PROVISIONING_DISABLED({redis_interface},{val})")
+        else:
+            LOG.info(f"set_PROVISIONING_DISABLED({redis_interface},{val})")
         redis_connection = redis_interface.get_connection()
         redis_connection.set('PROVISIONING_DISABLED', val)
     except Exception as e:

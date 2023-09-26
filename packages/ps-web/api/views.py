@@ -22,6 +22,7 @@ from rest_framework.decorators import api_view
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenBackendError
 from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED,redis_interface
+from users.utils import user_in_one_of_these_groups,disable_provisioning
 from users.global_constants import *
 from oauth2_provider.views.generic import ProtectedResourceView
 from django.http import JsonResponse
@@ -434,18 +435,6 @@ class DisableProvisioningView(generics.UpdateAPIView):
         password = request.data.get('password')
         mfa_code = request.data.get('mfa_code')
         LOG.info(f"{username} is attempting to disable provisioning")
-        LOG.info(f"request.data: {request.data}")
-        LOG.info(f"request: {request}")
-        #LOG.info(f"Raw request body: {request.body.decode('utf-8')}")  # Decoding bytes to string
-        LOG.info(f"Request data: {request.data}")
-        LOG.info(f"HTTP Method: {request.method}")
-        LOG.info(f"Path Info: {request.path_info}")
-        if request.user.is_authenticated:
-            LOG.info(f"Authenticated User: {request.user.username}")
-        else:
-            LOG.info("User not authenticated.")
-        LOG.info(f"Query Parameters: {request.query_params}")
-
         if not all([username, password, mfa_code]):
             return Response({'status': "FAILED","error_msg":"Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
         LOG.info(f"authenicating username:{username}")
@@ -456,17 +445,21 @@ class DisableProvisioningView(generics.UpdateAPIView):
                 try:
                     LOG.info(f"mfa_code:{mfa_code} MFA_PLACEHOLDER:{os.environ.get('MFA_PLACEHOLDER')} DOMAIN:{os.environ.get('DOMAIN')} TZ={os.environ.get('TZ')}")
                     if mfa_code == os.environ.get('MFA_PLACEHOLDER'):
-                        set_PROVISIONING_DISABLED(redis_interface,'True')
+                        req_msg = f"User:{request.user.username} requested disable provisioning"
+                        LOG.critical(f"{req_msg}")   
+                        error_msg, disable_msg, rsp_msg = disable_provisioning(request.user,req_msg)    
+                        if error_msg and error_msg != '':
+                            LOG.error(request, error_msg)
+                            return Response({'status': "FAILED","error_msg":'FAILED to disable provisioning'}, status=500)
                     else:
                         return Response({'status': "FAILED","error_msg":"Invalid MFA code"}, status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
-                    return Response({'status': "FAILED","error_msg":f"Failed to disable provisioning: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                
+                    return Response({'status': "FAILED","error_msg":f"Failed to disable provisioning: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)               
                 jrsp = {'status': "SUCCESS","msg":"You have disabled provisioning! Re-Deploy required!"}
                 http_status=status.HTTP_200_OK
             else:
                 jrsp = {'status': "FAILED","error_msg":"User is not a PS_Developer"}
-                http_status=status.HTTP_400_BAD_REQUEST
+                http_status=status.HTTP_401_UNAUTHORIZED
         else:
             jrsp = {'status': "FAILED","error_msg":"Invalid username/password"}
             http_status=status.HTTP_400_BAD_REQUEST

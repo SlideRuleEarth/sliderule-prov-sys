@@ -81,9 +81,9 @@ def main():
     bucket_name = 'sliderule'
     response = re_create_s3_bucket(bucket_name)
     #logger.info(f"Created S3 bucket with response: {response}")
-    logger.info(f"Created S3 bucket:{bucket_name} from cwd:{os.getcwd()}")
 
     local_directory = os.getenv('S3_TEST_FILES')
+    logger.info(f"Created S3 bucket:{bucket_name} from cwd:{os.getcwd()} local-dir-->S3_TEST_FILES:{local_directory}")
     if local_directory is None or local_directory == "":
         raise Exception("S3_TEST_FILES environment variable is not set")
     bucket_folder = 'prov-sys'

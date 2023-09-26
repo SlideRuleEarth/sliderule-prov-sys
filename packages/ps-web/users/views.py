@@ -20,7 +20,7 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups
+from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
 from .tasks import get_versions_for_org, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
 from django.core.mail import send_mail
 from django.conf import settings
@@ -888,27 +888,14 @@ def provSysAdmin(request):
 
 @login_required(login_url='account_login')
 @verified_email_required
-def disableProvisioning(request):    
-    if user_in_one_of_these_groups(user=request.user,groups=['PS_Developer']):
-        try:
-            with ps_client.create_client_channel("shutdown") as channel:
-                stub = ps_server_pb2_grpc.ShutdownServiceStub(channel)
-                timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
-                req_msg = f"User:{request.user.username} requested shutdown"
-                LOG.critical(f"{req_msg}")
-                rsp = stub.Shutdown(ps_server_pb2.ShutdownReq(message=req_msg),timeout=timeout)
-                rsp_msg = f"ps-server ShutDown response:{rsp}"
-                messages.warning(request, rsp_msg)
-                LOG.critical(rsp_msg)  
-                set_PROVISIONING_DISABLED(redis_interface,'True')
-                msg = f"User:{request.user.username} has disabled provisioning!"
-                messages.warning(request, msg)
-                LOG.critical(msg)
-        except Exception as e:
-            error_msg = f"Caught Exception in requested shutdown"
-            messages.error(request, error_msg) 
-            LOG.exception(f"{error_msg}")
-    else:
-        LOG.warning(f"User {request.user.username} attempted to disable provisioning")
-        messages.error(request, 'You are not a PS_Developer')
+def disableProvisioning(request): 
+    req_msg = f"User:{request.user.username} requested disable provisioning"
+    LOG.critical(f"{req_msg}")   
+    error_msg, disable_msg, rsp_msg = disable_provisioning(request.user,req_msg)    
+    if error_msg and error_msg != '':
+        messages.error(request, error_msg)
+    if disable_msg and disable_msg != '':
+        messages.warning(request, disable_msg)
+    if rsp_msg and rsp_msg != '':
+        messages.warning(request, rsp_msg)
     return redirect('browse')

@@ -15,7 +15,7 @@ from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
 
-from users.tasks import init_new_org_memberships,loop_iter,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user
+from users.tasks import init_new_org_memberships,loop_iter,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,RedisInterface,set_PROVISIONING_DISABLED
 from django.core import serializers
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -361,6 +361,8 @@ def init_test_environ(  name=None,
     clusterObj = Cluster.objects.get(org=new_orgAccountObj)
     this_logger.info(f"org:{new_orgAccountObj.name} provision_env_ready:{clusterObj.provision_env_ready} clusterObj.cur_version:{clusterObj.cur_version} orgAccountObj.version:{new_orgAccountObj.version} ")       
     assert clusterObj.cur_version == new_orgAccountObj.version
+    redis_interface = RedisInterface()
+    set_PROVISIONING_DISABLED(redis_interface,'False')
     return new_orgAccountObj,new_orgAccountObj.owner
 
 

@@ -173,7 +173,7 @@ def test_download_dir_when_deployed(setup_logging, s3, get_S3_BUCKET, test_name,
     # must leave terraform env as we found it so other tests don't fail because of this test
     assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, name=test_name, logger=setup_logging)
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.parametrize("version", ['v3', 'latest'])
 def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_name, control_instance, version):
     s3_client = s3

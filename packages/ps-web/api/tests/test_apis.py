@@ -187,7 +187,7 @@ def test_membership_status(caplog,client,mock_email_backend,initialize_test_envi
 #@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
-@pytest.mark.ps_disable_provisioning
+@pytest.mark.ps_disable # will shut down the provisioning system
 def test_disable_provisioning_success(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
     url = reverse('api-disable-provisioning')
     data={
@@ -206,14 +206,51 @@ def test_disable_provisioning_success(caplog,client,mock_email_backend,developer
         logger.info(f"response:{response}")
     assert response.status_code == 200 # Bingo!
 
-
 #@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
-@pytest.mark.ps_disable_provisioning
-def test_disable_provisioning_failure(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
+@pytest.mark.ps_disable # will shut down the provisioning system
+def test_disable_provisioning_idempotent(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
     url = reverse('api-disable-provisioning')
-    logger.info(f"url:{url} OWNER_USER:{OWNER_USER} OWNER_PASSWORD:{OWNER_PASSWORD} DEV_TEST_USER:{DEV_TEST_USER} DEV_TEST_PASSWORD:{DEV_TEST_PASSWORD} DEV_TEST_EMAIL:{DEV_TEST_EMAIL} ")
+    data={
+        "username":DEV_TEST_USER,
+        "password":DEV_TEST_PASSWORD, 
+        "mfa_code":"123456"
+        }
+    #json_str = json.dumps(data)
+    #logger.info(json_str)
+    response = client.put(url,data=data,content_type= 'application/json', HTTP_ACCEPT= 'application/json')
+    logger.info(f"status:{response.status_code}")
+    if response.content:
+        json_data = json.loads(response.content)
+        logger.info(f"rsp:{json_data}")
+    else:
+        logger.info(f"response:{response}")
+    assert response.status_code == 200 
+    response = client.put(url,data=data,content_type= 'application/json', HTTP_ACCEPT= 'application/json')
+    logger.info(f"status:{response.status_code}")
+    if response.content:
+        json_data = json.loads(response.content)
+        logger.info(f"rsp:{json_data}")
+    else:
+        logger.info(f"response:{response}")
+    assert response.status_code == 200 
+    response = client.put(url,data=data,content_type= 'application/json', HTTP_ACCEPT= 'application/json')
+    logger.info(f"status:{response.status_code}")
+    if response.content:
+        json_data = json.loads(response.content)
+        logger.info(f"rsp:{json_data}")
+    else:
+        logger.info(f"response:{response}")
+    assert response.status_code == 200 
+
+
+@pytest.mark.dev
+@pytest.mark.django_db
+#@pytest.mark.ps_server_stubbed
+def test_disable_provisioning_failure_NOT_developer(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
+    url = reverse('api-disable-provisioning')
+    logger.info(f"url:{url} OWNER_USER:{OWNER_USER} OWNER_PASSWORD:{OWNER_PASSWORD}  ")
     data = {
         "username": OWNER_USER,
         "password": OWNER_PASSWORD,
@@ -229,6 +266,14 @@ def test_disable_provisioning_failure(caplog,client,mock_email_backend,developer
     else:
         logger.info(f"response:{response}")
     assert response.status_code == 400 # User is not developer  
+ 
+
+@pytest.mark.dev
+@pytest.mark.django_db
+#@pytest.mark.ps_server_stubbed
+def test_disable_provisioning_failure_WRONG_mfa(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
+    url = reverse('api-disable-provisioning')
+    logger.info(f"url:{url}  DEV_TEST_USER:{DEV_TEST_USER} DEV_TEST_PASSWORD:{DEV_TEST_PASSWORD} DEV_TEST_EMAIL:{DEV_TEST_EMAIL} ")
     data={
         "username":DEV_TEST_USER,
         "password":DEV_TEST_PASSWORD, 
@@ -245,3 +290,25 @@ def test_disable_provisioning_failure(caplog,client,mock_email_backend,developer
         logger.info(f"response:{response}")
     assert response.status_code == 400 # wrong mfa code 
 
+
+@pytest.mark.dev
+@pytest.mark.django_db
+#@pytest.mark.ps_server_stubbed
+def test_disable_provisioning_failure_WRONG_password(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
+    url = reverse('api-disable-provisioning')
+    logger.info(f"url:{url}  DEV_TEST_USER:{DEV_TEST_USER} DEV_TEST_PASSWORD:{DEV_TEST_PASSWORD} DEV_TEST_EMAIL:{DEV_TEST_EMAIL} ")
+    data={
+        "username":DEV_TEST_USER,
+        "password":DEV_TEST_PASSWORD+"wrong", 
+        "mfa_code":"123456"
+        }
+    json_str = json.dumps(data)
+    logger.info(json_str)
+    response = client.put(url,json=data,content_type= 'application/json', accept= 'application/json')
+    logger.info(f"status:{response.status_code}")
+    if response.content:
+        json_data = json.loads(response.content)
+        logger.info(f"rsp:{json_data}")
+    else:
+        logger.info(f"response:{response}")
+    assert response.status_code == 400 # wrong mfa code 

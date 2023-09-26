@@ -136,13 +136,45 @@ unit-tests-ps-web-only-dev:   ## run the web_server unit tests against a running
 unit-tests-ps-server-only:   ## run the ps_server unit tests  then exit
 	cd $(PS_SERVER_SOURCE_DIR) && make unit-tests && make down
 
+unit-tests-disable_provisioning: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_success" && \
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent" && \
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_ps_web_view_disable_provisioning_success" && \
+	make down
+	@echo SITE_ID:$(SITE_ID)
+	@echo SITE_ID value:$($(SITE_ID))
+	@echo DOMAIN:$(DOMAIN)
+	@echo BLD_ENVVER:$(BLD_ENVVER)
+
 system-tests:  ## (incurs $$) run the web_server django unit tests against a running dev system then exit
 	pytest -m "system" $(PYTEST_ARGS)
 
 unit-tests: ## run all unit-tests
 	make unit-tests-ps-web-only && \
 	make unit-tests-ps-server-only && \
-	make unit-tests-local-stack 
+	make unit-tests-local-stack && \
+	make unit-tests-disable_provisioning
 
 unit-tests-with-cost: docker ## (incurs $$) run the web_server django unit tests against a running dev system then exit
 	make down && \

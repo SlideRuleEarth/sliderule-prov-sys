@@ -25,7 +25,7 @@ from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
 from django_celery_results.models import TaskResult
-from .tasks import get_ps_versions, get_org_queue_name_str, get_org_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface
+from .tasks import get_ps_versions, get_org_queue_name_str, get_org_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface, redis_interface
 from oauth2_provider.models import AbstractApplication
 from users.global_constants import *
 
@@ -188,10 +188,10 @@ def init_celery():
     hostname = socket.gethostname()
     LOG.info(f"hostname:{hostname}")
     domain = os.environ.get("DOMAIN")
-    redis_interface = RedisInterface()
+    local_redis_interface = RedisInterface()
 
-    set_PROVISIONING_DISABLED(redis_interface,'False')
-    LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED(redis_interface)}")
+    set_PROVISIONING_DISABLED(local_redis_interface,'False')
+    LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED(local_redis_interface)}")
 
     if 'localhost' in domain: 
         SHELL_CMD=f"celery -A ps_web flower --url_prefix=flower".split(" ")
@@ -230,6 +230,33 @@ def init_celery():
         except Exception as e:
             LOG.error(f"Caught an exception creating queues: {e}")
         LOG.info(f"forked subprocess--> {SHELL_CMD}")
+
+def disable_provisioning(user,req_msg):
+    error_msg=''
+    disable_msg=''
+    rsp_msg=''
+    if user_in_one_of_these_groups(user,groups=['PS_Developer']):
+        try:
+            if get_PROVISIONING_DISABLED(redis_interface):
+                LOG.warning(f"User {user.username} attempted to disable provisioning but it was already disabled")
+                rsp_msg = f"User {user.username} attempted to disable provisioning but it was already disabled"
+            else:
+                with ps_client.create_client_channel("shutdown") as channel:
+                    stub = ps_server_pb2_grpc.ShutdownServiceStub(channel)
+                    timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
+                    rsp = stub.Shutdown(ps_server_pb2.ShutdownReq(message=req_msg),timeout=timeout)
+                    rsp_msg = f"ps-server ShutDown response:{rsp}"
+                    LOG.critical(rsp_msg)  
+                    set_PROVISIONING_DISABLED(redis_interface,'True')
+                    disable_msg = f"User:{user.username} has disabled provisioning!"
+                    LOG.critical(disable_msg)
+        except Exception as e:
+            error_msg = f"Caught Exception in requested shutdown"
+            LOG.exception(f"{error_msg}")
+    else:
+        LOG.warning(f"User {user.username} attempted to disable provisioning")
+        error_msg = f"User {user.username} is not a Authorized to disable provisioning"
+    return error_msg, disable_msg, rsp_msg
 
 def get_ps_server_versions():
     '''
