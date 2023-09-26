@@ -216,5 +216,4 @@ def test_ps_web_view_disable_provisioning_failure_NOT_developer(caplog,client,s3
                         logger.info(f"Context Key: {key}, Value: {value}")
     assert (response.status_code == 400 or response.status_code == 302)
     # since we can get a 302 on success or failure lets check for the message
-    assert(any("is not a Authorized to disable provisioning" in str(message) for message in messages))
-
+    assert(is_in_messages(response,"is not a Authorized to disable provisioning",logger))
