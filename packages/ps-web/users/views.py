@@ -20,8 +20,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
-from .tasks import get_versions_for_org, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
+from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,org_has_max_ddt,is_this_month
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -232,7 +232,10 @@ def orgManageCluster(request, pk):
             pending_destroy = True
         except OwnerPSCmd.DoesNotExist:
             pending_destroy = False
-        context = { 'org': orgAccountObj, 
+        context = { 'org': orgAccountObj,
+                    'org_has_min_ddt': is_this_month(orgAccountObj.min_ddt), 
+                    'org_has_cur_ddt': is_this_month(orgAccountObj.cur_ddt), 
+                    'org_has_max_ddt': is_this_month(orgAccountObj.max_ddt), 
                     'cluster': clusterObj, 
                     'add_onn_form': add_onn_form,
                     'config_form': config_form, 
@@ -660,8 +663,8 @@ def browse(request):
             org_by_name = {}
             org_is_public = {}
             orgs = get_all_orgAccountObjs()
-            org_show_shutdown_date = {}
             user_is_org_admin = {}
+            org_has_ddt = {}
             unaffiliated = 0
             any_memberships = False
             any_ownerships = False
@@ -682,7 +685,6 @@ def browse(request):
                         org_cluster_cur_nodes.update({o.name: clusterObj.cur_nodes})
                         org_cluster_cur_version.update({o.name: clusterObj.cur_version})
                         org_cluster_connection_status.update({o.name: clusterObj.connection_status})
-                        org_show_shutdown_date.update({o.name: (o.min_ddt <= (datetime.now(timezone.utc) + timedelta(days=365)))})
                         user_is_org_admin.update({o.name: request.user.groups.filter(name=f'{o.name}_Admin').exists()})
                         LOG.info(f"org:{o.name} user_is_org_admin:{request.user.groups.filter(name=f'{o.name}_Admin').exists()} is_public:{o.is_public} owner:{o.owner.username} active_user:{active_user.username}")
                         if o.owner == request.user:
@@ -690,6 +692,7 @@ def browse(request):
                         user_is_owner.update({o.name: (o.owner == request.user)})
                         org_by_name.update({o.name: o})
                         org_is_public.update({o.name: o.is_public})
+                        org_has_ddt.update({o.name:  org_has_max_ddt(o)})
                         for m in members:
                             if o is not None and m.org is not None:
                                 if o.name == m.org.name:
@@ -710,13 +713,13 @@ def browse(request):
                     'user_is_org_admin': user_is_org_admin,
                     'org_by_name': org_by_name,
                     'org_pending': org_pending,
+                    'org_has_ddt': org_has_ddt,
                     'org_accounts': orgs,
                     'org_cluster_deployed_state': org_cluster_deployed_state,
                     'org_cluster_is_deployed': org_cluster_is_deployed,
                     'org_cluster_cur_nodes': org_cluster_cur_nodes,
                     'org_cluster_cur_version': org_cluster_cur_version,
                     'org_cluster_connection_status': org_cluster_connection_status,
-                    'org_show_shutdown_date': org_show_shutdown_date,
                     'org_cluster_active_ps_cmd': org_cluster_active_ps_cmd,
                     'user_is_owner': user_is_owner,
                     'user_is_developer': request.user.groups.filter(name='PS_Developer').exists(),
@@ -735,7 +738,7 @@ def browse(request):
             LOG.info("No orgs exist!")
             messages.info(
                 request, 'No orgs exist yet; Have staff user create them')
-
+        update_all_burn_rates()
     except Exception as e:
         LOG.exception("caught exception:")
         #emsg = "SW Error:%"+repr(e)

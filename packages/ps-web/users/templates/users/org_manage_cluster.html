@@ -371,6 +371,44 @@
                                                 <dd>{{org.balance}} - [Max:{{org.max_allowance}}]</dd>
                                                 <dt>Fiscal YTD accrued cost</dt>
                                                 <dd>{{org.fytd_accrued_cost}}</dd>
+                                                <dt>Low-Budget Auto-Shutdown</dt>
+                                                <dd>
+                                                    <dl class="nested-dl fs-6 ml-3">
+                                                        <dt>Min Nodes ({{org.min_node_cap}})</dt>
+                                                            {% if org.min_node_cap == 0 %}
+                                                                <dd>No Shutdown</dd>
+                                                            {% else %}
+                                                                {% if has_min_ddt %}
+                                                                    <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ org.min_ddt.isoformat }}">Loading...</p></dd>
+                                                                {% else %}
+                                                                    <dd>With Allowance: No Shutdown</dd>
+                                                                    <dd>Without Allowance: <p class="utc-time mx-1 my-1" data-utc-time="{{ org.min_ddt.isoformat }}">Loading...</p></dd>
+                                                                {% endif %}
+                                                            {% endif %}
+                                                        <dt>Cur Nodes ({{cur_nodes}})</dt>
+                                                            {% if cur_nodes %}
+                                                                {% if cur_nodes == 0 %}
+                                                                    <dd>No Shutdown</dd>
+                                                                {% else %}
+                                                                    {% if has_cur_ddt %}
+                                                                        <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ org.cur_ddt.isoformat }}">Loading...</p></dd>
+                                                                    {% else %}
+                                                                        <dd>With Allowance: No Shutdown</dd>
+                                                                        <dd>Without Allowance: <p class="utc-time mx-1 my-1" data-utc-time="{{ org.cur_ddt.isoformat }}">Loading...</p></dd>
+                                                                    {% endif %}
+                                                                {% endif %}
+                                                            {% else %}
+                                                                <dd>None</dd>
+                                                            {% endif %}
+                                                        <dt>Max Nodes ({{org.max_node_cap}})</dt>
+                                                        {% if has_max_ddt %}
+                                                            <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ org.max_ddt.isoformat }}">Loading...</p></dd>
+                                                        {% else %}
+                                                            <dd>With Allowance: No Shutdown</dd>
+                                                            <dd>Without Allowance: <p class="utc-time mx-1 my-1" data-utc-time="{{ org.max_ddt.isoformat }}">Loading...</p></dd>
+                                                        {% endif %}
+                                                    </dl>
+                                                </dd>
                                             </dl>
                                         </div>
                                     </div>

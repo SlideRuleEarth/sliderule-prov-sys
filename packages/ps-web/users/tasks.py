@@ -655,7 +655,35 @@ def update_cur_num_nodes(orgAccountObj):
             LOG.error(f"FAILED: caught exception on NumNodesReq")
             raise
 
+def get_hrs_left(orgAccountObj, hrly_rate):
+    '''
+        This prevents floating point overflow and underflow.
+    '''
+    if hrly_rate == 0:
+        LOG.error('Division by zero detected for hrs_left. Setting to max limit.')
+        return 24*60*365*10  # TEN_YEARS_IN_MINUTES
+    
+    hrs_left = float(orgAccountObj.balance) / hrly_rate
+
+    # Check for overflow
+    TEN_YEARS_IN_MINUTES = 24*60*365*10
+
+    if hrs_left == float('inf') or hrs_left == float('-inf'):
+        LOG.error('Floating point overflow detected for hrs_left')
+        hrs_left = TEN_YEARS_IN_MINUTES  # default for overflow
+
+    # Check for underflow (though this is less likely to be an issue in this context)
+    elif hrs_left == 0.0 and orgAccountObj.balance != 0:
+        LOG.error('Floating point underflow detected for hrs_left')
+        hrs_left = 1  # set to one hour for underflow
+
+    return min(hrs_left, TEN_YEARS_IN_MINUTES)
+
+
 def update_burn_rates(orgAccountObj):
+    '''
+     This routine calcuates the burn rates for minimum nodes current nodes and maximum nodes configurations.
+    '''
     global FMT
     try:
         update_cur_num_nodes(orgAccountObj)
@@ -666,13 +694,16 @@ def update_burn_rates(orgAccountObj):
         if min_nodes > 0:
             forecast_min_hrly = orgAccountObj.node_mgr_fixed_cost + min_nodes*orgAccountObj.node_fixed_cost
         else:
-            forecast_min_hrly = 0.0001
+            if not orgAccountObj.allow_auto_shutdown:
+                forecast_cur_hrly = max(orgAccountObj.node_mgr_fixed_cost,0.001)
+            else:
+                forecast_cur_hrly = 0.001
 
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if clusterObj.cur_nodes > 0:
             forecast_cur_hrly = orgAccountObj.node_mgr_fixed_cost + clusterObj.cur_nodes*orgAccountObj.node_fixed_cost
         else:
-            forecast_cur_hrly = 0.0001
+            forecast_cur_hrly = 0.001
 
         forecast_max_hrly = orgAccountObj.node_mgr_fixed_cost + max_nodes*orgAccountObj.node_fixed_cost
 
@@ -682,25 +713,25 @@ def update_burn_rates(orgAccountObj):
         orgAccountObj.save(update_fields=['min_hrly','cur_hrly','max_hrly'])
         #LOG.info(f"{orgAccountObj.name} forecast min/cur/max hrly burn rate {forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
 
-        min_hrs_left = float(orgAccountObj.balance)/forecast_min_hrly
+        min_hrs_left = get_hrs_left(orgAccountObj, forecast_min_hrly)
         # LOG.info("%s = %s/%s    min_hrs_left = balance/forecast_min_hrly (assuming no allowance) ",
         #          min_hrs_left, orgAccountObj.balance, forecast_min_hrly)
-        min_ddt = datetime.now(timezone.utc)+timedelta(hours=min_hrs_left)
+        orgAccountObj.min_ddt = datetime.now(timezone.utc)+timedelta(hours=min_hrs_left)
 
-        cur_hrs_left = float(orgAccountObj.balance)/forecast_cur_hrly
+        cur_hrs_left = get_hrs_left(orgAccountObj, forecast_cur_hrly)
         # LOG.info("%s = %s/%s    cur_hrs_left = balance/forecast_cur_hrly  (assuming no allowance) ",
         #          cur_hrs_left, orgAccountObj.balance, forecast_cur_hrly)
-        cur_ddt = datetime.now(timezone.utc)+timedelta(hours=cur_hrs_left)
+        orgAccountObj.cur_ddt = datetime.now(timezone.utc)+timedelta(hours=cur_hrs_left)
 
-        max_hrs_left = float(orgAccountObj.balance)/forecast_max_hrly
+        max_hrs_left = get_hrs_left(orgAccountObj, forecast_max_hrly)
         # LOG.info("%s = %s/%s    max_hrs_left = balance/forecast_max_hrly  (assuming no allowance) ",
         #          max_hrs_left, orgAccountObj.balance, forecast_max_hrly)
-        max_ddt = datetime.now(timezone.utc)+timedelta(hours=max_hrs_left)
+        orgAccountObj.max_ddt = datetime.now(timezone.utc)+timedelta(hours=max_hrs_left)
+        
+        orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt'])
 
-        # LOG.info("Assuming no allowance.... min_ddt: %s cur_ddt: %s max_ddt: %s",
-        #          datetime.strftime(min_ddt, FMT),
-        #          datetime.strftime(cur_ddt, FMT),
-        #          datetime.strftime(max_ddt, FMT))
+        LOG.info(f"{orgAccountObj.name} min_hrly: {forecast_min_hrly} cur_hrly: {forecast_cur_hrly} max_hrly: {forecast_max_hrly}")
+        LOG.info(f"Assuming no allowance....{orgAccountObj.name}  min_ddt: {datetime.strftime(orgAccountObj.min_ddt, FMT)} cur_ddt: {datetime.strftime(orgAccountObj.cur_ddt, FMT)} max_ddt: {datetime.strftime(orgAccountObj.max_ddt, FMT)}")
         return forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly
 
     except Exception as e:

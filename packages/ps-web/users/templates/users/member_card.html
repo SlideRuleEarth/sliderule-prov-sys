@@ -47,11 +47,11 @@
                                     {% include 'users/cluster_state.html' %}
                                 </dd>
                                 {% endwith %}
-                                <dt>Auto-Shutdown</dt>
-                                {% if show_shutdown_date %}
-                                    <dd>{{org.min_ddt|date:"Y-m-d H:i:s A T"}}</dd>
+                                <dt>Low-Budget Auto-Shutdown</dt>
+                                {% if org_has_ddt %}
+                                    <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ membership.org.max_ddt.isoformat }}">Loading...</p></dd>
                                 {% else %}
-                                    <p>No shutdown scheduled</p>
+                                    <dd>No Shutdown</dd>
                                 {% endif %}
                                 <dt>Monthly Allowance</dt>
                                 <dd>{{membership.org.monthly_allowance}}</dd>

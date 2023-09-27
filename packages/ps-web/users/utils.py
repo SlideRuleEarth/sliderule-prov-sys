@@ -326,3 +326,23 @@ def has_admin_privilege(user,orgAccountObj):
     has_privilege = user_in_one_of_these_groups(user,[f'{orgAccountObj.name}_Admin','PS_Developer']) or (user == orgAccountObj.owner)
     LOG.info(f"has_admin_privilege: {has_privilege} user:{user} orgAccountObj.owner:{orgAccountObj.owner} orgAccountObj.name:{orgAccountObj.name}")
     return has_privilege
+
+def next_month_first_day():
+    # Calculate the beginning of the next month
+    now = datetime.now(timezone.utc)
+    if now.month == 12:
+        next_month_first_day = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        next_month_first_day = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+    return next_month_first_day
+
+def org_has_max_ddt(orgAccountObj):
+    if orgAccountObj.max_ddt < next_month_first_day():
+        return True
+
+def is_this_month(t):
+    return t < next_month_first_day()
+
+import logging
+
+LOG = logging.getLogger(__name__)
