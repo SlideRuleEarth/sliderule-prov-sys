@@ -13,6 +13,10 @@ logging.basicConfig(level=logging.INFO)
 
 def main(domain, mfa_code):
 
+    if mfa_code == 'skip': # Check if mfa_code is blank
+        logger.info("skipping disable_provisioning") # Log the message
+        return 0 # Exit with success code
+
     ps_username = None
     ps_password = None
     session = requests.Session()
