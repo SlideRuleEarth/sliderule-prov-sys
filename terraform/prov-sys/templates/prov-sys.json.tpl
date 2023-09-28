@@ -19,6 +19,10 @@
         },
         "environment": [
             {
+                "name": "PS_SERVER_PORT",
+                "value": "${ps_server_port}"
+            },
+            {
                 "name": "GRPC_POLL_STRATEGY",
                 "value": "poll"
             },
