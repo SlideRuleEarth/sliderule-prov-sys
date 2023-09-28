@@ -482,6 +482,7 @@ def orgAccountForecast(request, pk):
     clusterObj = Cluster.objects.get(org__name=orgAccountObj.name)
     LOG.info("%s %s", request.method, orgAccountObj.name)
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
+        update_burn_rates(orgAccountObj) # also updates clusterObj.version clusterObj.cur_nodes
         update_ddt(orgAccountObj) # ddt is drop dead times i.e. when the org runs out of money for min current and max node configurations
         create_all_forecasts(orgAccountObj)
         show_min_shutdown_date = (orgAccountObj.min_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
