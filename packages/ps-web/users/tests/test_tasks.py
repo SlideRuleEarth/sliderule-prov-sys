@@ -76,12 +76,12 @@ def test_update_burn_rates(tasks_module,initialize_test_environ):
     init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1)
 
     assert(orgAccountObj.owner.username == OWNER_USER)
-    forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly = update_burn_rates(orgAccountObj)
+    update_burn_rates(orgAccountObj)
     logger.info(f"{orgAccountObj.min_node_cap}/{clusterObj.cur_nodes}/{orgAccountObj.max_node_cap}")
-    logger.info(f"{forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
-    assert(pytest_approx(forecast_min_hrly,0.0001))
-    assert(pytest_approx(forecast_cur_hrly,0.379))
-    assert(pytest_approx(forecast_max_hrly,2.413))
+    logger.info(f"{orgAccountObj.min_hrly}/{orgAccountObj.cur_hrly}/{orgAccountObj.max_hrly}")
+    assert(pytest_approx(orgAccountObj.min_hrly,0.0001))
+    assert(pytest_approx(orgAccountObj.cur_hrly,0.379))
+    assert(pytest_approx(orgAccountObj.max_hrly,2.413))
 
 #@pytest.mark.dev
 @pytest.mark.django_db

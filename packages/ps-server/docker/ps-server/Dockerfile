@@ -24,5 +24,6 @@ COPY ./stage/test_misc/ /ps_server/test_misc/
 COPY ./stage/.ps_server_versions /ps_server/
 
 EXPOSE 50051/tcp
+EXPOSE 50052/tcp
 RUN python -m grpc_tools.protoc -I/ps_server/protos/ --python_out=. --grpc_python_out=. /ps_server/protos/ps_server.proto
 ENTRYPOINT [ "/ps_server/docker-entrypoint.sh" ]

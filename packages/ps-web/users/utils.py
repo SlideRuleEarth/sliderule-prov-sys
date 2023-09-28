@@ -241,15 +241,9 @@ def disable_provisioning(user,req_msg):
                 LOG.warning(f"User {user.username} attempted to disable provisioning but it was already disabled")
                 rsp_msg = f"User {user.username} attempted to disable provisioning but it was already disabled"
             else:
-                with ps_client.create_client_channel("shutdown") as channel:
-                    stub = ps_server_pb2_grpc.ShutdownServiceStub(channel)
-                    timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
-                    rsp = stub.Shutdown(ps_server_pb2.ShutdownReq(message=req_msg),timeout=timeout)
-                    rsp_msg = f"ps-server ShutDown response:{rsp}"
-                    LOG.critical(rsp_msg)  
-                    set_PROVISIONING_DISABLED(redis_interface,'True')
-                    disable_msg = f"User:{user.username} has disabled provisioning!"
-                    LOG.critical(disable_msg)
+                set_PROVISIONING_DISABLED(redis_interface,'True')
+                disable_msg = f"User:{user.username} has disabled provisioning!"
+                LOG.critical(disable_msg)
         except Exception as e:
             error_msg = f"Caught Exception in requested shutdown"
             LOG.exception(f"{error_msg}")
@@ -335,14 +329,7 @@ def next_month_first_day():
     else:
         next_month_first_day = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
     return next_month_first_day
-
-def org_has_max_ddt(orgAccountObj):
-    if orgAccountObj.max_ddt < next_month_first_day():
-        return True
-
-def is_this_month(t):
-    return t < next_month_first_day()
-
+   
 import logging
 
 LOG = logging.getLogger(__name__)

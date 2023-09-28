@@ -206,11 +206,20 @@ def test_disable_provisioning_success(caplog,client,mock_email_backend,developer
         logger.info(f"response:{response}")
     assert response.status_code == 200 # Bingo!
 
-#@pytest.mark.dev
+def check_disable_provisioning_rsp(json_data,alternate_port):
+    assert json_data['status'] == 'SUCCESS'
+    assert json_data['msg'] == 'You have disabled provisioning! Re-Deploy required!'
+    assert json_data['alternate_port'] == alternate_port
+    return True
+
+@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
 @pytest.mark.ps_disable # will shut down the provisioning system
 def test_disable_provisioning_idempotent(caplog,client,mock_email_backend,developer_TEST_USER,initialize_test_environ):
+    ps_server_port = os.environ.get('PS_SERVER_PORT')
+    ps_server_alternate_port = os.environ.get('PS_SERVER_ALTERNATE_PORT')
+    logger.info(f"test_disable_provisioning_idempotent PS_SERVER_PORT:{ps_server_port} PS_SERVER_ALTERNATE_PORT:{ps_server_alternate_port}")
     url = reverse('api-disable-provisioning')
     data={
         "username":DEV_TEST_USER,
@@ -223,26 +232,34 @@ def test_disable_provisioning_idempotent(caplog,client,mock_email_backend,develo
     logger.info(f"status:{response.status_code}")
     if response.content:
         json_data = json.loads(response.content)
-        logger.info(f"rsp:{json_data}")
+        logger.info(f"json_data:{json_data}")
+        check_disable_provisioning_rsp(json_data,alternate_port=ps_server_alternate_port)
+        assert response.status_code == 200 
     else:
-        logger.info(f"response:{response}")
-    assert response.status_code == 200 
+        logger.error(f"response:{response}")
+        assert False
+
     response = client.put(url,data=data,content_type= 'application/json', HTTP_ACCEPT= 'application/json')
     logger.info(f"status:{response.status_code}")
     if response.content:
         json_data = json.loads(response.content)
         logger.info(f"rsp:{json_data}")
+        check_disable_provisioning_rsp(json_data,alternate_port=ps_server_alternate_port) # this toggles back and forth
+        assert response.status_code == 200 
     else:
-        logger.info(f"response:{response}")
-    assert response.status_code == 200 
+        logger.error(f"response:{response}")
+        assert False
+
     response = client.put(url,data=data,content_type= 'application/json', HTTP_ACCEPT= 'application/json')
     logger.info(f"status:{response.status_code}")
     if response.content:
         json_data = json.loads(response.content)
         logger.info(f"rsp:{json_data}")
+        check_disable_provisioning_rsp(json_data,alternate_port=ps_server_alternate_port)
+        assert response.status_code == 200 
     else:
-        logger.info(f"response:{response}")
-    assert response.status_code == 200 
+        logger.error(f"response:{response}")
+        assert False
 
 
 #@pytest.mark.dev

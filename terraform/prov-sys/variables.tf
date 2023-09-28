@@ -41,13 +41,6 @@ variable "ps_web_health_check_path" {
   default     = "/ping/"
 }
 
-# ps-server load balancer
-
-variable "ps_server_host" {
-  description = "url for ps_web gRpc client to connect to ps_server gRpc server"
-  default     = "ps-server"
-}
-
 variable "ps_server_health_check_path" {
   description = "Health check path for the default target group"
   default     = "/"
@@ -141,11 +134,18 @@ variable "nginx_port" {
     description = "port exposed by nginx app container"
     default     = 80
 }
+
 variable "redis_port" {
     description = "port exposed by redis container"
     default     = 6379
 }
-variable "ps_server_container_port" {
+
+variable "ps_server_host" {
+  description = "url for ps_web gRpc client to connect to ps_server gRpc server"
+  default     = "ps-server"
+}
+
+variable "ps_server_port" {
     description = "port exposed by container"
     default     = 50051
 }

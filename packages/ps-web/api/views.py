@@ -451,13 +451,31 @@ class DisableProvisioningView(generics.UpdateAPIView):
                         if error_msg and error_msg != '':
                             LOG.error(request, error_msg)
                             return Response({'status': "FAILED","error_msg":'FAILED to disable provisioning'}, status=500)
+                        else:
+                            port_str = os.environ.get("PS_SERVER_PORT")
+                            LOG.info(f"PS_SERVER_PORT:{port_str}")
+                            if port_str is None:
+                                LOG.error(f"PS_SERVER_PORT is not set in environment")
+                                port_str = "50052"
+                            if port_str == "50051":
+                                port_str = "50052"
+                            else:
+                                port_str = "50051"
+                            jrsp = {
+                                'status': "SUCCESS",
+                                "msg":"You have disabled provisioning! Re-Deploy required!",
+                                "alternate_port":f"{port_str}",
+                                }
+                            http_status=status.HTTP_200_OK
+                            LOG.info(f"{jrsp}")
                     else:
+                        LOG.error(f"Invalid MFA code")
                         return Response({'status': "FAILED","error_msg":"Invalid MFA code"}, status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
+                    LOG.exception("caught exception:")
                     return Response({'status': "FAILED","error_msg":f"Failed to disable provisioning: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)               
-                jrsp = {'status': "SUCCESS","msg":"You have disabled provisioning! Re-Deploy required!"}
-                http_status=status.HTTP_200_OK
             else:
+                LOG.error(f"{username} attempted to disable provisioning but is not a PS_Developer")
                 jrsp = {'status': "FAILED","error_msg":"User is not a PS_Developer"}
                 http_status=status.HTTP_401_UNAUTHORIZED
         else:

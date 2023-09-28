@@ -655,29 +655,46 @@ def update_cur_num_nodes(orgAccountObj):
             LOG.error(f"FAILED: caught exception on NumNodesReq")
             raise
 
-def get_hrs_left(orgAccountObj, hrly_rate):
-    '''
-        This prevents floating point overflow and underflow.
-    '''
-    if hrly_rate == 0:
-        LOG.error('Division by zero detected for hrs_left. Setting to max limit.')
-        return 24*60*365*10  # TEN_YEARS_IN_MINUTES
-    
-    hrs_left = float(orgAccountObj.balance) / hrly_rate
 
-    # Check for overflow
-    TEN_YEARS_IN_MINUTES = 24*60*365*10
+def calculate_ddt(dollar_balance, dollar_allowance, dollar_hourly_burn_rate):
+    # Convert all inputs to Decimal
+    dollar_balance = Decimal(dollar_balance)
+    dollar_allowance = Decimal(dollar_allowance)
+    dollar_hourly_burn_rate = Decimal(dollar_hourly_burn_rate)
 
-    if hrs_left == float('inf') or hrs_left == float('-inf'):
-        LOG.error('Floating point overflow detected for hrs_left')
-        hrs_left = TEN_YEARS_IN_MINUTES  # default for overflow
+    # Start from the current time
+    current_time = datetime.now(timezone.utc)
 
-    # Check for underflow (though this is less likely to be an issue in this context)
-    elif hrs_left == 0.0 and orgAccountObj.balance != 0:
-        LOG.error('Floating point underflow detected for hrs_left')
-        hrs_left = 1  # set to one hour for underflow
+    # Calculate the end time as 10 years from now
+    TEN_YEARS_IN_DAYS = 365*10
+    end_time = current_time + timedelta(days=TEN_YEARS_IN_DAYS) 
 
-    return min(hrs_left, TEN_YEARS_IN_MINUTES)
+    # Keep checking every hour until balance is 0 or 10 years have passed
+    while current_time <= end_time:
+        # If it's midnight on the first day of the month, add the dollar allowance
+        if current_time.hour == 0 and current_time.day == 1:
+            dollar_balance += dollar_allowance
+
+        # Subtract the hourly burn rate
+        dollar_balance -= dollar_hourly_burn_rate
+
+        # If balance is 0 or less, return the current time
+        if dollar_balance <= 0:
+            return current_time
+
+        # Increment current time by 1 hour
+        current_time += timedelta(hours=1)
+
+    # If past end time, return end time
+    return end_time
+
+
+def update_ddt(orgAccountObj):
+    orgAccountObj.min_ddt = calculate_ddt(orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.min_hrly)
+    orgAccountObj.cur_ddt = calculate_ddt(orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.cur_hrly)
+    orgAccountObj.max_ddt = calculate_ddt(orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.max_hrly)
+    orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt'])
+
 
 
 def update_burn_rates(orgAccountObj):
@@ -685,55 +702,34 @@ def update_burn_rates(orgAccountObj):
      This routine calcuates the burn rates for minimum nodes current nodes and maximum nodes configurations.
     '''
     global FMT
+    MINIMUM_HRLY_RATE = 0.0001
     try:
         update_cur_num_nodes(orgAccountObj)
 
-        min_nodes = orgAccountObj.min_node_cap
-        max_nodes = orgAccountObj.max_node_cap
-
-        if min_nodes > 0:
-            forecast_min_hrly = orgAccountObj.node_mgr_fixed_cost + min_nodes*orgAccountObj.node_fixed_cost
+        if orgAccountObj.min_node_cap > 0:
+            orgAccountObj.min_hrly = orgAccountObj.node_mgr_fixed_cost + orgAccountObj.min_node_cap*orgAccountObj.node_fixed_cost
         else:
-            if not orgAccountObj.allow_auto_shutdown:
-                forecast_cur_hrly = max(orgAccountObj.node_mgr_fixed_cost,0.001)
+            if not orgAccountObj.destroy_when_no_nodes:
+                orgAccountObj.min_hrly = max(orgAccountObj.node_mgr_fixed_cost,MINIMUM_HRLY_RATE)
             else:
-                forecast_cur_hrly = 0.001
+                orgAccountObj.min_hrly = MINIMUM_HRLY_RATE
 
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if clusterObj.cur_nodes > 0:
-            forecast_cur_hrly = orgAccountObj.node_mgr_fixed_cost + clusterObj.cur_nodes*orgAccountObj.node_fixed_cost
+            orgAccountObj.cur_hrly = orgAccountObj.node_mgr_fixed_cost + clusterObj.cur_nodes*orgAccountObj.node_fixed_cost
         else:
-            forecast_cur_hrly = 0.001
+            orgAccountObj.cur_hrly = MINIMUM_HRLY_RATE
 
-        forecast_max_hrly = orgAccountObj.node_mgr_fixed_cost + max_nodes*orgAccountObj.node_fixed_cost
+        orgAccountObj.max_hrly = orgAccountObj.node_mgr_fixed_cost + orgAccountObj.max_node_cap*orgAccountObj.node_fixed_cost
 
-        orgAccountObj.min_hrly      = forecast_min_hrly
-        orgAccountObj.cur_hrly      = forecast_cur_hrly
-        orgAccountObj.max_hrly      = forecast_max_hrly
         orgAccountObj.save(update_fields=['min_hrly','cur_hrly','max_hrly'])
-        #LOG.info(f"{orgAccountObj.name} forecast min/cur/max hrly burn rate {forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
+        #LOG.info(f"{orgAccountObj.name} forecast min/cur/max hrly burn rate {orgAccountObj.min_hrly}/{orgAccountObj.cur_hrly}/{orgAccountObj.max_hrly}")
 
-        min_hrs_left = get_hrs_left(orgAccountObj, forecast_min_hrly)
-        # LOG.info("%s = %s/%s    min_hrs_left = balance/forecast_min_hrly (assuming no allowance) ",
-        #          min_hrs_left, orgAccountObj.balance, forecast_min_hrly)
-        orgAccountObj.min_ddt = datetime.now(timezone.utc)+timedelta(hours=min_hrs_left)
-
-        cur_hrs_left = get_hrs_left(orgAccountObj, forecast_cur_hrly)
-        # LOG.info("%s = %s/%s    cur_hrs_left = balance/forecast_cur_hrly  (assuming no allowance) ",
-        #          cur_hrs_left, orgAccountObj.balance, forecast_cur_hrly)
-        orgAccountObj.cur_ddt = datetime.now(timezone.utc)+timedelta(hours=cur_hrs_left)
-
-        max_hrs_left = get_hrs_left(orgAccountObj, forecast_max_hrly)
-        # LOG.info("%s = %s/%s    max_hrs_left = balance/forecast_max_hrly  (assuming no allowance) ",
-        #          max_hrs_left, orgAccountObj.balance, forecast_max_hrly)
-        orgAccountObj.max_ddt = datetime.now(timezone.utc)+timedelta(hours=max_hrs_left)
         
-        orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt'])
+        LOG.info(f"{orgAccountObj.name} min_hrly: {orgAccountObj.min_hrly} cur_hrly: {orgAccountObj.cur_hrly} max_hrly: {orgAccountObj.max_hrly}")
+        LOG.info(f"{orgAccountObj.name}  min_ddt: {datetime.strftime(orgAccountObj.min_ddt, FMT)} cur_ddt: {datetime.strftime(orgAccountObj.cur_ddt, FMT)} max_ddt: {datetime.strftime(orgAccountObj.max_ddt, FMT)}")
 
-        LOG.info(f"{orgAccountObj.name} min_hrly: {forecast_min_hrly} cur_hrly: {forecast_cur_hrly} max_hrly: {forecast_max_hrly}")
-        LOG.info(f"Assuming no allowance....{orgAccountObj.name}  min_ddt: {datetime.strftime(orgAccountObj.min_ddt, FMT)} cur_ddt: {datetime.strftime(orgAccountObj.cur_ddt, FMT)} max_ddt: {datetime.strftime(orgAccountObj.max_ddt, FMT)}")
-        return forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly
-
+ 
     except Exception as e:
         LOG.exception('Exception caught')
         return None, None, None
@@ -927,7 +923,7 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
         This routine calculates hourly,daily,and monthly forecasts for a given hourly rate.
         The tm represents the start time of the given period
     '''
-
+    LOG.info(f"create_forecast for {orgAccountObj.name} hourlyRate:{hourlyRate} daily_days_to_forecast:{daily_days_to_forecast} hourly_days_to_forecast:{hourly_days_to_forecast}")
     daily_days_to_forecast = daily_days_to_forecast or 91
     hourly_days_to_forecast = hourly_days_to_forecast or 14
     #LOG.info("%s %2g", orgAccountObj.name, hrlyRate)
@@ -1089,6 +1085,7 @@ def cost_accounting(orgObj):
     try:
         if update_ccr(orgObj):
             update_burn_rates(orgObj) # auto scaling changes num_nodes
+            update_ddt(orgObj)
             create_all_forecasts(orgObj)
     except Exception as e:
         LOG.exception("Error in cost_accounting: %s", repr(e))
@@ -1329,7 +1326,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
             LOG.info(f"Update {orgAccountObj.name}")
             psCmdResultObj.expiration = expire_time
             if psCmdResultObj.expiration is None or psCmdResultObj.expiration > datetime.now(timezone.utc):
-                cost_accounting(orgAccountObj) ## update DDT to check for broke orgs
+                update_ddt(orgAccountObj) ## update DDT to check for broke orgs
                 LOG.info(f"Update {orgAccountObj.name} test times min_ddt:{orgAccountObj.min_ddt} max_ddt:{orgAccountObj.max_ddt} now:{datetime.now(timezone.utc)} MIN_HRS_TO_LIVE_TO_START:{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
                 if (orgAccountObj.max_ddt - datetime.now(timezone.utc)) < timedelta(hours=MIN_HRS_TO_LIVE_TO_START):
                     emsg = f"cluster:{orgAccountObj.name} Raise LowBalanceError ddt:{orgAccountObj.max_ddt.strftime(FMT)}"
@@ -1602,6 +1599,7 @@ def hourly_processing(self):
         return True
     except Exception as e:
         LOG.exception('Exception caught')
+        LOG.error(f"hourly_processing {self.request.id} finished with an exception")
         return False
 
 @shared_task(name="flush_expired_refresh_tokens",bind=True)  # name is referenced in settings.py

@@ -63,7 +63,15 @@ def main(domain, mfa_code):
                     return 1
                 rsps.raise_for_status()
                 logger.info(' Provisioning system returned => {}'.format(rsps_body))
-                return 0
+                # Check for alternate_port in response and print it to stdout
+                alternate_port = rsps_body.get("alternate_port", None)
+                if alternate_port:
+                    print(alternate_port)
+                    return 0
+                else:
+                    logger.error(f' Missing alternate_port => {rsps_body}')
+                    print("50052")
+                    return 0
             except requests.exceptions.HTTPError as e:
                 logger.error(f' Provisioning system returned:{e} ===> Status:{rsps.status_code} {rsps_body["error_msg"]}')
                 return 1

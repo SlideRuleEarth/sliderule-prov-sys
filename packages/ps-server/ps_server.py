@@ -1720,16 +1720,6 @@ def idempotent_migration():
     # this can be removed after a successful migration and deploy to production servers
     update_key_in_dir(local_dir=get_root_dir(), target_filename="SetUp.json", old_key="orgName", new_key="name")
 
-class ShutdownServiceServicer(ps_server_pb2_grpc.ShutdownServiceServicer):
-
-    def __init__(self, server):
-        self.server = server
-
-    def Shutdown(self, request, context):
-        LOG.critical("Shutdown request received. Server will shut down...")
-        LOG.critical(f"Shutdown request:{MessageToString(request)}")
-        self.server.stop(0)
-        return ps_server_pb2.ShutdownRsp(message="ps-server will shut down.")
 
 
 @contextlib.contextmanager
@@ -1740,7 +1730,6 @@ def run_server(host, port, use_tls):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     ps_server_pb2_grpc.add_ControlServicer_to_server(Control(), server)
     ps_server_pb2_grpc.add_AccountServicer_to_server(Account(), server)
-    ps_server_pb2_grpc.add_ShutdownServiceServicer_to_server(ShutdownServiceServicer(server), server)
     if use_tls == "True":
         # We use this in development so we test the ps-web client with tls certs
         SERVER_CERTIFICATE = _load_credential_from_file("credentials/ps-server.crt")
@@ -1764,12 +1753,14 @@ def main():
     LOG = logging.getLogger("ps_logger")
     LOG.info(f"Starting ps-server @ {datetime.now().astimezone()}")
     try:
+        fallback_port = os.environ.get("PS_SERVER_PORT", "50051")
+        LOG.info(f"fallback_port:{fallback_port}")
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--host", nargs="?", type=str, default="[::]", help="the listening host"
         )
         parser.add_argument(
-            "--port", nargs="?", type=int, default=50051, help="the listening port"
+            "--port", nargs="?", type=int, default=fallback_port, help="the listening port"
         )
         parser.add_argument(
             "--use_tls",

@@ -20,8 +20,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,org_has_max_ddt,is_this_month
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
+from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api,update_ddt,create_all_forecasts
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -185,8 +185,8 @@ def orgManageCluster(request, pk):
         except PsCmdResult.DoesNotExist:
             psCmdResultObjs = None
         #LOG.info("%s is_deployed?:%s  deployed_state:%s", orgAccountObj.name, clusterObj.is_deployed,clusterObj.deployed_state)
-        update_burn_rates(orgAccountObj) # updates clusterObj.version clusterObj.cur_nodes
-
+        update_burn_rates(orgAccountObj) # also updates clusterObj.version clusterObj.cur_nodes
+        update_ddt(orgAccountObj) # ddt is drop dead times i.e. when the org runs out of money for min current and max node configurations
         if request.method == "POST":
             form_submit_value = request.POST.get('form_submit')
             LOG.info(f"form_submit_value:{form_submit_value}")
@@ -233,9 +233,6 @@ def orgManageCluster(request, pk):
         except OwnerPSCmd.DoesNotExist:
             pending_destroy = False
         context = { 'org': orgAccountObj,
-                    'org_has_min_ddt': is_this_month(orgAccountObj.min_ddt), 
-                    'org_has_cur_ddt': is_this_month(orgAccountObj.cur_ddt), 
-                    'org_has_max_ddt': is_this_month(orgAccountObj.max_ddt), 
                     'cluster': clusterObj, 
                     'add_onn_form': add_onn_form,
                     'config_form': config_form, 
@@ -485,7 +482,8 @@ def orgAccountForecast(request, pk):
     clusterObj = Cluster.objects.get(org__name=orgAccountObj.name)
     LOG.info("%s %s", request.method, orgAccountObj.name)
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
-        cost_accounting(orgAccountObj)
+        update_ddt(orgAccountObj) # ddt is drop dead times i.e. when the org runs out of money for min current and max node configurations
+        create_all_forecasts(orgAccountObj)
         show_min_shutdown_date = (orgAccountObj.min_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
         show_cur_shutdown_date = (orgAccountObj.cur_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
         context = {'org': orgAccountObj, 'cluster':clusterObj, 'show_cur_shutdown_date': show_cur_shutdown_date, 'show_min_shutdown_date': show_min_shutdown_date}
@@ -675,6 +673,8 @@ def browse(request):
                         LOG.error(f"DELETING org:{o.name}")
                         o.delete()
                     else:    
+                        update_ddt(o)
+                        org_has_ddt.update({o.name:  (o.cur_ddt < datetime.now(timezone.utc)+timedelta(days=(10*365)))})
                         found_m = False
                         pend = False
                         members = get_MembershipsForUser(active_user)
@@ -692,7 +692,6 @@ def browse(request):
                         user_is_owner.update({o.name: (o.owner == request.user)})
                         org_by_name.update({o.name: o})
                         org_is_public.update({o.name: o.is_public})
-                        org_has_ddt.update({o.name:  org_has_max_ddt(o)})
                         for m in members:
                             if o is not None and m.org is not None:
                                 if o.name == m.org.name:

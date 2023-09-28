@@ -155,6 +155,7 @@ unit-tests-ps-server-only:   ## run the ps_server unit tests  then exit
 	cd $(PS_SERVER_SOURCE_DIR) && make unit-tests && make down
 
 unit-tests-disable_provisioning: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+#   These test cause the system to be disabled so each have to be run in isolation
 	make down && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
@@ -178,12 +179,59 @@ unit-tests-disable_provisioning: docker-test ## run the web_server django unit t
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	docker compose up --detach
 	sleep 3
-	docker exec -it ps-web coverage run -m pytest -k "test_ps_web_view_disable_provisioning_success" && \
+	docker exec -it ps-web coverage run -m pytest -k "test_ps_web_view_disable_provisioning_success"
+#   now test port switching
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50052 && \
+	export PS_SERVER_ALTERNATE_PORT=50051 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+#   now switch the ports
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50051 && \
+	export PS_SERVER_ALTERNATE_PORT=50052 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
 	make down
 	@echo SITE_ID:$(SITE_ID)
 	@echo SITE_ID value:$($(SITE_ID))
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+
+unit-tests-disable_provisioning-dev: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50052 && \
+	export PS_SERVER_ALTERNATE_PORT=50051 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+#   now switch the ports
+	make down
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50051 && \
+	export PS_SERVER_ALTERNATE_PORT=50052 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+
 
 system-tests:  ## (incurs $$) run the web_server django unit tests against a running dev system then exit
 	pytest -m "system" $(PYTEST_ARGS)
