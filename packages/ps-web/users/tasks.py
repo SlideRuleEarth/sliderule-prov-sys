@@ -58,6 +58,10 @@ redis_interface = RedisInterface()
 
 def set_PROVISIONING_DISABLED(redis_interface,val):
     try:
+        if val == 'True':
+            LOG.critical(f"set_PROVISIONING_DISABLED({redis_interface},{val})")
+        else:
+            LOG.info(f"set_PROVISIONING_DISABLED({redis_interface},{val})")
         redis_connection = redis_interface.get_connection()
         redis_connection.set('PROVISIONING_DISABLED', val)
     except Exception as e:
@@ -502,11 +506,11 @@ def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cm
     LOG.info(f"status:{status} jrsp['status']:{jrsp['status']} msg:'{jrsp['msg']}' error_msg:'{jrsp['error_msg']}' ")
     return jrsp,status
 
-def get_versions():
+def get_versions_for_org(name):
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
-            versions_rsp = stub.GetVersions(ps_server_pb2.GetVersionsReq())
+            versions_rsp = stub.GetVersions(ps_server_pb2.GetVersionsReq(name=name))
             #LOG.info(f"versions_rsp:{versions_rsp}")
             return versions_rsp.versions
     except Exception as e:
@@ -651,54 +655,89 @@ def update_cur_num_nodes(orgAccountObj):
             LOG.error(f"FAILED: caught exception on NumNodesReq")
             raise
 
+
+def calculate_ddt(label, dollar_balance, dollar_allowance, dollar_hourly_burn_rate):
+    # Convert all inputs to Decimal
+    dollar_balance = Decimal(dollar_balance)
+    start_balance = dollar_balance
+    dollar_allowance = Decimal(dollar_allowance)
+    dollar_hourly_burn_rate = Decimal(dollar_hourly_burn_rate)
+
+    # Start from the current time
+    current_time = datetime.now(timezone.utc)
+
+    # Calculate the end time as 10 years from now
+    end_time = current_time + timedelta(days=TEN_YEARS_IN_DAYS)
+
+    # Log template
+    log_template = (f"{label} calculate_ddt: {{time}} Starting Balance: {start_balance:.2f} Monthly Allowance: {dollar_allowance:.2f} Hourly Burn Rate: {dollar_hourly_burn_rate:.2f}")
+
+    # Keep checking every hour until balance is 0 or 10 years have passed
+    while current_time <= end_time:
+        # If it's midnight on the first day of the month, add the dollar allowance
+        if current_time.hour == 0 and current_time.day == 1:
+            dollar_balance += dollar_allowance
+
+        # Subtract the hourly burn rate
+        dollar_balance -= dollar_hourly_burn_rate
+
+        # If balance is 0 or less, log and return the current time
+        if dollar_balance <= 0:
+            formatted_time = current_time.strftime('%Y-%m-%d %H:%M:%S')
+            LOG.info(log_template.format(time=formatted_time))
+            return current_time
+
+        # Increment current time by 1 hour
+        current_time += timedelta(hours=1)
+
+    # If past end time, log and return end time
+    formatted_end_time = end_time.strftime('%Y-%m-%d %H:%M:%S')
+    LOG.info(log_template.format(time=formatted_end_time))
+    return end_time
+
+
+def update_ddt(orgAccountObj):
+    orgAccountObj.min_ddt = calculate_ddt('min',orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.min_hrly)
+    orgAccountObj.cur_ddt = calculate_ddt('cur', orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.cur_hrly)
+    orgAccountObj.max_ddt = calculate_ddt('max',orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.max_hrly)
+    LOG.info(f"update_ddt:{orgAccountObj.name} min_ddt:{orgAccountObj.min_ddt} cur_ddt:{orgAccountObj.cur_ddt} max_ddt:{orgAccountObj.max_ddt}")
+    orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt'])
+
+
+
 def update_burn_rates(orgAccountObj):
+    '''
+     This routine calcuates the burn rates for minimum nodes current nodes and maximum nodes configurations.
+    '''
     global FMT
+    MINIMUM_HRLY_RATE = 0.0001
     try:
         update_cur_num_nodes(orgAccountObj)
 
-        min_nodes = orgAccountObj.min_node_cap
-        max_nodes = orgAccountObj.max_node_cap
-
-        if min_nodes > 0:
-            forecast_min_hrly = orgAccountObj.node_mgr_fixed_cost + min_nodes*orgAccountObj.node_fixed_cost
+        if orgAccountObj.min_node_cap > 0:
+            orgAccountObj.min_hrly = orgAccountObj.node_mgr_fixed_cost + orgAccountObj.min_node_cap*orgAccountObj.node_fixed_cost
         else:
-            forecast_min_hrly = 0.0001
+            if not orgAccountObj.destroy_when_no_nodes:
+                orgAccountObj.min_hrly = max(orgAccountObj.node_mgr_fixed_cost,MINIMUM_HRLY_RATE)
+            else:
+                orgAccountObj.min_hrly = MINIMUM_HRLY_RATE
 
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if clusterObj.cur_nodes > 0:
-            forecast_cur_hrly = orgAccountObj.node_mgr_fixed_cost + clusterObj.cur_nodes*orgAccountObj.node_fixed_cost
+            orgAccountObj.cur_hrly = orgAccountObj.node_mgr_fixed_cost + clusterObj.cur_nodes*orgAccountObj.node_fixed_cost
         else:
-            forecast_cur_hrly = 0.0001
+            orgAccountObj.cur_hrly = MINIMUM_HRLY_RATE
 
-        forecast_max_hrly = orgAccountObj.node_mgr_fixed_cost + max_nodes*orgAccountObj.node_fixed_cost
+        orgAccountObj.max_hrly = orgAccountObj.node_mgr_fixed_cost + orgAccountObj.max_node_cap*orgAccountObj.node_fixed_cost
 
-        orgAccountObj.min_hrly      = forecast_min_hrly
-        orgAccountObj.cur_hrly      = forecast_cur_hrly
-        orgAccountObj.max_hrly      = forecast_max_hrly
         orgAccountObj.save(update_fields=['min_hrly','cur_hrly','max_hrly'])
-        #LOG.info(f"{orgAccountObj.name} forecast min/cur/max hrly burn rate {forecast_min_hrly}/{forecast_cur_hrly}/{forecast_max_hrly}")
+        #LOG.info(f"{orgAccountObj.name} forecast min/cur/max hrly burn rate {orgAccountObj.min_hrly}/{orgAccountObj.cur_hrly}/{orgAccountObj.max_hrly}")
 
-        min_hrs_left = float(orgAccountObj.balance)/forecast_min_hrly
-        # LOG.info("%s = %s/%s    min_hrs_left = balance/forecast_min_hrly (assuming no allowance) ",
-        #          min_hrs_left, orgAccountObj.balance, forecast_min_hrly)
-        min_ddt = datetime.now(timezone.utc)+timedelta(hours=min_hrs_left)
+        
+        LOG.info(f"{orgAccountObj.name} min_hrly: {orgAccountObj.min_hrly} cur_hrly: {orgAccountObj.cur_hrly} max_hrly: {orgAccountObj.max_hrly}")
+        LOG.info(f"{orgAccountObj.name}  min_ddt: {datetime.strftime(orgAccountObj.min_ddt, FMT)} cur_ddt: {datetime.strftime(orgAccountObj.cur_ddt, FMT)} max_ddt: {datetime.strftime(orgAccountObj.max_ddt, FMT)}")
 
-        cur_hrs_left = float(orgAccountObj.balance)/forecast_cur_hrly
-        # LOG.info("%s = %s/%s    cur_hrs_left = balance/forecast_cur_hrly  (assuming no allowance) ",
-        #          cur_hrs_left, orgAccountObj.balance, forecast_cur_hrly)
-        cur_ddt = datetime.now(timezone.utc)+timedelta(hours=cur_hrs_left)
-
-        max_hrs_left = float(orgAccountObj.balance)/forecast_max_hrly
-        # LOG.info("%s = %s/%s    max_hrs_left = balance/forecast_max_hrly  (assuming no allowance) ",
-        #          max_hrs_left, orgAccountObj.balance, forecast_max_hrly)
-        max_ddt = datetime.now(timezone.utc)+timedelta(hours=max_hrs_left)
-
-        # LOG.info("Assuming no allowance.... min_ddt: %s cur_ddt: %s max_ddt: %s",
-        #          datetime.strftime(min_ddt, FMT),
-        #          datetime.strftime(cur_ddt, FMT),
-        #          datetime.strftime(max_ddt, FMT))
-        return forecast_min_hrly, forecast_cur_hrly, forecast_max_hrly
-
+ 
     except Exception as e:
         LOG.exception('Exception caught')
         return None, None, None
@@ -892,13 +931,11 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
         This routine calculates hourly,daily,and monthly forecasts for a given hourly rate.
         The tm represents the start time of the given period
     '''
-
     daily_days_to_forecast = daily_days_to_forecast or 91
     hourly_days_to_forecast = hourly_days_to_forecast or 14
+    LOG.info(f"create_forecast for {orgAccountObj.name} hourlyRate:{hourlyRate} daily_days_to_forecast:{daily_days_to_forecast} hourly_days_to_forecast:{hourly_days_to_forecast}")
     #LOG.info("%s %2g", orgAccountObj.name, hrlyRate)
     global FMT_HOURLY, FMT_DAILY
-    A_LONG_TIME_FROM_NOW = datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM+DISPLAY_EXP_TM_MARGIN)
-    drop_dead_time = A_LONG_TIME_FROM_NOW
     hrlyRate = float(hourlyRate)
     days_of_week,num_days_in_month = calendar.monthrange(orgAccountObj.most_recent_recon_time.year, orgAccountObj.most_recent_recon_time.month)
     ############# HOURLY #############
@@ -921,8 +958,6 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
         tm_bal_tuple.append((formatted_tm,bal))
         bal = bal - hrlyRate 
         if bal <= 0.00:
-            if tm < drop_dead_time:
-                drop_dead_time = tm
             bal = 0.00
         tm = tm + timedelta(hours=1)
     fc_hourly = json.dumps({'tm': tms, 'bal': bals})
@@ -945,8 +980,6 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
         tm_bal_tuple.append((formatted_tm,bal))
         bal = bal - (hrlyRate*24)
         if bal < 0.00:
-            if tm < drop_dead_time:
-                drop_dead_time = tm
             bal = 0.00
         tm = tm + timedelta(days=1)
     fc_daily = json.dumps({'tm': tms, 'bal': bals})
@@ -962,8 +995,7 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
     day = day_to_start.day  # 
     tm = day_to_start  # beginning of first full day
     if bal < 0:
-         drop_dead_time = tm
-         bal = 0.0
+        bal = 0.0
     #LOG.info(f"num_days_in_month:{num_days_in_month} day:{day}")
     bals.append(bal)
     formatted_tm = datetime.strftime(hr_to_start, FMT_MONTHLY)# MONTH fmt so need to be IN first partial month
@@ -975,8 +1007,6 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
             bal = bal + float(orgAccountObj.monthly_allowance)
         bal = bal - (hrlyRate*24)
         if bal < 0.00:
-            if tm < drop_dead_time:
-                drop_dead_time = tm
             bal = 0.00
         day = day + 1
         tm = tm + timedelta(days=1)
@@ -988,8 +1018,6 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
         bal = bal + float(orgAccountObj.monthly_allowance)
         bal = bal - (num_days_in_month*hrlyRate*24)
         if bal < 0.00:
-            if tm < drop_dead_time:
-                drop_dead_time = tm
             bal = 0.00
         bals.append(bal)
         formatted_tm = datetime.strftime(tm, FMT_MONTHLY)
@@ -1000,22 +1028,22 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
 
     fc_monthly = json.dumps({'tm': tms, 'bal': bals})
     fc_monthly_tm_bal = json.dumps(tm_bal_tuple)
-    return drop_dead_time, fc_hourly, fc_daily, fc_monthly, fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal
+    return fc_hourly, fc_daily, fc_monthly, fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal
 
 def create_all_forecasts(orgAccountObj):
     update_cur_num_nodes(orgAccountObj)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     LOG.info(f"Hourly burn rates: {orgAccountObj.min_hrly}/{orgAccountObj.cur_hrly}/{orgAccountObj.max_hrly}")
 
-    orgAccountObj.min_ddt, orgAccountObj.fc_min_hourly, orgAccountObj.fc_min_daily, orgAccountObj.fc_min_monthly,fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal  = create_forecast(orgAccountObj, orgAccountObj.min_hrly)
+    orgAccountObj.fc_min_hourly, orgAccountObj.fc_min_daily, orgAccountObj.fc_min_monthly,fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal  = create_forecast(orgAccountObj, orgAccountObj.min_hrly)
     #LOG.info(f"MIN fc_hourly_tm_bal:{fc_hourly_tm_bal} fc_daily_tm_bal:{fc_daily_tm_bal} fc_monthly_tm_bal:{fc_monthly_tm_bal} ")
-    #LOG.info(f"MIN min_ddt:{orgAccountObj.min_ddt.strftime(FMT)} fc_min_hourly:{orgAccountObj.fc_min_hourly},fc_min_daily:{orgAccountObj.fc_min_daily},fc_min_monthly:{orgAccountObj.fc_min_monthly}")
-    orgAccountObj.cur_ddt, orgAccountObj.fc_cur_hourly, orgAccountObj.fc_cur_daily, orgAccountObj.fc_cur_monthly,fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal = create_forecast(orgAccountObj, orgAccountObj.cur_hrly)
+    #LOG.info(f"MIN fc_min_hourly:{orgAccountObj.fc_min_hourly},fc_min_daily:{orgAccountObj.fc_min_daily},fc_min_monthly:{orgAccountObj.fc_min_monthly}")
+    orgAccountObj.fc_cur_hourly, orgAccountObj.fc_cur_daily, orgAccountObj.fc_cur_monthly,fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal = create_forecast(orgAccountObj, orgAccountObj.cur_hrly)
     #LOG.info(f"CUR fc_hourly_tm_bal:{fc_hourly_tm_bal} fc_daily_tm_bal:{fc_daily_tm_bal} fc_monthly_tm_bal:{fc_monthly_tm_bal} ")
-    #LOG.info(f"CUR cur_ddt:{orgAccountObj.cur_ddt.strftime(FMT)} fc_cur_hourly:{orgAccountObj.fc_cur_hourly},fc_cur_daily:{orgAccountObj.fc_cur_daily},fc_cur_monthly:{orgAccountObj.fc_cur_monthly}")
-    orgAccountObj.max_ddt, orgAccountObj.fc_max_hourly, orgAccountObj.fc_max_daily, orgAccountObj.fc_max_monthly,fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal = create_forecast(orgAccountObj, orgAccountObj.max_hrly)
+    #LOG.info(f"CUR fc_cur_hourly:{orgAccountObj.fc_cur_hourly},fc_cur_daily:{orgAccountObj.fc_cur_daily},fc_cur_monthly:{orgAccountObj.fc_cur_monthly}")
+    orgAccountObj.fc_max_hourly, orgAccountObj.fc_max_daily, orgAccountObj.fc_max_monthly,fc_hourly_tm_bal, fc_daily_tm_bal, fc_monthly_tm_bal = create_forecast(orgAccountObj, orgAccountObj.max_hrly)
     #LOG.info(f"MAX fc_hourly_tm_bal:{fc_hourly_tm_bal} fc_daily_tm_bal:{fc_daily_tm_bal} fc_monthly_tm_bal:{fc_monthly_tm_bal} ")
-    #LOG.info(f"MAX max_ddt:{orgAccountObj.max_ddt.strftime(FMT)} fc_max_hourly:{orgAccountObj.fc_max_hourly},fc_max_daily:{orgAccountObj.fc_max_daily},fc_max_monthly:{orgAccountObj.fc_max_monthly}")
+    #LOG.info(f"MAX fc_max_hourly:{orgAccountObj.fc_max_hourly},fc_max_daily:{orgAccountObj.fc_max_daily},fc_max_monthly:{orgAccountObj.fc_max_monthly}")
 
     LOG.info(f"min_ddt:{orgAccountObj.min_ddt.strftime(FMT)},cur_ddt:{orgAccountObj.cur_ddt.strftime(FMT)},max_ddt:{orgAccountObj.max_ddt.strftime(FMT)}")
     orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt','fc_min_hourly','fc_min_daily','fc_min_monthly','fc_cur_hourly','fc_cur_daily','fc_cur_monthly','fc_max_hourly','fc_max_daily','fc_max_monthly'])
@@ -1030,6 +1058,7 @@ def create_all_forecasts_for_all_orgs():
 def ad_hoc_cost_reconcile_for_org(orgObj):
     update_ccr(orgObj)
     update_burn_rates(orgObj)
+    update_ddt(orgObj)
     reconcile_org(orgObj)
     create_all_forecasts(orgObj)
 
@@ -1054,6 +1083,7 @@ def cost_accounting(orgObj):
     try:
         if update_ccr(orgObj):
             update_burn_rates(orgObj) # auto scaling changes num_nodes
+            update_ddt(orgObj)
             create_all_forecasts(orgObj)
     except Exception as e:
         LOG.exception("Error in cost_accounting: %s", repr(e))
@@ -1294,7 +1324,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
             LOG.info(f"Update {orgAccountObj.name}")
             psCmdResultObj.expiration = expire_time
             if psCmdResultObj.expiration is None or psCmdResultObj.expiration > datetime.now(timezone.utc):
-                cost_accounting(orgAccountObj) ## update DDT to check for broke orgs
+                update_ddt(orgAccountObj) ## update DDT to check for broke orgs
                 LOG.info(f"Update {orgAccountObj.name} test times min_ddt:{orgAccountObj.min_ddt} max_ddt:{orgAccountObj.max_ddt} now:{datetime.now(timezone.utc)} MIN_HRS_TO_LIVE_TO_START:{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
                 if (orgAccountObj.max_ddt - datetime.now(timezone.utc)) < timedelta(hours=MIN_HRS_TO_LIVE_TO_START):
                     emsg = f"cluster:{orgAccountObj.name} Raise LowBalanceError ddt:{orgAccountObj.max_ddt.strftime(FMT)}"
@@ -1567,6 +1597,7 @@ def hourly_processing(self):
         return True
     except Exception as e:
         LOG.exception('Exception caught')
+        LOG.error(f"hourly_processing {self.request.id} finished with an exception")
         return False
 
 @shared_task(name="flush_expired_refresh_tokens",bind=True)  # name is referenced in settings.py

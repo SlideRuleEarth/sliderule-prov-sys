@@ -11,6 +11,12 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-west-2
       - AWS_SESSION_TOKEN=test
+  localstack:
+    container_name: "${LOCALSTACK_DOCKER_NAME-localstack_main}"
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:4566:4566"            # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559"  # external services port range
   ps-db:
     image: postgres:13
     container_name: ps-db
@@ -48,6 +54,7 @@ services:
       - GRPC_TIMEOUT_SECS=1800
       - COOLOFF_SECS=0
       - REDIS_HOST=redis
+      - MFA_PLACEHOLDER=123456
     expose:
       - 8000
     image: ${DOCKER_REPO}/sliderule-ps-web:${PS_WEB_DOCKER_TAG}

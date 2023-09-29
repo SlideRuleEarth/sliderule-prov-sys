@@ -28,7 +28,36 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Provisioning System server """
+"""
+Provisioning System server 
+-----------------------------
+
+This module is responsible for initializing and running a gRPC server with various services. It supports both secure (TLS) and insecure connections. 
+
+Features:
+    - Configurable host and port via command-line arguments.
+    - Support for both TLS and non-TLS connections.
+    - Integrated logging for monitoring and debugging.
+    - Special handling for localhost environments, including localstack status polling.
+    - Interacts with AWS S3 to manage specific folder downloads.
+    - Provides a shutdown service to gracefully terminate the server on demand.
+
+Usage:
+    To run the server with default parameters, simply execute this script.
+    For specific configurations, use the command-line arguments:
+        --host: The listening host. Default is "[::]".
+        --port: The listening port. Default is 50051.
+        --use_tls: Whether to use TLS for secure connections. Default is "False".
+
+Dependencies:
+    - Requires and defines various helper functions and configurations, such as get_domain_env, get_ps_versions, and others.
+    - Uses gRPC for server operations and service definitions.
+
+Note:
+    It's important to ensure the necessary credentials are available if TLS is enabled, and the appropriate environment variables are set for domain and other configurations.
+
+"""
+
 import argparse
 from concurrent import futures
 import contextlib
@@ -41,10 +70,13 @@ import ps_server_pb2
 import ps_server_pb2_grpc
 import sys
 import boto3
+import botocore.exceptions
+
 from statistics import mean, fmean, stdev
 from collections import OrderedDict
 from botocore.exceptions import ClientError
 from botocore.exceptions import NoCredentialsError
+from concurrent import futures
 
 import pytz
 from datetime import datetime, timezone, timedelta
@@ -57,9 +89,6 @@ import os
 import subprocess
 import time
 import requests
-
-# import re
-# import io
 from time import sleep
 from inspect import currentframe, getframeinfo
 from collections import defaultdict
@@ -69,12 +98,19 @@ from pathlib import Path
 from google.protobuf.json_format import Parse
 from google.protobuf.json_format import MessageToJson
 from google.protobuf.text_format import MessageToString
+import threading
+
+
+# Initialize thread-local storage at the module level
+thread_local_storage = threading.local()
+
 
 MAX_NUM_NODES   = 1000  # TBD what should this absolute max be?
 FULL_FMT = "%Y-%m-%dT%H:%M:%SZ"
 DAY_FMT = "%Y-%m-%d"
 
 SETUP_JSON_FILE = 'SetUp.json'
+ORGS_PERMITTED_JSON_FILE = 'OrgsPermitted.json'
 S3_BUCKET = os.environ.get("S3_BUCKET",'sliderule')
 
 # logging.basicConfig(filename='/home/logs/ps-server.log',
@@ -138,6 +174,9 @@ def get_terraform_dir(name):
 def get_chdir_parm(name):
     return f"-chdir={get_terraform_dir(name)}"
 
+def get_tf_versions_s3_root():
+    return 'prov-sys/cluster_tf_versions/'
+
 def get_workspace_list(name):
     workspaces = []
     cmd_args = [get_terraform_cli(), get_chdir_parm(name), "workspace", "list"]
@@ -159,6 +198,39 @@ def get_workspace_list(name):
     # NOTE: there should always be ['default']
     #       so [] idicates an error occurred
     return workspaces
+
+def get_s3_client():
+    if not hasattr(thread_local_storage, "s3_client"):
+        endpoint_url = os.environ.get("AWS_S3_ENDPOINT_URL")
+        aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+        LOG.info(f"endpoint_url:{endpoint_url} aws_region:{aws_region}")
+        if endpoint_url is None or endpoint_url == "":
+            s3_client = boto3.client("s3", region_name=aws_region)
+        else:
+            s3_client = boto3.client("s3", region_name=aws_region, endpoint_url=endpoint_url)
+    return s3_client
+
+def get_ce_client():
+    if not hasattr(thread_local_storage, "ce_client"):
+        endpoint_url = os.environ.get("AWS_CE_ENDPOINT_URL")
+        aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+        LOG.info(f"endpoint_url:{endpoint_url} aws_region:{aws_region}")
+        if endpoint_url is None or endpoint_url == "":
+            ce_client = boto3.client("ce", region_name=aws_region)
+        else:
+            ce_client = boto3.client("ce", region_name=aws_region, endpoint_url=endpoint_url)
+    return ce_client,endpoint_url,aws_region
+
+def get_ec2_client():
+    if not hasattr(thread_local_storage, "ec2_client"):
+        endpoint_url = os.environ.get("AWS_EC2_ENDPOINT_URL")
+        aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+        LOG.info(f"endpoint_url:{endpoint_url} aws_region:{aws_region}")
+        if endpoint_url is None or endpoint_url == "":
+            ec2_client = boto3.client("ec2", region_name=aws_region)
+        else:
+            ec2_client = boto3.client("ec2", region_name=aws_region, endpoint_url=endpoint_url)
+    return ec2_client
 
 def skip_this_file(rel_path):
     return ('/.terraform/' in rel_path or 'terraform.tfstate.d' in rel_path or '.terraform.lock.hcl' in rel_path)
@@ -391,69 +463,6 @@ def poll_for_localstack_status(logger):
     return False
 
 
-# def download_dir(prefix, local, bucket, client):
-#     """
-#     Recursively downloads from bucket/prefix to local
-
-#     params:
-#     - prefix: pattern to match in s3
-#     - local: local path to folder in which to place files
-#     - bucket: s3 bucket with target contents
-#     - client: initialized s3 client object
-#     """
-#     LOG.info(f"bucket:{bucket} prefix:{prefix} local:{local} ")
-#     keys = []
-#     dirs = []
-#     next_token = ''
-#     base_kwargs = {
-#         'Bucket':bucket,
-#         'Prefix':prefix,
-#     }
-#     num_downloaded = 0
-#     while next_token is not None:
-#         kwargs = base_kwargs.copy()
-#         if next_token != '':
-#             kwargs.update({'ContinuationToken': next_token})
-#         results = client.list_objects_v2(**kwargs)
-#         contents = results.get('Contents')
-#         if contents:
-#             for i in contents:
-#                 k = i.get('Key')
-#                 if k[-1] != '/':
-#                     keys.append(k)
-#                 else:
-#                     dirs.append(k)
-#         else:
-#             LOG.info(f"No contents found for {bucket}/{prefix}")
-#         next_token = results.get('NextContinuationToken')
-#     for d in dirs:
-#         dest_pathname = os.path.join(local, d)
-#         if not os.path.exists(os.path.dirname(dest_pathname)):
-#             os.makedirs(os.path.dirname(dest_pathname))
-#     for k in keys:
-#         # Split the key into components based on forward slash
-#         parts = k.split("/")
-#         if len(parts) > 1:
-#             # Create a new key composed of only the last two parts
-#             new_key = "/".join(parts[-2:])
-#         else:
-#             new_key = k
-
-#         # Use the new key to create the local path
-#         dest_pathname = os.path.join(local, new_key)
-#         if not os.path.exists(os.path.dirname(dest_pathname)):
-#             os.makedirs(os.path.dirname(dest_pathname))
-#         try:
-#             #LOG.info(f"Downloading {dest_pathname}")
-#             client.download_file(bucket, k, dest_pathname)
-#             num_downloaded += 1
-#         except NoCredentialsError:
-#             LOG.info("No AWS credentials found")
-#             return False
-#     LOG.info(f"Successfully downloaded {num_downloaded} files from {bucket}/{prefix} into {local}")
-#     return True
-
-
 def get_ps_versions():
     '''
         These are the pkg versions obtained from the ps_server_versions file extracted from the container
@@ -466,11 +475,7 @@ def get_ps_versions():
 def get_num_nodes_suffix(region, name, version, suffix):
     endpoint_url = os.environ.get('AWS_EC2_ENDPOINT_URL')
     #LOG.info(f"get_num_nodes_suffix: region:{region} name:{name} version:{version} suffix:{suffix} endpoint_url:{endpoint_url}")
-    if endpoint_url is None or endpoint_url == "":
-        ec2_client = boto3.client('ec2', region_name=region)
-    else:
-        ec2_client = boto3.client('ec2', region_name=region, endpoint_url=endpoint_url)
-
+    ec2_client = get_ec2_client()
     orgGrok = name
     if version != "":
         orgGrok = orgGrok
@@ -571,41 +576,133 @@ def ce_get_cost_and_usage(ce_client,ccr,st_str,et_str,tag_key,tag_values):
         ccr.stats.std = stdev(ccr.cost)
     return ccr
 
-def get_s3_client():
-    endpoint_url = os.environ.get("AWS_S3_ENDPOINT_URL")
-    aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-    LOG.info(f"endpoint_url:{endpoint_url} aws_region:{aws_region}")
-    if endpoint_url is None or endpoint_url == "":
-        s3_client = boto3.client("s3", region_name=aws_region)
-    else:
-        s3_client = boto3.client("s3", region_name=aws_region, endpoint_url=endpoint_url)
-    return s3_client
+def read_orgs_permitted(name):
+    '''
+        Returns a list of orgs permitted to use this version of the cluster.
+        It is assumed that a file named f'{ORGS_PERMITTED_JSON_FILE}' might exist in the terraform version directories.
+        If the file does not exist in that version any org is permitted to use that version. 
+        If the file exists only orgs in the list are permitted to use that version.
+    '''
+    orgs_permitted_json_file_path = os.path.join(get_cluster_root_dir(name), 'terraform', ORGS_PERMITTED_JSON_FILE)
+    orgs_permitted = []
+    try:
+        with open(orgs_permitted_json_file_path, 'r') as json_file:
+            data = json.load(json_file)
+            orgs_permitted = data['orgs']
 
-def get_versions(s3_client):
-    VERSIONS = []
-    sorted_versions = []
+    except FileNotFoundError:
+        LOG.info(f"read_orgs_permitted: FileNotFoundError reading :{orgs_permitted_json_file_path}")
+
+    except json.JSONDecodeError:
+        LOG.error(f"read_orgs_permitted: Malformed JSON in :{orgs_permitted_json_file_path}")
+
+    except KeyError:
+        LOG.error(f"read_orgs_permitted: Expected key 'orgs' not found in :{orgs_permitted_json_file_path}")
+
+    except Exception as e:
+        LOG.exception(f"read_orgs_permitted: Unexpected error reading :{orgs_permitted_json_file_path} - {repr(e)}")
+
+    LOG.info(f"{orgs_permitted} from {orgs_permitted_json_file_path}")
+    return orgs_permitted
+
+def get_all_versions(s3_client):
+    versions = []
     try:
         result = s3_client.list_objects(Bucket=S3_BUCKET,
-                                        Prefix='prov-sys/cluster_tf_versions/',
+                                        Prefix=f'{get_tf_versions_s3_root()}',
                                         Delimiter='/'
                                         )
         #LOG.info(f"result:{pprint.pformat(result)}")
-        for o in result.get('CommonPrefixes'):
+        for o in result.get('CommonPrefixes',[]):
             #LOG.info(o.get('Prefix'))
             path = o.get('Prefix')
             #LOG.info(path.split("/")[:-1][2])
             version = path.split("/")[:-1][2].rstrip()
-            VERSIONS.append(version)
-        sorted_versions = sorted(VERSIONS,reverse=True)
-        #LOG.info(f"sorted_versions:{sorted_versions}")
-        # Move 'latest' to the first position
+            versions.append(version)
+        #LOG.info(f"lastest is first now in sorted_versions:{sorted_versions}")
+    except botocore.exceptions.NoCredentialsError:
+        LOG.error("No AWS credentials found.")
+        
+    except botocore.exceptions.PartialCredentialsError:
+        LOG.error("Incomplete AWS credentials provided.")
+        
+    except botocore.exceptions.ClientError as e:
+        # You can further inspect the error response to tailor the log message
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        LOG.error(f"AWS Client Error ({error_code}): {error_message}")
+    except Exception as e:
+        LOG.exception(f"get_all_versions caught exception:{repr(e)}") 
+    LOG.info(f"versions:{versions}")  
+    return versions
+
+def get_last_part_of_prefix(prefix):
+    # Split the prefix by '/' and get the second last segment
+    # (since prefixes typically end with '/')
+    parts = prefix.rstrip('/').split('/')
+    #LOG.info(f"get_last_part_of_prefix: prefix:{prefix} parts:{parts}")
+    return parts[-1] if parts else None
+
+def sort_versions(versions):
+    sorted_versions = sorted(versions, reverse=True)
+    # Move 'latest' to the first position
+    if 'latest' in sorted_versions:
         sorted_versions.remove('latest')
         sorted_versions.insert(0, 'latest')
-        #LOG.info(f"lastest is first now in sorted_versions:{sorted_versions}")
-    except Exception as e:
-        LOG.exception(f"get_versions caught exception:{repr(e)}") 
-    LOG.info(f"sorted_versions:{sorted_versions}")  
+    # Move 'unstable' to the last position
+    if 'unstable' in sorted_versions:
+        sorted_versions.remove('unstable')
+        sorted_versions.append('unstable')
     return sorted_versions
+
+
+def get_versions_for_org(s3_client, org_to_check):
+    permitted_prefixes = []
+
+    try:
+        # List all prefixes/subfolders
+        result = s3_client.list_objects(Bucket=S3_BUCKET,
+                                        Prefix=f'{get_tf_versions_s3_root()}',
+                                        Delimiter='/')       
+        for o in result.get('CommonPrefixes', []):
+            prefix = o.get('Prefix')
+            file_key = f"{prefix}{ORGS_PERMITTED_JSON_FILE}"
+            try:
+                # Check if ORGS_PERMITTED_JSON_FILE exists within the prefix
+                file_content = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)['Body'].read().decode('utf-8')
+                # Parse the JSON file and check if org_to_check is present
+                orgs = json.loads(file_content)
+                #LOG.info(f"file:{file_key} org_to_check:{org_to_check} orgs:{orgs}")
+                if org_to_check in orgs:
+                    last_part = get_last_part_of_prefix(prefix)
+                    if last_part:  # Ensure it's not None or empty
+                        LOG.info(f"file:{file_key} has org_to_check:{org_to_check} in orgs:{orgs}")
+                        permitted_prefixes.append(last_part)
+                else:
+                    LOG.info(f"file:{file_key} does NOT have org_to_check:{org_to_check} in orgs:{orgs}")
+            except s3_client.exceptions.NoSuchKey:
+                # If ORGS_PERMITTED_JSON_FILE does not exist, add the prefix to the list
+                #LOG.info(f"{file_key} not found using with s3_client.region_name:{s3_client._client_config.region_name} endpoint:{s3_client._endpoint.host}")
+                last_part = get_last_part_of_prefix(prefix)
+                if last_part:  # Ensure it's not None or empty
+                    permitted_prefixes.append(last_part)
+            except json.JSONDecodeError:
+                LOG.error(f"Error decoding JSON for prefix: {prefix}")
+            except Exception as e:
+                LOG.error(f"Error processing file {file_key}: {repr(e)}")
+    except botocore.exceptions.NoCredentialsError:
+        LOG.error("No AWS credentials found.")
+    except botocore.exceptions.PartialCredentialsError:
+        LOG.error("Incomplete AWS credentials provided.")
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        LOG.error(f"AWS Client Error ({error_code}): {error_message}")
+    except Exception as e:
+        LOG.exception(f"get_versions_for_org caught exception: {repr(e)}") 
+    LOG.info(f"org_to_check:{org_to_check} permitted_prefixes:{permitted_prefixes}")
+    return permitted_prefixes
+
 
 def read_SetUpCfg(name):
     setup_json_file_path = os.path.join(get_cluster_root_dir(name),SETUP_JSON_FILE)
@@ -682,13 +779,7 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             ccr_using_name_tags = ccr
             legacy_name_tags = []
             project_tags = []
-            endpoint_url = os.environ.get("AWS_CE_ENDPOINT_URL")
-            aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-            if endpoint_url is None or endpoint_url == "":
-                ce_client = boto3.client("ce", region_name=aws_region)
-            else:
-                # we use this for testing
-                ce_client = boto3.client("ce", region_name=aws_region, endpoint_url=endpoint_url)
+            ce_client,endpoint_url,aws_region = get_ce_client()
             #for tags use entire period
             if delta_tm > max_delta_tm:
                 delta_tm = max_delta_tm
@@ -1223,7 +1314,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def get_specific_tf_version_files_from_s3(self, s3_client, name, version):
         try:
             tf_dir = get_terraform_dir(name) # of the form /<org>/terraform/
-            folder = f"prov-sys/cluster_tf_versions/{version}"
+            folder = f"{get_tf_versions_s3_root()}{version}"
             if download_s3_folder(s3_client=s3_client, 
                                     bucket_name=S3_BUCKET,
                                     s3_folder=folder,
@@ -1565,8 +1656,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         '''
             This is the list of versions of terraform files available in s3
         '''
-        versions=get_versions(get_s3_client())
-        return ps_server_pb2.GetVersionsRsp(versions=versions)
+        if request.name is None or request.name == "":
+            versions = get_all_versions(get_s3_client())
+        else:
+            versions = get_versions_for_org(get_s3_client(),request.name)
+        sorted_versions = sort_versions(versions)
+        return ps_server_pb2.GetVersionsRsp(versions=sorted_versions)
 
     def GetCurrentSetUpCfg(self,request,context):
         '''
@@ -1626,6 +1721,7 @@ def idempotent_migration():
     update_key_in_dir(local_dir=get_root_dir(), target_filename="SetUp.json", old_key="orgName", new_key="name")
 
 
+
 @contextlib.contextmanager
 def run_server(host, port, use_tls):
     hoststring = host + ":" + str(port)
@@ -1649,10 +1745,7 @@ def run_server(host, port, use_tls):
         port = server.add_insecure_port(hoststring)
 
     server.start()
-    try:
-        yield server, host, port, use_tls
-    finally:
-        server.stop(0)
+    yield server, host, port, use_tls
 
 def main():
     os.environ['TZ'] = 'UTC'
@@ -1660,12 +1753,14 @@ def main():
     LOG = logging.getLogger("ps_logger")
     LOG.info(f"Starting ps-server @ {datetime.now().astimezone()}")
     try:
+        fallback_port = os.environ.get("PS_SERVER_PORT", "50051")
+        LOG.info(f"fallback_port:{fallback_port}")
         parser = argparse.ArgumentParser()
         parser.add_argument(
             "--host", nargs="?", type=str, default="[::]", help="the listening host"
         )
         parser.add_argument(
-            "--port", nargs="?", type=int, default=50051, help="the listening port"
+            "--port", nargs="?", type=int, default=fallback_port, help="the listening port"
         )
         parser.add_argument(
             "--use_tls",
@@ -1693,7 +1788,7 @@ def main():
                     LOG.info(f"{key}: {value}")            
                 poll_for_localstack_status(LOG)
             s3_client = get_s3_client()
-            LOG.info(f"terraform versions found in S3:{get_versions(s3_client)}")
+            LOG.info(f"terraform versions found in S3:{get_all_versions(s3_client)}")
             s3_folder = f"prov-sys/{get_domain_env()}/current_cluster_tf_by_org"
             local_dir = get_root_dir()
             if download_s3_folder(s3_client=s3_client, 
@@ -1718,7 +1813,14 @@ def main():
             LOG.info(f"---------- Server is READY listening at {host}:{port} use_tls?:{use_tls} domain:{get_domain_env()} terraform_cli:{get_terraform_cli()}----------"
             )
             LOG.handlers[0].flush()
-            server.wait_for_termination()
+            try:
+                server.wait_for_termination()
+            except KeyboardInterrupt:
+                LOG.info("KeyboardInterrupt?")
+                pass
+            finally:
+                LOG.info("Shutting down server")
+                server.stop(0)
 
     except HTTPError as http_err:
         LOG.error(f"HTTP error occurred getting Org names from website: {http_err}")

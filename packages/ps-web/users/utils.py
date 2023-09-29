@@ -25,7 +25,7 @@ from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
 from django_celery_results.models import TaskResult
-from .tasks import get_ps_versions, get_org_queue_name_str, get_org_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface
+from .tasks import get_ps_versions, get_org_queue_name_str, get_org_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface, redis_interface
 from oauth2_provider.models import AbstractApplication
 from users.global_constants import *
 
@@ -165,80 +165,6 @@ def get_new_tokens(org):
         'access_lifetime': str(api_settings.ACCESS_TOKEN_LIFETIME.total_seconds()),
     }
 
-# def fetch_current_token(orgAccountObj):
-#     #LOG.info(orgAccountObj.tokens)
-#     tokens = orgAccountObj.tokens
-#     tokens_time = orgAccountObj.tokens_time
-#     now = datetime.now(tz=timezone.utc)
-#     need_refresh = False
-#     if( (type(tokens) is dict) and (tokens is not None) ):
-#         seconds = float(tokens['access_lifetime'])
-#         # LOG.info(" --- is dictionary and not None --- seconds:%f",seconds)
-#         # LOG.info(tokens_time)
-#         # LOG.info(timedelta(seconds=seconds))
-#         # LOG.info(now)
-#         if (tokens_time + timedelta(seconds=seconds)) < now:
-#             need_refresh = True
-#     else:
-#         #LOG.info(" --- is NOT dictionary or None --- ")
-#         need_refresh = True
-
-#     if need_refresh:
-#         orgAccountObj.tokens = get_new_tokens(orgAccountObj)
-#         #LOG.info(str(orgAccountObj.tokens))
-#         orgAccountObj.tokens_time = datetime.now(tz=timezone.utc)
-#         orgAccountObj.save(update_fields=['tokens','tokens_time'])
-#     #LOG.info(orgAccountObj.tokens)
-#     return orgAccountObj.tokens
-
-# def process_cluster_connection_status(orgAccountObj):
-#     task_id= 'unset'
-#     try:
-#         clusterObj = Cluster.objects.get(org=orgAccountObj) 
-#         LOG.info("%s %s",task_id,orgAccountObj.name)
-#         clusterObj.connection_status = "unknown"
-#         clusterObj = Cluster.objects.get(org=orgAccountObj)
-#         clusterObj.version_query_log  = ""
-#         clusterObj.save()
-#         domain = os.environ.get("DOMAIN")
-#         url = "https://"+ orgAccountObj.name + "." + domain + "/source/version"
-#         bearer_token_header = "Bearer " + str(fetch_current_token(orgAccountObj)['access'])
-#         headers = {"Authorization": bearer_token_header}
-#         THIS_TIMEOUT = 5
-#         clusterObj.version_query_log  = "*** attempt connection check using timeout:"+ str(THIS_TIMEOUT)+ " " + repr(url) +" ***\n"
-#         clusterObj.save()
-#         result = requests.get(url,headers=headers, timeout = THIS_TIMEOUT)
-#         LOG.info(result.json())
-#         if result.status_code == 200:
-#             clusterObj.connection_status = "good"
-#             clusterObj.version_query_log = clusterObj.version_query_log + '*** connection check result: '+ str(result.json())
-#             clusterObj.save()
-#         else:
-#             clusterObj.connection_status = "bad"
-#             clusterObj.version_query_log = clusterObj.version_query_log + '*** connection check result: '+ str(result.json())
-#             clusterObj.save()
-
-#     except requests.exceptions.ConnectionError as e:
-#         clusterObj.connection_status = "bad"
-#         LOG.info(repr(e))
-#         clusterObj.version_query_log = clusterObj.version_query_log + '\n' + repr(e)
-#         clusterObj.save()
-#     except json.JSONDecodeError as e:
-#         clusterObj.connection_status = "bad"
-#         LOG.info(repr(e))
-#         clusterObj.version_query_log = clusterObj.version_query_log + '\n' + repr(e)
-#         clusterObj.save()
-
-#     except Exception as e:
-#         clusterObj.connection_status = "bad"
-#         LOG.exception(f"Caught an exception: {e}")       
-#         clusterObj.version_query_log = clusterObj.version_query_log + '\n' + repr(e)
-#         clusterObj.save()
-#     finally:
-#         LOG.info("%s >>>>>> done connection status <<<<<< ",task_id)
-#     for handler in LOG.handlers:
-#        handler.flush()
-
 def create_org_queue(orgAccountObj):
     hostname = socket.gethostname()
     LOG.info(f"hostname:{hostname}")
@@ -262,10 +188,10 @@ def init_celery():
     hostname = socket.gethostname()
     LOG.info(f"hostname:{hostname}")
     domain = os.environ.get("DOMAIN")
-    redis_interface = RedisInterface()
+    local_redis_interface = RedisInterface()
 
-    set_PROVISIONING_DISABLED(redis_interface,'False')
-    LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED(redis_interface)}")
+    set_PROVISIONING_DISABLED(local_redis_interface,'False')
+    LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED(local_redis_interface)}")
 
     if 'localhost' in domain: 
         SHELL_CMD=f"celery -A ps_web flower --url_prefix=flower".split(" ")
@@ -304,6 +230,27 @@ def init_celery():
         except Exception as e:
             LOG.error(f"Caught an exception creating queues: {e}")
         LOG.info(f"forked subprocess--> {SHELL_CMD}")
+
+def disable_provisioning(user,req_msg):
+    error_msg=''
+    disable_msg=''
+    rsp_msg=''
+    if user_in_one_of_these_groups(user,groups=['PS_Developer']):
+        try:
+            if get_PROVISIONING_DISABLED(redis_interface):
+                LOG.warning(f"User {user.username} attempted to disable provisioning but it was already disabled")
+                rsp_msg = f"User {user.username} attempted to disable provisioning but it was already disabled"
+            else:
+                set_PROVISIONING_DISABLED(redis_interface,'True')
+                disable_msg = f"User:{user.username} has disabled provisioning!"
+                LOG.critical(disable_msg)
+        except Exception as e:
+            error_msg = f"Caught Exception in requested shutdown"
+            LOG.exception(f"{error_msg}")
+    else:
+        LOG.warning(f"User {user.username} attempted to disable provisioning")
+        error_msg = f"User {user.username} is not a Authorized to disable provisioning"
+    return error_msg, disable_msg, rsp_msg
 
 def get_ps_server_versions():
     '''
@@ -362,3 +309,27 @@ def get_memberships(request):
         if m.org is not None:
             memberships.append(m.org.name)
     return memberships
+
+def user_in_one_of_these_groups(user,groups):
+    for group in groups:
+        if user.groups.filter(name=group).exists():
+            return True
+    return False
+
+def has_admin_privilege(user,orgAccountObj):
+    has_privilege = user_in_one_of_these_groups(user,[f'{orgAccountObj.name}_Admin','PS_Developer']) or (user == orgAccountObj.owner)
+    LOG.info(f"has_admin_privilege: {has_privilege} user:{user} orgAccountObj.owner:{orgAccountObj.owner} orgAccountObj.name:{orgAccountObj.name}")
+    return has_privilege
+
+def next_month_first_day():
+    # Calculate the beginning of the next month
+    now = datetime.now(timezone.utc)
+    if now.month == 12:
+        next_month_first_day = datetime(now.year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        next_month_first_day = datetime(now.year, now.month + 1, 1, tzinfo=timezone.utc)
+    return next_month_first_day
+   
+import logging
+
+LOG = logging.getLogger(__name__)

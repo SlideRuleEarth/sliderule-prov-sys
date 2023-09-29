@@ -201,7 +201,7 @@ def init_s3_current_cluster_tf_by_org_factory(setup_logging, s3, get_S3_BUCKET, 
     def _init_s3_current_cluster_tf_by_org(logger,test_name,version):
         src_s3_folder = f'prov-sys/cluster_tf_versions/{version}'
         dest_s3_folder = f'prov-sys/localhost/current_cluster_tf_by_org/{test_name}'
-        logger.critical(f'init_s3_current_cluster_tf_by_org: s3_client:{s3_client} s3_bucket:{s3_bucket} src_s3_folder:{src_s3_folder} dest_s3_folder:{dest_s3_folder}')
+        logger.info(f'init_s3_current_cluster_tf_by_org: s3_client:{s3_client} s3_bucket:{s3_bucket} src_s3_folder:{src_s3_folder} dest_s3_folder:{dest_s3_folder}')
         assert s3_folder_exist(logger, s3_client, s3_bucket, src_s3_folder)
         try:
             assert copy_s3_objects( logger=logger,

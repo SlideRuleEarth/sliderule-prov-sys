@@ -40,9 +40,6 @@ ps-web-clean-stage : # clean ps docker stage directory
 ps-nginx-clean-stage : # clean ps docker stage directory
 	rm -rf docker/nginx/stage
 
-ps-web-update-proto:   ## grab latest proto file from ps-server
-	rm -rf protos/; cp -r ../ps-server/protos/ ../protos/
-
 ps-web-stage : ps-web-clean-stage
 	mkdir -p docker/ps-web/stage
 	echo DOCKER_TAG=$(PS_WEB_DOCKER_TAG) >> docker/ps-web/stage/.versions
@@ -57,7 +54,8 @@ ps-web-stage : ps-web-clean-stage
 	cp -R api docker/ps-web/stage/
 	cp -R templates docker/ps-web/stage/
 	cp -R users docker/ps-web/stage/
-	cp -R protos docker/ps-web/stage/
+	cp -R ../ps-server/protos docker/ps-web/stage/
+	cp -R ../../scripts docker/ps-web/stage/
 
 ps-server-test-stub-clean-stage : # clean docker stage directory
 	rm -rf docker/ps-server-test-stub/stage
@@ -72,7 +70,7 @@ ps-server-test-stub-stage : ps-server-test-stub-clean-stage # stage the files fo
 	cp docker/ps-server-test-stub/docker-entrypoint.sh docker/ps-server-test-stub/stage/
 	cp docker/ps-server-test-stub/requirements.txt docker/ps-server-test-stub/stage/
 	cp ps_server_test_stub/ps_server.py docker/ps-server-test-stub/stage/ps_server.py
-	cp -R protos docker/ps-server-test-stub/stage/
+	cp -R ../ps-server/protos docker/ps-server-test-stub/stage/
 	mkdir -p docker/ps-server-test-stub/stage/users/tests
 	cp ../../packages/ps-web/users/global_constants.py docker/ps-server-test-stub/stage/users/global_constants.py
 	cp ../../packages/ps-web/users/tests/global_test_constants.py docker/ps-server-test-stub/stage/users/tests/global_test_constants.py
@@ -143,7 +141,7 @@ bld-and-run-unit-tests: down # build and run the unit tests against a running de
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker logs ps-web && \
-	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage run -m pytest -k "not TasksTestWithPSServer" -m "not real_ps_server" && \
+	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage run -m pytest -k "not TasksTestWithPSServer" -m "not real_ps_server and not ps_disable" && \
 	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage html
 	make down
 
@@ -152,7 +150,7 @@ bld-and-run-unit-test-dev: down # build and run the unit tests against a running
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker logs ps-web && \
-	docker exec $(DOCKER_EXEC_OPTS) ps-web pytest -k "not TasksTestWithPSServer" -m "dev and not real_ps_server"
+	docker exec $(DOCKER_EXEC_OPTS) ps-web pytest -k "not TasksTestWithPSServer" -m "dev and not real_ps_server and not ps_disable"
 	make down
 
 unit-tests: clean-coverage ## build and run ps-web unit tests from interactive terminal

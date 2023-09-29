@@ -28,6 +28,7 @@ services:
       - TERRAFORM_CLI=terraform
       - DOMAIN=localhost
       - S3_FILES=/ps_server/test_misc/cluster_tf_versions
+      - PS_SERVER_PORT=${PS_SERVER_PORT}
     ports:
       - 50051:50051
     image: icesat2sliderule/sliderule-ps-server:${DOCKER_TAG}
@@ -49,6 +50,9 @@ services:
   django-app:
     env_file:
       - .env
+    environment:
+      - PS_SERVER_PORT=${PS_SERVER_PORT}
+      - PS_SERVER_ALTERNATE_PORT=${PS_SERVER_ALTERNATE_PORT} 
     expose:
       - 8000
     image: icesat2sliderule/sliderule-ps-web:${DOCKER_TAG}

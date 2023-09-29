@@ -41,7 +41,7 @@ data "template_file" "prov-sys" {
     django_secret_key             = local.provsys_creds.django_secret_key
     django_celery_url             = var.django_celery_url
     ps_server_host                = var.ps_server_host
-    ps_server_port                = var.ps_server_container_port
+    ps_server_port                = var.ps_server_port
     mfa_placeholder               = local.provsys_creds.mfa_placeholder
     jwt_secret_key                = local.provsys_creds.jwt_secret_key
     domain                        = var.domain

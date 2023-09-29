@@ -119,13 +119,31 @@ unit-tests-local-stack: docker-test ## run the web_server django unit tests agai
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	docker compose up --detach
 	sleep 3
-	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and not recon_sim and not cost and not system" $(PYTEST_ARGS) && \
+	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and not recon_sim and not cost and not system and not ps_disable" $(PYTEST_ARGS) && \
 	docker exec -it ps-web coverage html
 	make down
 	@echo SITE_ID:$(SITE_ID)
 	@echo SITE_ID value:$($(SITE_ID))
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+unit-tests-local-stack-dev: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and dev and not recon_sim and not cost and not system and not ps_disable" $(PYTEST_ARGS) && \
+	docker exec -it ps-web coverage html
+	make down
+	@echo SITE_ID:$(SITE_ID)
+	@echo SITE_ID value:$($(SITE_ID))
+	@echo DOMAIN:$(DOMAIN)
+	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+
 
 unit-tests-ps-web-only:   ## run the web_server unit tests against a running dev system then exit
 	cd $(PS_WEB_SOURCE_DIR) && make unit-tests && make down
@@ -136,13 +154,93 @@ unit-tests-ps-web-only-dev:   ## run the web_server unit tests against a running
 unit-tests-ps-server-only:   ## run the ps_server unit tests  then exit
 	cd $(PS_SERVER_SOURCE_DIR) && make unit-tests && make down
 
+unit-tests-disable_provisioning: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+#   These test cause the system to be disabled so each have to be run in isolation
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_success" && \
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent" && \
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_ps_web_view_disable_provisioning_success"
+#   now test port switching
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50052 && \
+	export PS_SERVER_ALTERNATE_PORT=50051 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+#   now switch the ports
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50051 && \
+	export PS_SERVER_ALTERNATE_PORT=50052 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+	make down
+	@echo SITE_ID:$(SITE_ID)
+	@echo SITE_ID value:$($(SITE_ID))
+	@echo DOMAIN:$(DOMAIN)
+	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+
+unit-tests-disable_provisioning-dev: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50052 && \
+	export PS_SERVER_ALTERNATE_PORT=50051 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+#   now switch the ports
+	make down
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_SERVER_PORT=50051 && \
+	export PS_SERVER_ALTERNATE_PORT=50052 && \
+	docker compose up --detach
+	sleep 3
+	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
+
+
 system-tests:  ## (incurs $$) run the web_server django unit tests against a running dev system then exit
 	pytest -m "system" $(PYTEST_ARGS)
 
 unit-tests: ## run all unit-tests
 	make unit-tests-ps-web-only && \
 	make unit-tests-ps-server-only && \
-	make unit-tests-local-stack 
+	make unit-tests-local-stack && \
+	make unit-tests-disable_provisioning
 
 unit-tests-with-cost: docker ## (incurs $$) run the web_server django unit tests against a running dev system then exit
 	make down && \
@@ -344,7 +442,7 @@ db-restore-SCHEMA-FROM-sql-file:  ## restore the test db SCHEMA e.g. make db-res
 	$(DB_BACKUP_DIR)/$(DB_FILE) | docker exec -i ps-db psql --username=ps_admin -d ps_postgres_db 
 	docker compose -f docker-compose-prov-sys-db-only.yml down 
 
-db-restore-FULL-from-sql-gz:  ## restore the test db e.g. make db-restore-FULL VERSION=v2.0.4 NOTE:This restores to a BLANK! db named: ps_postgres_db from file /sliderule-postgres-backup-FULL-DEV-$(VERSION).sql.gz
+db-restore-FULL-from-sql-gz:  ## restore the test db e.g. make db-restore-FULL NOTE:This restores into a BLANK! db named: ps_postgres_db from file $(FILE)
 	docker compose -f docker-compose-prov-sys-db-only.yml down 
 	docker compose -f docker-compose-prov-sys-db-only.yml up --detach && \
 	gunzip < $(DB_BACKUP_DIR)/$(FILE) | docker exec -i ps-db psql --username=ps_admin -d ps_postgres_db 

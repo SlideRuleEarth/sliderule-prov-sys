@@ -9,7 +9,7 @@
             <div class="container-fluid">
                 <div class="card text-center mb-2 border-0">
                     {% if not membership.active %}
-                        <div class="mm-btn-group my-4 mx-4">
+                        <div class="btn-group my-4 mx-4">
                             <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
                         </div>
                         <dl>
@@ -17,26 +17,41 @@
                             <dd><span>requested {{membership.creation_date | date:"DATETIME_FORMAT"}}</span></dd>
                         </dl>
                     {% else %}
-                        <div class="mm-btn-group my-4 mx-4">
-                            {% if is_developer or user_is_owner  %}
-                                <a class="btn btn-outline-primary"  href="{% url 'org-manage-cluster' membership.org.id %}">Manage</a> 
-                            {% else %}
-                                <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
-                            {% endif %}
-                        </div>
-                        <div my-4 mx-2>
+                        <div class="container my-4 mx-2">
                             <dl class="border border-0">
-                                {% with active_ps_cmd=this_active_ps_cmd deployed_state=this_deployed_state is_deployed=this_is_deployed cur_nodes=cur_nodes cur_version=cur_version connection_status=this_connection_status %}
+                                {% if user_is_developer %}
+                                    {% if user_is_owner %}
+                                        <dt>Owner (Developer)</dt>
+                                    {% else %}
+                                        <dt>Member (Developer)</dt>
+                                    {% endif %}
+                                {% elif user_is_owner %}
+                                    <dt>Owner</dt>
+                                {% elif user_is_org_admin %}
+                                    <dt>Member (Admin)</dt>
+                                {% else %} 
+                                    <dt>Member</dt>       
+                                {% endif %}
+                                <dd>
+                                    <div class="btn-group my-1 mx-1">
+                                        {% if user_is_developer or user_is_owner or user_is_org_admin %}
+                                            <a class="btn btn-outline-primary"  href="{% url 'org-manage-cluster' membership.org.id %}">Manage</a> 
+                                        {% else %}
+                                            <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
+                                        {% endif %}
+                                    </div>
+                                </dd>
                                 <dt> Cluster State</dt>
                                 <dd>
+                                    {% with active_ps_cmd=this_active_ps_cmd deployed_state=this_deployed_state is_deployed=this_is_deployed cur_nodes=cur_nodes cur_version=cur_version connection_status=this_connection_status %}
                                     {% include 'users/cluster_state.html' %}
                                 </dd>
                                 {% endwith %}
-                                <dt>Auto-Shutdown</dt>
-                                {% if show_shutdown_date %}
-                                    <dd>{{org.min_ddt|date:"Y-m-d H:i:s A T"}}</dd>
+                                <dt>Low-Budget Auto-Shutdown</dt>
+                                {% if org_has_ddt %}
+                                    <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ membership.org.max_ddt.isoformat }}">Loading...</p></dd>
                                 {% else %}
-                                    <p>No shutdown scheduled</p>
+                                    <dd>No Shutdown</dd>
                                 {% endif %}
                                 <dt>Monthly Allowance</dt>
                                 <dd>{{membership.org.monthly_allowance}}</dd>
@@ -52,6 +67,13 @@
                                 {% endif %}
                                 <dt>Member Since</dt>
                                 <dd><p>{{membership.activation_date | date:"DATETIME_FORMAT"}}</p></dd>
+                            
+                                {% if user_is_org_admin %}
+                                    <dt></dt>
+                                    <dd>
+                                        <a class="btn btn-outline-primary"  href="{% url 'cancel-membership' membership.id %}">Cancel Membership</a> 
+                                    </dd>
+                                {% endif %}
                             </dl>
                         </div>
                     {% endif %}

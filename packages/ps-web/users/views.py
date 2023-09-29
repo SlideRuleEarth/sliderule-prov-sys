@@ -20,8 +20,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env
-from .tasks import get_versions, update_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api
+from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api,update_ddt,create_all_forecasts
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -125,7 +125,7 @@ def send_activation_email(request, orgname, user):
 def orgManageMembers(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
     LOG.info("%s %s",request.method,orgAccountObj.name)
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    if has_admin_privilege(request.user, orgAccountObj):
         memberships = get_Memberships(orgAccountObj)
         formset_initial = []
         for m in memberships:
@@ -176,8 +176,7 @@ def orgManageCluster(request, pk):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     LOG.info(f"{request.method} {orgAccountObj.name} loop_count:{orgAccountObj.loop_count} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn} autocommit:{get_autocommit()}")
     orgNumNodeObjs = sort_ONN_by_nn_exp(orgAccountObj)
-    user_is_developer = request.user.groups.filter(name='PS_Developer').exists()
-    if user_is_developer or orgAccountObj.owner == request.user:
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         try:
             filter_time = (datetime.now(timezone.utc)-timedelta(hours=orgAccountObj.pcqr_display_age_in_hours)).replace(microsecond=0)
             purge_time = (datetime.now(timezone.utc)-timedelta(days=orgAccountObj.pcqr_retention_age_in_days)).replace(microsecond=0)
@@ -186,8 +185,8 @@ def orgManageCluster(request, pk):
         except PsCmdResult.DoesNotExist:
             psCmdResultObjs = None
         #LOG.info("%s is_deployed?:%s  deployed_state:%s", orgAccountObj.name, clusterObj.is_deployed,clusterObj.deployed_state)
-        update_burn_rates(orgAccountObj) # updates clusterObj.version clusterObj.cur_nodes
-
+        update_burn_rates(orgAccountObj) # also updates clusterObj.version clusterObj.cur_nodes
+        update_ddt(orgAccountObj) # ddt is drop dead times i.e. when the org runs out of money for min current and max node configurations
         if request.method == "POST":
             form_submit_value = request.POST.get('form_submit')
             LOG.info(f"form_submit_value:{form_submit_value}")
@@ -217,7 +216,7 @@ def orgManageCluster(request, pk):
             add_onn_form = OrgNumNodeForm(min_nodes=orgAccountObj.min_node_cap,max_nodes=OrgAccount.admin_max_node_cap,prefix = 'add_onn')
         LOG.info(f"{orgAccountObj.name} cluster current_version:{clusterObj.cur_version} provision_env_ready:{clusterObj.provision_env_ready}")
         #LOG.info(f"about to get versions")
-        versions = get_versions()
+        versions = get_versions_for_org(orgAccountObj.name)
         config_form = OrgAccountCfgForm(instance=orgAccountObj,available_versions=versions)
 
         domain = os.environ.get("DOMAIN")
@@ -233,14 +232,18 @@ def orgManageCluster(request, pk):
             pending_destroy = True
         except OwnerPSCmd.DoesNotExist:
             pending_destroy = False
-        context = {'org': orgAccountObj, 'cluster': clusterObj, 'add_onn_form': add_onn_form,
-                'config_form': config_form, 'ps_cmd_rslt_objs':psCmdResultObjs,
-                'cluster_mod_date_utc': clusterObj.modified_date.replace(tzinfo=pytz.utc),
-                'onn_objs':orgNumNodeObjs,
-                'domain':domain, 'user_is_developer':user_is_developer, 'now':datetime.now(timezone.utc),
-                'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface),
-                'pending_refresh':pending_refresh,
-                'pending_destroy':pending_destroy,
+        context = { 'org': orgAccountObj,
+                    'cluster': clusterObj, 
+                    'add_onn_form': add_onn_form,
+                    'config_form': config_form, 
+                    'ps_cmd_rslt_objs':psCmdResultObjs,
+                    'cluster_mod_date_utc': clusterObj.modified_date.replace(tzinfo=pytz.utc),
+                    'onn_objs':orgNumNodeObjs,
+                    'domain':domain, 
+                    'user_is_developer':request.user.groups.filter(name='PS_Developer').exists(), 'now':datetime.now(timezone.utc),
+                    'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface),
+                    'pending_refresh':pending_refresh,
+                    'pending_destroy':pending_destroy,
                 }
         
         LOG.info(f"{request.user.username} {request.method} {orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} pending_refresh:{pending_refresh} pending_destroy:{pending_destroy}")
@@ -256,7 +259,7 @@ def orgManageCluster(request, pk):
 def orgRefreshCluster(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
     LOG.info("%s %s",request.method,orgAccountObj.name)
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             status = 200
             task_id = ''
@@ -290,7 +293,7 @@ def orgRefreshCluster(request, pk):
 def orgDestroyCluster(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
     LOG.info("%s %s",request.method,orgAccountObj.name)
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             orgAccountObj = OrgAccount.objects.get(id=orgAccountObj.id)
             status = 200
@@ -341,14 +344,15 @@ def orgDestroyCluster(request, pk):
 def clearOrgNumNodesReqs(request, pk):
     orgAccountObj = OrgAccount.objects.get(id=pk)
     LOG.info(f"{request.user.username} {request.method} {orgAccountObj.name} <owner:{orgAccountObj.owner.username}>")
-    LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             jrsp = remove_num_node_requests(request.user,orgAccountObj)
             if jrsp['status'] == 'SUCCESS':
                 messages.info(request,jrsp['msg'])
+                LOG.info(jrsp['msg'])
             else:
-                messages.error(request,jrsp['error_msg'])           
+                messages.error(request,jrsp['error_msg']) 
+                LOG.error(jrsp['error_msg'])          
         # GET just displays org_manage_cluster
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
@@ -363,9 +367,8 @@ def clearOrgNumNodesReqs(request, pk):
 def clearActiveNumNodeReq(request, pk):
     orgAccountObj = OrgAccount.objects.get(id=pk)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    LOG.info(f"{request.user.username} {request.method} {orgAccountObj.name} <owner:{orgAccountObj.owner.username}>")
-    LOG.info(f"request.POST:{request.POST} in group:{request.user.groups.filter(name='PS_Developer').exists()} is_owner:{orgAccountObj.owner == request.user}")
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    LOG.info(f"request.POST:{request.POST} {request.user.username} {request.method} {orgAccountObj.name} <owner:{orgAccountObj.owner.username}>")
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             active_onns = OrgNumNode.objects.filter(id__in=clusterObj.cnnro_ids)
             if active_onns.exists():
@@ -383,13 +386,13 @@ def clearActiveNumNodeReq(request, pk):
 @verified_email_required
 def orgConfigure(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
-    LOG.info("%s %s",request.method,orgAccountObj.name)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
     updated = False
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             try:
                 # USING an Unbound form and setting the object explicitly one field at a time!
-                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions())
+                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions_for_org(orgAccountObj.name))
                 emsg = ''
                 if(config_form.is_valid()):
                     for field, value in config_form.cleaned_data.items():
@@ -426,6 +429,7 @@ def orgConfigure(request, pk):
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
             handler.flush()
+        messages.info(request,f'org {orgAccountObj.name} cfg updated successfully')
         return redirect('org-manage-cluster',pk=orgAccountObj.id)
     else:
         messages.error(request,"Unauthorized access")
@@ -436,7 +440,7 @@ def orgConfigure(request, pk):
 def orgAccountHistory(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
     LOG.info("%s %s",request.method,orgAccountObj.name)
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         cost_accounting(orgAccountObj)
         context = {'org': orgAccountObj,'today': datetime.now()} # TBD do we need tz=timezone.utc ?
         return render(request, 'users/org_account_history.html', context)
@@ -448,9 +452,9 @@ def orgAccountHistory(request, pk):
 @login_required(login_url='account_login')
 @verified_email_required
 def ajaxOrgAccountHistory(request):
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+    orgAccountObj = get_orgAccountObj(request.GET.get("org_uuid", None))
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if(request.headers.get('x-requested-with') == 'XMLHttpRequest') and (request.method == 'GET'):
-            orgAccountObj = get_orgAccountObj(request.GET.get("org_uuid", None))
             gran = request.GET.get("granularity", "undefined")
             LOG.info("%s %s %s", orgAccountObj.name,request.method, request.GET.get("granularity", "undefined"))
             got_data, orgCostObj = get_db_org_cost(gran, orgAccountObj)
@@ -477,8 +481,10 @@ def orgAccountForecast(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
     clusterObj = Cluster.objects.get(org__name=orgAccountObj.name)
     LOG.info("%s %s", request.method, orgAccountObj.name)
-    if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
-        cost_accounting(orgAccountObj)
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
+        update_burn_rates(orgAccountObj) # also updates clusterObj.version clusterObj.cur_nodes
+        update_ddt(orgAccountObj) # ddt is drop dead times i.e. when the org runs out of money for min current and max node configurations
+        create_all_forecasts(orgAccountObj)
         show_min_shutdown_date = (orgAccountObj.min_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
         show_cur_shutdown_date = (orgAccountObj.cur_ddt <= (datetime.now(timezone.utc) + timedelta(days=DISPLAY_EXP_TM)))
         context = {'org': orgAccountObj, 'cluster':clusterObj, 'show_cur_shutdown_date': show_cur_shutdown_date, 'show_min_shutdown_date': show_min_shutdown_date}
@@ -542,8 +548,8 @@ def orgProfile(request, pk):
     try:
         # User must be in the PS_Developer group or the owner to modify the profile
         orgAccountObj = get_orgAccountObj(pk)
-        LOG.info("%s %s",request.method,orgAccountObj.name)
-        if request.user.groups.filter(name='PS_Developer').exists() or orgAccountObj.owner == request.user:
+        LOG.info(f"{request.method} {orgAccountObj.name}")
+        if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
             if request.method == "POST":
                 # USING an Unbound form and setting the object explicitly one field at a time!
                 f = OrgProfileForm(request.POST)
@@ -554,11 +560,12 @@ def orgProfile(request, pk):
                     orgAccountObj.save(update_fields=['point_of_contact_name','email'])
                     messages.success(request,'Profile succesfully saved')
                     LOG.info(f"Profile updated with point_of_contact_name:{orgAccountObj.point_of_contact_name} email:{orgAccountObj.email}")
-                    return redirect('org-profile',pk=orgAccountObj.id)
+
                 else:
                     LOG.error("Form error:%s", f.errors.as_text)
                     messages.warning(request, 'error in form')
-            f = OrgProfileForm(instance=orgAccountObj)
+            else:
+                f = OrgProfileForm(instance=orgAccountObj)
             context = {'org': orgAccountObj, 'form': f}
             return render(request, 'users/org_profile.html', context)
         else:
@@ -579,7 +586,7 @@ def orgProfile(request, pk):
 # atomic ensures org and cluster and orgCost are always created together
 def orgAccountCreate(request):
     try:
-        # User must be in the PS_Developer group or the owner to modify the profile
+        # User must be in the PS_Developer group
         if request.user.groups.filter(name='PS_Developer').exists():
             if request.method == 'POST':
                 form = OrgAccountForm(request.POST)
@@ -655,12 +662,11 @@ def browse(request):
             org_by_name = {}
             org_is_public = {}
             orgs = get_all_orgAccountObjs()
-            org_show_shutdown_date = {}
+            user_is_org_admin = {}
+            org_has_ddt = {}
             unaffiliated = 0
-            any_owner = False
             any_memberships = False
             any_ownerships = False
-            user_is_developer = request.user.groups.filter(name='PS_Developer').exists()
             for o in orgs:
                 try:
                     if o.name == 'uninitialized':
@@ -668,6 +674,8 @@ def browse(request):
                         LOG.error(f"DELETING org:{o.name}")
                         o.delete()
                     else:    
+                        update_ddt(o)
+                        org_has_ddt.update({o.name:  (o.cur_ddt < datetime.now(timezone.utc)+timedelta(days=(10*365)))})
                         found_m = False
                         pend = False
                         members = get_MembershipsForUser(active_user)
@@ -678,7 +686,8 @@ def browse(request):
                         org_cluster_cur_nodes.update({o.name: clusterObj.cur_nodes})
                         org_cluster_cur_version.update({o.name: clusterObj.cur_version})
                         org_cluster_connection_status.update({o.name: clusterObj.connection_status})
-                        org_show_shutdown_date.update({o.name: (o.min_ddt <= (datetime.now(timezone.utc) + timedelta(days=365)))})
+                        user_is_org_admin.update({o.name: request.user.groups.filter(name=f'{o.name}_Admin').exists()})
+                        LOG.info(f"org:{o.name} user_is_org_admin:{request.user.groups.filter(name=f'{o.name}_Admin').exists()} is_public:{o.is_public} owner:{o.owner.username} active_user:{active_user.username}")
                         if o.owner == request.user:
                             any_ownerships = True
                         user_is_owner.update({o.name: (o.owner == request.user)})
@@ -701,19 +710,19 @@ def browse(request):
 
         context = { 'org_member': org_member,
                     'is_member_of_org': is_member_of_org,
+                    'user_is_org_admin': user_is_org_admin,
                     'org_by_name': org_by_name,
                     'org_pending': org_pending,
+                    'org_has_ddt': org_has_ddt,
                     'org_accounts': orgs,
                     'org_cluster_deployed_state': org_cluster_deployed_state,
                     'org_cluster_is_deployed': org_cluster_is_deployed,
                     'org_cluster_cur_nodes': org_cluster_cur_nodes,
                     'org_cluster_cur_version': org_cluster_cur_version,
                     'org_cluster_connection_status': org_cluster_connection_status,
-                    'org_show_shutdown_date': org_show_shutdown_date,
                     'org_cluster_active_ps_cmd': org_cluster_active_ps_cmd,
-                    'is_developer': request.user.groups.filter(name='PS_Developer').exists(),
                     'user_is_owner': user_is_owner,
-                    'user_is_developer': user_is_developer,
+                    'user_is_developer': request.user.groups.filter(name='PS_Developer').exists(),
                     'any_unaffiliated': (unaffiliated>0),
                     'any_ownerships': any_ownerships,
                     'any_memberships': any_memberships,
@@ -729,7 +738,7 @@ def browse(request):
             LOG.info("No orgs exist!")
             messages.info(
                 request, 'No orgs exist yet; Have staff user create them')
-
+        update_all_burn_rates()
     except Exception as e:
         LOG.exception("caught exception:")
         #emsg = "SW Error:%"+repr(e)
@@ -738,48 +747,47 @@ def browse(request):
         handler.flush()
     return render(request, 'users/browse.html', context)
 
-@login_required(login_url='account_login')
-@verified_email_required
-def memberships(request):  # current session user
-    #LOG.info(request.method)
-    active_user = request.user
-    org_cluster_deployed_state = {}
-    org_cluster_connection_status = {}
-    org_cluster_active_ps_cmd = {}
-    user_is_owner = {}
-    membershipObjs = get_MembershipsForUser(active_user)
-    displayed_memberships = []
-    for m in membershipObjs:
-        if m.user.username.strip() == active_user.username.strip():
-            displayed_memberships.append(m)
-            o = get_orgAccountObjByName(m.org.name)
-            clusterObj = Cluster.objects.get(org__name=o.name)
-            org_cluster_deployed_state.update({o.name: clusterObj.deployed_state})
-            org_cluster_connection_status.update({o.name: clusterObj.connection_status})
-            org_cluster_active_ps_cmd.update({o.name: clusterObj.active_ps_cmd})
-            user_is_owner.update({o.name: (o.owner == request.user)})
-    #LOG.info(org_cluster_deployed_state)
+# @login_required(login_url='account_login')
+# @verified_email_required
+# def memberships(request):  # current session user
+#     #LOG.info(request.method)
+#     active_user = request.user
+#     org_cluster_deployed_state = {}
+#     org_cluster_connection_status = {}
+#     org_cluster_active_ps_cmd = {}
+#     user_is_owner = {}
+#     membershipObjs = get_MembershipsForUser(active_user)
+#     displayed_memberships = []
+#     for m in membershipObjs:
+#         if m.user.username.strip() == active_user.username.strip():
+#             displayed_memberships.append(m)
+#             o = get_orgAccountObjByName(m.org.name)
+#             clusterObj = Cluster.objects.get(org__name=o.name)
+#             org_cluster_deployed_state.update({o.name: clusterObj.deployed_state})
+#             org_cluster_connection_status.update({o.name: clusterObj.connection_status})
+#             org_cluster_active_ps_cmd.update({o.name: clusterObj.active_ps_cmd})
+#             user_is_owner.update({o.name: (o.owner == request.user)})
+#     #LOG.info(org_cluster_deployed_state)
 
-    context = { 'user': active_user,
-                'memberships': displayed_memberships,
-                'org_cluster_deployed_state': org_cluster_deployed_state,
-                'org_cluster_connection_status': org_cluster_connection_status,
-                'org_cluster_active_ps_cmd': org_cluster_active_ps_cmd,
-                'is_developer': request.user.groups.filter(name='PS_Developer').exists(),
-                'is_developer': request.user.groups.filter(name='PS_Developer').exists(),
-                'user_is_owner': user_is_owner
-                }
+#     context = { 'user': active_user,
+#                 'memberships': displayed_memberships,
+#                 'org_cluster_deployed_state': org_cluster_deployed_state,
+#                 'org_cluster_connection_status': org_cluster_connection_status,
+#                 'org_cluster_active_ps_cmd': org_cluster_active_ps_cmd,
+#                 'is_developer': request.user.groups.filter(name='PS_Developer').exists(),
+#                 'user_is_owner': user_is_owner
+#                 }
 
-    # this filter 'get_item' is used inside the template
-    @register.filter
-    def get_item(dictionary, key):
-        return dictionary.get(key)
-    if(membershipObjs.count() > 0):
-        return render(request, 'users/memberships.html', context)
-    else:
-        messages.info(request,
-                      'You have no memberships; Find your organization then Click "Request Membership" ')
-        return redirect('browse')
+#     # this filter 'get_item' is used inside the template
+#     @register.filter
+#     def get_item(dictionary, key):
+#         return dictionary.get(key)
+#     if(membershipObjs.count() > 0):
+#         return render(request, 'users/memberships.html', context)
+#     else:
+#         messages.info(request,
+#                       'You have no memberships; Find your organization then Click "Request Membership" ')
+#         return redirect('browse')
 
 @login_required(login_url='account_login')
 @verified_email_required
@@ -878,7 +886,7 @@ def reqNewMembership(request, pk):
 @verified_email_required
 def provSysAdmin(request):
 
-    if request.user.groups.filter(name='PS_Developer').exists():
+    if user_in_one_of_these_groups(user=request.user,groups=['PS_Developer']):
         return render(request, 'prov_sys_admin.html', {'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface)})
     else:
         messages.error(request, 'You Do NOT have privileges to access this page')
@@ -886,11 +894,14 @@ def provSysAdmin(request):
 
 @login_required(login_url='account_login')
 @verified_email_required
-def disableProvisioning(request):    
-    if request.user.groups.filter(name='PS_Developer').exists():
-        set_PROVISIONING_DISABLED(redis_interface,'True')
-        messages.warning(request, 'You have disabled provisioning!')
-    else:
-        LOG.warning(f"User {request.user.username} attempted to disable provisioning")
-        messages.error(request, 'You are not a PS_Developer')
+def disableProvisioning(request): 
+    req_msg = f"User:{request.user.username} requested disable provisioning"
+    LOG.critical(f"{req_msg}")   
+    error_msg, disable_msg, rsp_msg = disable_provisioning(request.user,req_msg)    
+    if error_msg and error_msg != '':
+        messages.error(request, error_msg)
+    if disable_msg and disable_msg != '':
+        messages.warning(request, disable_msg)
+    if rsp_msg and rsp_msg != '':
+        messages.warning(request, rsp_msg)
     return redirect('browse')

@@ -16,15 +16,19 @@ from datetime import datetime, timezone, timedelta
 from users.models import Membership, OrgAccount, User, Cluster, OrgNumNode
 from users.ps_errors import ClusterDeployAuthError
 import logging
+import json
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenBackendError
 from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED,redis_interface
+from users.utils import user_in_one_of_these_groups,disable_provisioning
 from users.global_constants import *
 from oauth2_provider.views.generic import ProtectedResourceView
 from django.http import JsonResponse
 from django.contrib.auth import authenticate, login
+from django.conf import settings
+
 
 LOG = logging.getLogger('django')
 JWT_authenticator = JWTAuthentication()
@@ -418,7 +422,7 @@ class DisableProvisioningSerializer(serializers.Serializer):
 )
 class DisableProvisioningView(generics.UpdateAPIView):
     '''
-    USED FOR PROVISIONING SYSTEM DEVELOPMENT ONLY!
+    USED BY PROVISIONING SYSTEM DEVELOPERS ONLY!
     Takes a username, password and mfa_code and disables provisioning for ALL clusters in the domain.
     This is used when provisioning a new Provisioining System cluster.
     This can only be done by a PS_Developer. 
@@ -430,27 +434,50 @@ class DisableProvisioningView(generics.UpdateAPIView):
         username = request.data.get('username')
         password = request.data.get('password')
         mfa_code = request.data.get('mfa_code')
-
+        LOG.info(f"{username} is attempting to disable provisioning")
         if not all([username, password, mfa_code]):
             return Response({'status': "FAILED","error_msg":"Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
-
+        LOG.info(f"authenicating username:{username}")
         user = authenticate(request, username=username, password=password)
         if user is not None:
             if user.groups.filter(name='PS_Developer').exists():
                 login(request, user)
                 try:
-                    if mfa_code == os.environ.get('MFA_CODE'):
-                        set_PROVISIONING_DISABLED(redis_interface,'True')
+                    LOG.info(f"mfa_code:{mfa_code} MFA_PLACEHOLDER:{os.environ.get('MFA_PLACEHOLDER')} DOMAIN:{os.environ.get('DOMAIN')} TZ={os.environ.get('TZ')}")
+                    if mfa_code == os.environ.get('MFA_PLACEHOLDER'):
+                        req_msg = f"User:{request.user.username} requested disable provisioning"
+                        LOG.critical(f"{req_msg}")   
+                        error_msg, disable_msg, rsp_msg = disable_provisioning(request.user,req_msg)    
+                        if error_msg and error_msg != '':
+                            LOG.error(request, error_msg)
+                            return Response({'status': "FAILED","error_msg":'FAILED to disable provisioning'}, status=500)
+                        else:
+                            port_str = os.environ.get("PS_SERVER_PORT")
+                            LOG.info(f"PS_SERVER_PORT:{port_str}")
+                            if port_str is None:
+                                LOG.error(f"PS_SERVER_PORT is not set in environment")
+                                port_str = "50052"
+                            if port_str == "50051":
+                                port_str = "50052"
+                            else:
+                                port_str = "50051"
+                            jrsp = {
+                                'status': "SUCCESS",
+                                "msg":"You have disabled provisioning! Re-Deploy required!",
+                                "alternate_port":f"{port_str}",
+                                }
+                            http_status=status.HTTP_200_OK
+                            LOG.info(f"{jrsp}")
                     else:
+                        LOG.error(f"Invalid MFA code")
                         return Response({'status': "FAILED","error_msg":"Invalid MFA code"}, status=status.HTTP_400_BAD_REQUEST)
                 except Exception as e:
-                    return Response({'status': "FAILED","error_msg":f"Failed to disable provisioning: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                
-                jrsp = {'status': "SUCCESS","msg":"You have disabled provisioning! Re-Deploy required!"}
-                http_status=status.HTTP_200_OK
+                    LOG.exception("caught exception:")
+                    return Response({'status': "FAILED","error_msg":f"Failed to disable provisioning: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)               
             else:
+                LOG.error(f"{username} attempted to disable provisioning but is not a PS_Developer")
                 jrsp = {'status': "FAILED","error_msg":"User is not a PS_Developer"}
-                http_status=status.HTTP_400_BAD_REQUEST
+                http_status=status.HTTP_401_UNAUTHORIZED
         else:
             jrsp = {'status': "FAILED","error_msg":"Invalid username/password"}
             http_status=status.HTTP_400_BAD_REQUEST

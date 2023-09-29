@@ -13,6 +13,10 @@ logging.basicConfig(level=logging.INFO)
 
 def main(domain, mfa_code):
 
+    if mfa_code == 'skip': # Check if mfa_code is blank
+        logger.info("skipping disable_provisioning") # Log the message
+        return 0 # Exit with success code
+
     ps_username = None
     ps_password = None
     session = requests.Session()
@@ -44,14 +48,13 @@ def main(domain, mfa_code):
                 rqst = {"username": ps_username, "password": ps_password, "mfa_code": mfa_code}
                 headers = {'Content-Type': 'application/json'}
                 if domain == 'localhost':
-                    host = "http://localhost:8080/api/disable_provisioning/"
+                    host = "http://localhost/api/disable_provisioning/"
                 else:
                     host = "https://ps." + domain + "/api/disable_provisioning/"
                 rsps = session.put(host, data=json.dumps(rqst), headers=headers, timeout=request_timeout)
                 logger.info(' Provisioning system returned => {}'.format(rsps))
                 try:
                     rsps_body = rsps.json()
-                    logger.info(' Provisioning system returned => {}'.format(rsps_body))
                 except json.JSONDecodeError:
                     logger.error(f' Failed to decode JSON response')
                     return 1
@@ -60,7 +63,15 @@ def main(domain, mfa_code):
                     return 1
                 rsps.raise_for_status()
                 logger.info(' Provisioning system returned => {}'.format(rsps_body))
-                return 0
+                # Check for alternate_port in response and print it to stdout
+                alternate_port = rsps_body.get("alternate_port", None)
+                if alternate_port:
+                    print(alternate_port)
+                    return 0
+                else:
+                    logger.error(f' Missing alternate_port => {rsps_body}')
+                    print("50052")
+                    return 0
             except requests.exceptions.HTTPError as e:
                 logger.error(f' Provisioning system returned:{e} ===> Status:{rsps.status_code} {rsps_body["error_msg"]}')
                 return 1

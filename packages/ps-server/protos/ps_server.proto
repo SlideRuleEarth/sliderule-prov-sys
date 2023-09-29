@@ -141,7 +141,10 @@ message CurrentCostReq{
   string tm           = 3; 
 }
 
-message GetVersionsReq{}
+message GetVersionsReq{
+  string name = 1; // can be empty
+}
+
 message GetVersionsRsp{
   repeated string versions = 1;
 }

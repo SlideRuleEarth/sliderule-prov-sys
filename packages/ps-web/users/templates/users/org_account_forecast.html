@@ -8,7 +8,7 @@
         {% include 'users/org_button_bar.html' %} 
         {% endwith %}
     </div>
-{% endblock %}
+{% endblock nav %}
 
 {% block content %}
 
@@ -108,7 +108,7 @@
                                                             <td>{{cluster.cur_nodes}}</td>
                                                             <td>                                                                
                                                             {% if show_cur_shutdown_date %}
-                                                                {{org.cur_ddt|date:"Y-m-d H:i:s A T"}}
+                                                                <p class="data-utc-time mx-1 my-1" data-utc-time="{{ org.cur_ddt.isoformat }}">Loading...</p>
                                                             {% else %}
                                                                 No shutdown scheduled
                                                             {% endif %}
@@ -119,7 +119,7 @@
                                                             <td>{{org.min_node_cap}}</td>
                                                             <td>
                                                             {% if show_min_shutdown_date %}
-                                                                {{org.min_ddt|date:"Y-m-d H:i:s A T"}}
+                                                            <p class="data-utc-time mx-1 my-1" data-utc-time="{{ org.min_ddt.isoformat }}">Loading...</p>
                                                             {% else %}
                                                                 No shutdown scheduled
                                                             {% endif %}
@@ -129,13 +129,13 @@
                                                             <th scope="row">Maximum</th>
                                                             <td>{{org.max_node_cap}}</td>
                                                             <td>
-                                                                {{org.max_ddt|date:"Y-m-d H:i:s A T"}}
+                                                                <p class="data-utc-time mx-1 my-1" data-utc-time="{{ org.max_ddt.isoformat }}">Loading...</p>
                                                             </td>
                                                         </tr>                                                          
                                                     </tbody>
                                                 </table>
                                             </dd>
-                                    </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -154,29 +154,36 @@
                                         <div class="row">
                                             <table>
                                                 <tbody">
+                                                    <!-- Header Row -->
+                                                    <tr class="table_header font-weight-bold">
+                                                        <td class="table-mc-data-col"></td>  <!-- Empty Cell for Alignment -->
+                                                        <td class="table-mc-data-col">Min</td>
+                                                        <td class="table-mc-data-col">Current</td>
+                                                        <td class="table-mc-data-col">Max</td>
+                                                    </tr>
                                                     <tr class="table_row">
                                                         <td class="table-mc-labels-col">Nodes:</td>
-                                                        <td class="table-mc-data-col">{{org.min_node_cap}}</td>
-                                                        <td class="table-mc-data-col">{{cluster.cur_nodes}}</td>
-                                                        <td class="table-mc-data-col">{{org.max_node_cap}}</td>
+                                                        <td class="table-mc-data-col my-1"><p>{{org.min_node_cap}}</p></td>
+                                                        <td class="table-mc-data-col my-1"><p>{{cluster.cur_nodes}}</p></td>
+                                                        <td class="table-mc-data-col my-1"><p>{{org.max_node_cap}}</p></td>
                                                     </tr>
                                                     <tr class="table_row">
                                                         <td class="table-mc-labels-col">Burn Rates:</td>
-                                                        <td class="table-mc-data-col">
+                                                        <td class="table-mc-data-col my-1">
                                                             <span id="br-min-field">{{org.min_hrly|floatformat:"2g"}} </span>  <span id="br-min-units">units</span>
                                                         </td>
-                                                        <td class="table-mc-data-col">
+                                                        <td class="table-mc-data-col my-1">
                                                             <span id="br-cur-field">{{org.cur_hrly|floatformat:"2g"}} </span>  <span id="br-cur-units">units</span>
                                                         </td>
-                                                        <td class="table-mc-data-col">
+                                                        <td class="table-mc-data-col my-1">
                                                             <span id="br-max-field">{{org.max_hrly|floatformat:"2g"}} </span>  <span id="br-max-units">units</span>
                                                         </td>
                                                     </tr>
                                                     <tr class="table_row">
                                                         <td class="table-mc-labels-col">Auto-Shutdown:</td>
-                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.min_ddt|date:"Y-m-d H:i:s T"}} {% endtimezone %}</td>
-                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.cur_ddt|date:"Y-m-d H:i:s T"}} {% endtimezone %}</td>
-                                                        <td class="table-mc-data-col">{% timezone "UTC" %} {{org.max_ddt|date:"Y-m-d H:i:s T"}} {% endtimezone %}</td>
+                                                        <td class="table-mc-data-col"><p class="data-utc-time my-1" data-utc-time="{{ org.min_ddt.isoformat }}">Loading...</p></td>
+                                                        <td class="table-mc-data-col"><p class="data-utc-time my-1" data-utc-time="{{ org.cur_ddt.isoformat }}">Loading...</p></td>
+                                                        <td class="table-mc-data-col"><p class="data-utc-time my-1" data-utc-time="{{ org.max_ddt.isoformat }}">Loading...</p></td>
                                                     </tr>
                                                 </tbody> 
                                             </table>
@@ -209,6 +216,11 @@
             // These options are needed to round to whole numbers if that's what you want.
             minimumFractionDigits: 2, // (this suffices for whole numbers, but will print 2500.10 as $2,500.1)
             maximumFractionDigits: 2  // (causes 2500.99 to be printed as $2,501)
+        });
+        const utcTimes = document.querySelectorAll('.data-utc-time');
+        utcTimes.forEach(utcTimeElement => {
+            const utcTime = new Date(utcTimeElement.dataset.utcTime);
+            utcTimeElement.textContent = utcTime.toLocaleString();
         });
  
         $("#granularity").change(function() {

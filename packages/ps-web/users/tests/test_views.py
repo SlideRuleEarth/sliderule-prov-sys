@@ -7,8 +7,9 @@ import os
 import pathlib
 from importlib import import_module
 from datetime import datetime, timezone, timedelta
-from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_user,process_onn_api,process_org_configure,log_ONN,create_active_membership,verify_api_user_makes_onn_ttl
-from users.tasks import loop_iter
+from users.tests.utilities_for_unit_tests import *
+#get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_user,process_onn_api,process_org_configure,log_ONN,create_active_membership,verify_api_user_makes_onn_ttl,upload_json_string_to_s3
+from users.tasks import loop_iter,get_versions_for_org
 from users.models import OwnerPSCmd,OrgNumNode,OrgAccount,PsCmdResult,Cluster
 from django.urls import reverse
 import time_machine
@@ -957,6 +958,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 
     response = client.post(url,HTTP_ACCEPT='application/json')
     assert((response.status_code == 200) or (response.status_code == 302))
+    assert(is_in_messages(response, "ownertestuser cleaned all PENDING org node reqs for test_org",logger))
     assert OrgNumNode.objects.count() == 1
 
     # now clear the active one
@@ -966,6 +968,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 
     response = client.post(url,HTTP_ACCEPT='application/json')
     assert((response.status_code == 200) or (response.status_code == 302))
+    assert(is_in_messages(response, "Successfully deleted active Org Num Node requests",logger))
     assert OrgNumNode.objects.count() == 0
 
 

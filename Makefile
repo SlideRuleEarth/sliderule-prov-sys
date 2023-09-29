@@ -7,12 +7,13 @@ PS_NGINX_SOURCE_DIR = $(ROOT)/packages/ps-web # nginx docker is built in web dir
 
 VERSION ?= latest
 VERSION_TOKENS := $(subst ., ,$(lastword $(VERSION)))
+DOMAIN ?= testsliderule.org
+REGION ?= us-west-2
 REPO ?= $(shell aws secretsmanager get-secret-value --secret-id $(DOMAIN)/secrets | jq -r '.SecretString' | jq -r '.prov_sys_repo')
 ACCT_ID ?= $(shell aws secretsmanager get-secret-value --secret-id $(DOMAIN)/secrets | jq -r '.SecretString' | jq -r '.aws_account_id')
 NOW = $(shell /bin/date +"%Y%m%d%H%M%S")
 ENVVER = $(shell git --git-dir .git --work-tree . describe --abbrev --dirty --always --tags --long)
 MFA_CODE ?= $(shell read -p "Enter MFA code: " code; echo $$code)
-DOMAIN ?= testsliderule.org
 DOMAIN_ROOT = $(firstword $(subst ., ,$(DOMAIN)))
 DOMAIN_NAME = $(subst .,-,$(DOMAIN))
 DB_FINAL_SNAPSHOT_NAME = $(DOMAIN_NAME)-tf-applied-${NOW}
@@ -53,13 +54,6 @@ dump-params-used:
 ############################
 # Docker Utility Targets
 ############################
-
-# logins for aws and docker expect ~/.asw/credentials [default] profile to contain valid entries for:
-# aws_access_key_id
-# aws_secret_access_key
-# aws_session_token
-aws-repo-docker-login: ## This authenticates the Docker CLI to use the aws ECR ( the asw container registry )
-	aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $(REPO)
 
 docker-login: ## login to docker command line to access Docker container registery
 	docker login
@@ -103,12 +97,17 @@ docker-push:
 	docker push $(REPO)/sliderule-ps-server:$(VERSION)
 	@echo VERSION:$(VERSION)
 
-disable_provisioning: ## disable provisioning for DOMAIN. Once you do this you MUST deploy something
-	python3 $(ROOT)/scripts/disable_provisioning.py --domain $(DOMAIN) --mfa_code $(MFA_CODE)
-	
-deploy:  # deploy prov-sys docker container tagged $(VERSION) (which defaults to latest) in terraform workspace $(DOMAIN) e.g. 'make deploy VERSION=v0.0.1 DOMAIN='testsliderule.org' SITE_TITLE='SlideRule Test''
+disable_provisioning:  ## disable provisioning for DOMAIN. Once you do this you MUST deploy something
+	@echo "Disabling provisioning for domain: $(DOMAIN)"
+	@read -p "Enter MFA code: " code; \
+	port=$$(python3 $(ROOT)/scripts/disable_provisioning.py --domain $(DOMAIN) --mfa_code $$code); \
+	echo "Port from script: $$port"; \
+	echo $$port > .port.tmp
+
+deploy: disable_provisioning # deploy prov-sys docker container tagged $(VERSION) (which defaults to latest) in terraform workspace $(DOMAIN) e.g. 'make deploy VERSION=v0.0.1 DOMAIN='testsliderule.org' SITE_TITLE='SlideRule Test''
+	port=$$(cat .port.tmp); \
 	mkdir -p terraform/prov-sys && cd terraform/prov-sys && terraform init && terraform workspace select $(DOMAIN)-prov-sys || terraform workspace new $(DOMAIN)-prov-sys && \
-	terraform apply -var docker_image_url_ps-web=$(REPO)/sliderule-ps-web:$(VERSION) -var docker_image_url_ps-nginx=$(REPO)/sliderule-ps-nginx:$(VERSION)  -var docker_image_url_ps-server=$(REPO)/sliderule-ps-server:$(VERSION) -var rds_id=$(DOMAIN_NAME) -var rds_final_snapshot=$(DB_FINAL_SNAPSHOT_NAME) -var domain=$(DOMAIN) -var domain_root=$(DOMAIN_ROOT) -var ps_server_host=localhost -var ps_version=$(VERSION) -var ps_site_title='$(SITE_TITLE)' -var ps_bld_envver=$(ENVVER) -var site_id=$($(SITE_ID))
+	terraform apply -var docker_image_url_ps-web=$(REPO)/sliderule-ps-web:$(VERSION) -var docker_image_url_ps-nginx=$(REPO)/sliderule-ps-nginx:$(VERSION)  -var docker_image_url_ps-server=$(REPO)/sliderule-ps-server:$(VERSION) -var rds_id=$(DOMAIN_NAME) -var rds_final_snapshot=$(DB_FINAL_SNAPSHOT_NAME) -var domain=$(DOMAIN) -var domain_root=$(DOMAIN_ROOT) -var ps_server_host=localhost -var ps_server_port=$$port -var ps_version=$(VERSION) -var ps_site_title='$(SITE_TITLE)' -var ps_bld_envver=$(ENVVER) -var site_id=$($(SITE_ID))
 	@echo SITE_ID:$(SITE_ID)
 	@echo SITE_ID value:$($(SITE_ID))
 	@echo DOMAIN:$(DOMAIN)

@@ -11,15 +11,9 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from google.protobuf.json_format import MessageToJson
-from ps_server import ps_server_pb2,get_sorted_tm_cost,merge_ccrs,get_ps_versions,get_versions,read_SetUpCfg
-
-# module_name = 'ps_server'
-# # discover the src directory to import the file being tested
-# parent_dir = pathlib.Path(__file__).parent.resolve()
-# src_path = os.path.join(parent_dir, '..', '')
-# sys.path.append(src_path)
+from ps_server import S3_BUCKET,ps_server_pb2,get_sorted_tm_cost,merge_ccrs,get_ps_versions,get_versions_for_org,read_SetUpCfg,ORGS_PERMITTED_JSON_FILE,get_domain_env,get_all_versions
 from conftest import *
-
+from test_utils import *
 
 def example_ccr(gran,tm,cost):
     ccr = ps_server_pb2.CostAndUsageRsp(
@@ -231,12 +225,12 @@ def test_get_ps_versions(setup_logging):
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('v3',False),('latest',True)], indirect=True)
-def test_get_versions(setup_logging,terraform_env,s3):
+def test_get_versions(setup_logging,terraform_env,s3,test_name):
     logger = setup_logging
-    versions = get_versions(s3_client=s3)
-    logger.info(f'ps_versions:{versions}')
-    assert ('latest' in versions)
-    assert ('v3' in versions)
+    versions_for_org = get_versions_for_org(s3_client=s3,org_to_check=test_name)
+    logger.info(f'ps_versions:{versions_for_org}')
+    assert ('latest' in versions_for_org)
+    assert ('v3' in versions_for_org)
 
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('v3',False),('v3',True)], indirect=True)
@@ -271,3 +265,39 @@ def test_read_SetUpCfg_is_public_True(setup_logging,terraform_env,test_name):
     is_public = read_SetUpCfg(name=test_name).is_public
     logger.info(f'is_public:{is_public}')
     assert is_public
+
+#@pytest.mark.dev
+@pytest.mark.parametrize('terraform_env', [('latest',True),('v3',True)], indirect=True)
+def test_read_PermittedOrg_included(setup_logging,s3,terraform_env,test_name):
+    logger = setup_logging
+    upload_json_string_to_s3(s3_client=s3,
+                             s3_bucket=S3_BUCKET,
+                             s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                             json_string=f'["{test_name}", "unit-test-private"]',
+                             logger=logger)
+    versions_for_org = get_versions_for_org(s3_client=s3,org_to_check=test_name)
+    logger.info(f'versions_for_org:{versions_for_org}')
+    all_versions = get_all_versions(s3_client=s3)
+    logger.info(f'all_versions:{all_versions}')
+    assert(have_same_elements(versions_for_org,all_versions))
+    assert ('latest' in versions_for_org)
+    assert ('v3' in versions_for_org)
+    assert ('unstable' in versions_for_org)
+
+#@pytest.mark.dev
+@pytest.mark.parametrize('terraform_env', [('latest',True),('v3',True)], indirect=True)
+def test_read_PermittedOrg_excluded(setup_logging,s3,terraform_env,test_name):
+    logger = setup_logging
+    upload_json_string_to_s3(s3_client=s3,
+                             s3_bucket=S3_BUCKET,
+                             s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                             json_string=f'["{test_name}"]', # test_name is unit-test-org
+                             logger=logger)
+    versions_for_org = get_versions_for_org(s3_client=s3,org_to_check='unit-test-private')
+    logger.info(f'versions_for_org:{versions_for_org}')
+    all_versions = get_all_versions(s3_client=s3)
+    logger.info(f'all_versions:{all_versions}')
+    assert(not have_same_elements(versions_for_org,all_versions))
+    assert ('latest' not in versions_for_org)
+    assert ('v3' in versions_for_org)
+    assert ('unstable' in versions_for_org)

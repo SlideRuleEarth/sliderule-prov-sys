@@ -45,7 +45,6 @@ import logging
 import unicodedata
 import calendar
 import time_machine
-
 import grpc
 import ps_server_pb2
 import ps_server_pb2_grpc
@@ -125,7 +124,7 @@ def get_terraform_dir(name):
 def get_s3_client():
     return boto3.client("s3", region_name="us-west-2", endpoint_url= "http://localstack:4566")
 
-def get_versions():
+def get_versions_for_org(name):
     VERSIONS =shared_Mock_Clusters.versions
     LOG.critical(VERSIONS)
     return VERSIONS
@@ -194,7 +193,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         return ps_server_pb2.InitRsp(success=True, error_msg='')
 
     def GetVersions(self, request, context):
-        return ps_server_pb2.GetVersionsRsp(versions=get_versions())
+        return ps_server_pb2.GetVersionsRsp(versions=get_versions_for_org(name=request.name))
 
     def GetPSVersions(self, request, context):
         ps_server_versions = get_ps_versions()
