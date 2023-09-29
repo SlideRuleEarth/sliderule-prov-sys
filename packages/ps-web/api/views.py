@@ -21,7 +21,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenBackendError
-from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED,redis_interface
+from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED
 from users.utils import user_in_one_of_these_groups,disable_provisioning
 from users.global_constants import *
 from oauth2_provider.views.generic import ProtectedResourceView

@@ -21,7 +21,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,set_PROVISIONING_DISABLED,redis_interface,process_num_nodes_api,update_ddt,create_all_forecasts
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -241,7 +241,7 @@ def orgManageCluster(request, pk):
                     'onn_objs':orgNumNodeObjs,
                     'domain':domain, 
                     'user_is_developer':request.user.groups.filter(name='PS_Developer').exists(), 'now':datetime.now(timezone.utc),
-                    'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface),
+                    'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(),
                     'pending_refresh':pending_refresh,
                     'pending_destroy':pending_destroy,
                 }
@@ -727,7 +727,7 @@ def browse(request):
                     'any_ownerships': any_ownerships,
                     'any_memberships': any_memberships,
                     'org_is_public': org_is_public,
-                    'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface),
+                    'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(),
                     }
 
             # this filter 'get_item' is used inside the template
@@ -887,7 +887,7 @@ def reqNewMembership(request, pk):
 def provSysAdmin(request):
 
     if user_in_one_of_these_groups(user=request.user,groups=['PS_Developer']):
-        return render(request, 'prov_sys_admin.html', {'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED(redis_interface)})
+        return render(request, 'prov_sys_admin.html', {'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED()})
     else:
         messages.error(request, 'You Do NOT have privileges to access this page')
         return redirect('browse')

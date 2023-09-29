@@ -31,57 +31,46 @@ from users.global_constants import *
 import redis
 import json
 import logging
+from django.core.cache import cache
+
 LOG = logging.getLogger('django')
 #LOG.propagate = False
 
-class RedisInterface:
-    def __init__(self):
-        self.redis_conn = None
-        self.host = os.environ.get("REDIS_HOST", "localhost")
+def check_redis(log_label):
+    try:
+        client = cache.client.get_client()  # Get the underlying Redis client
+        while not client.ping():  # Call the ping method on the Redis client
+            LOG.critical(f"{log_label} waiting for redis to come up...")
+            sleep(5)    # wait 5 seconds before trying again
+    except Exception as e:
+        LOG.critical(f"{log_label} check_redis got this exception:{str(e)}")
+        sleep(5)
 
-    def get_connection(self):
-        if not self.redis_conn:
-            self.redis_conn = redis.Redis(host=self.host, port=6379, db=1)
-        return self.redis_conn
 
-    def server_is_up(self):
-        try:
-            redis_connection = self.get_connection()
-            if redis_connection.ping():
-                pass
-        except redis.ConnectionError:
-            LOG.critical("The redis server isn't responding.")        
-            return False
-        return True
-
-redis_interface = RedisInterface()
-
-def set_PROVISIONING_DISABLED(redis_interface,val):
+def set_PROVISIONING_DISABLED(val):
     try:
         if val == 'True':
-            LOG.critical(f"set_PROVISIONING_DISABLED({redis_interface},{val})")
+            LOG.critical(f"set_PROVISIONING_DISABLED({val})")
         else:
-            LOG.info(f"set_PROVISIONING_DISABLED({redis_interface},{val})")
-        redis_connection = redis_interface.get_connection()
-        redis_connection.set('PROVISIONING_DISABLED', val)
+            LOG.info(f"set_PROVISIONING_DISABLED({val})")
+        cache.set('PROVISIONING_DISABLED', val)
     except Exception as e:
-        LOG.critical(f"set_PROVISIONING_DISABLED({redis_interface},{val}) failed with {e} ")
+        LOG.critical(f"set_PROVISIONING_DISABLED({val}) failed with {e}")
 
-def get_PROVISIONING_DISABLED(redis_interface):
+def get_PROVISIONING_DISABLED():
     try:
-        redis_connection = redis_interface.get_connection()
-        state = redis_connection.get('PROVISIONING_DISABLED').decode('utf-8')  == 'True'
+        state = cache.get('PROVISIONING_DISABLED')
         if state is None:
             # initialize to False
             LOG.critical("PROVISIONING_DISABLED is None; Setting to False")
-            set_PROVISIONING_DISABLED(redis_interface,'False')
-            state = False
-        if state != False:
+            set_PROVISIONING_DISABLED('False')
+            state = 'False'
+        if state == 'True':
             LOG.critical(f"PROVISIONING_DISABLED is {state}")
     except Exception as e:
-        LOG.critical(f"get_PROVISIONING_DISABLED() failed with {e} ")
-        state = False
-    return state
+        LOG.critical(f"get_PROVISIONING_DISABLED() failed with {e}")
+        state = 'False'
+    return state == 'True'
 
 def get_org_queue_name_str(orgAccount_name):
     return f"ps-cmd-{orgAccount_name}"
@@ -1611,33 +1600,34 @@ def refresh_token_maintenance(self):
         LOG.exception('Exception caught')
         return False
 
-@shared_task(name="forever_loop_main_task",bind=True) 
-def forever_loop_main_task(self,name,loop_count):
+
+@shared_task(name="forever_loop_main_task", bind=True)
+def forever_loop_main_task(self, name, loop_count):
     '''
-    This is the main loop for each org. 
+    This is the main loop for each org.
     '''
     orgAccountObj = OrgAccount.objects.get(name=name)
     result = True
     task_idle = True
-    redis_interface = None
+    check_redis(log_label=f"forever_loop_main_task name:{name} loop_count:{loop_count}")
     try:
         LOG.info(f"forever_loop_main_task {self.request.id} STARTED for {orgAccountObj.name}")
-        redis_interface = RedisInterface()
-        while task_idle and redis_interface.server_is_up() and not get_PROVISIONING_DISABLED(redis_interface):
-            task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+        while task_idle and not get_PROVISIONING_DISABLED():
+            task_idle, loop_count = loop_iter(orgAccountObj, loop_count)
     except Exception as e:
         LOG.exception(f'forever_loop_main_task - Exception caught while processing:{orgAccountObj.name}')
-        sleep(5) # wait 5 seconds before trying again
+        sleep(5)  # wait 5 seconds before trying again
         result = False
-    #run again if  we have a redis connection and not disabled
-    if redis_interface is not None and redis_interface.server_is_up():
-        if get_PROVISIONING_DISABLED(redis_interface) == False: 
+    # we can exit above if the task is NOT idle (i.e. it executed a cmd) and provisioning is disabled
+    try:
+        if not get_PROVISIONING_DISABLED():
             sleep(1)
-            LOG.info(f" forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception or PS_CMD because get_PROVISIONING_DISABLED is False!")
-            forever_loop_main_task.apply_async((orgAccountObj.name,orgAccountObj.loop_count),queue=get_org_queue_name(orgAccountObj))
+            LOG.info(f"forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception or PS_CMD because PROVISIONING_DISABLED is False!")
+            forever_loop_main_task.apply_async((orgAccountObj.name, orgAccountObj.loop_count), queue=get_org_queue_name(orgAccountObj))
         else:
             LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because PROVISIONING_DISABLED is True!")
-    else:
+    except Exception:
         LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because we cannot connect to redis!")
+
     LOG.info(f"forever_loop_main_task {self.request.id} FINISHED for {orgAccountObj.name} with result:{result} @ loop_count:{loop_count}")
     return result

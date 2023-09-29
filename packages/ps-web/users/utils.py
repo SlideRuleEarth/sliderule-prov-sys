@@ -25,7 +25,7 @@ from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
 from django_celery_results.models import TaskResult
-from .tasks import get_ps_versions, get_org_queue_name_str, get_org_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, RedisInterface, redis_interface
+from .tasks import get_ps_versions, get_org_queue_name_str, get_org_queue_name, forever_loop_main_task, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis
 from oauth2_provider.models import AbstractApplication
 from users.global_constants import *
 
@@ -188,10 +188,9 @@ def init_celery():
     hostname = socket.gethostname()
     LOG.info(f"hostname:{hostname}")
     domain = os.environ.get("DOMAIN")
-    local_redis_interface = RedisInterface()
-
-    set_PROVISIONING_DISABLED(local_redis_interface,'False')
-    LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED(local_redis_interface)}")
+    check_redis(log_label="init_celery")
+    set_PROVISIONING_DISABLED('False')
+    LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED()}")
 
     if 'localhost' in domain: 
         SHELL_CMD=f"celery -A ps_web flower --url_prefix=flower".split(" ")
@@ -237,11 +236,11 @@ def disable_provisioning(user,req_msg):
     rsp_msg=''
     if user_in_one_of_these_groups(user,groups=['PS_Developer']):
         try:
-            if get_PROVISIONING_DISABLED(redis_interface):
+            if get_PROVISIONING_DISABLED():
                 LOG.warning(f"User {user.username} attempted to disable provisioning but it was already disabled")
                 rsp_msg = f"User {user.username} attempted to disable provisioning but it was already disabled"
             else:
-                set_PROVISIONING_DISABLED(redis_interface,'True')
+                set_PROVISIONING_DISABLED('True')
                 disable_msg = f"User:{user.username} has disabled provisioning!"
                 LOG.critical(disable_msg)
         except Exception as e:
