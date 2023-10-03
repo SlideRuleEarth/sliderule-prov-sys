@@ -10,13 +10,13 @@ ENV PYTHONDONTWRITEBYTECODE 1
 # upgrade PIP as root user
 RUN pip install --upgrade pip
 # Install postgres client
-RUN apt-get update && apt-get install -y  postgresql-client
-
+RUN apt-get update && apt-get install -y  postgresql-client sudo
+RUN pip install py-spy
+RUN echo "reg_user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/reg_user
 RUN adduser reg_user
 USER reg_user
 ENV PATH="/home/reg_user/.local/bin:${PATH}"
-WORKDIR /home/reg_user/ps/htmlcov
-WORKDIR /home/reg_user/ps/staticfiles 
+RUN mkdir -p /home/reg_user/ps/staticfiles /home/reg_user/ps/htmlcov
 WORKDIR /home/reg_user/ps
 COPY --chown=reg_user:reg_user ./stage/requirements.txt requirements.txt
 RUN pip install --user -r requirements.txt 

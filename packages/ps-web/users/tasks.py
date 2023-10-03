@@ -62,7 +62,7 @@ def get_PROVISIONING_DISABLED():
         state = cache.get('PROVISIONING_DISABLED')
         if state is None:
             # initialize to False
-            LOG.critical("PROVISIONING_DISABLED is None; Setting to False")
+            LOG.critical("PROVISIONING_DISABLED is None (connection timeout); Setting to False")
             set_PROVISIONING_DISABLED('False')
             state = 'False'
         if state == 'True':
@@ -1542,7 +1542,7 @@ def loop_iter(orgAccountObj,loop_count):
     orgAccountObj.refresh_from_db()
     is_idle = process_prov_sys_tbls(orgAccountObj)
     if is_idle:
-        sleep(0.5) # ~2hz when idle
+        sleep(1) # ~2hz when idle
     #
     # The complexity below is to lower the rate of DB transactions 
     # but keeps relevant info for diagnostics

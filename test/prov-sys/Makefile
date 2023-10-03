@@ -111,6 +111,21 @@ run: docker ## run prov-sys locally
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
 
+run-debug: docker-test ## run prov-sys locally
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	make docker-versions && \
+	make db-backup-timestamped-running
+	@echo SITE_ID:$(SITE_ID)
+	@echo SITE_ID value:$($(SITE_ID))
+	@echo DOMAIN:$(DOMAIN)
+	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+
 unit-tests-local-stack: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
 	make down && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \

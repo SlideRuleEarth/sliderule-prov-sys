@@ -17,7 +17,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 from django.contrib import admin
 from django.views.generic.base import TemplateView
-
+from django.conf import settings
 """The include() function allows referencing other URLconfs. 
     Whenever Django encounters include(), 
     it chops off whatever part of the URL matched up to that point 
@@ -33,3 +33,6 @@ urlpatterns = [
     path('', include('users.urls')),
     path('captcha/', include('captcha.urls'))
 ]
+if settings.DEBUG and settings.DJANGO_DEBUG_TOOLBAR:
+    import debug_toolbar
+    urlpatterns.insert(0, path('__debug__/', include(debug_toolbar.urls)))

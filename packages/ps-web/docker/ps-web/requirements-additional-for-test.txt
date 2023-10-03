@@ -6,6 +6,7 @@ pipdeptree
 pytest-mock
 flower<2
 coverage
+django-debug-toolbar
 
 
 

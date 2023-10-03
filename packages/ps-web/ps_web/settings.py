@@ -39,14 +39,22 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY","INVALID")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = (os.environ.get("DEBUG", default="False")=="True")
+DJANGO_DEBUG_TOOLBAR = (os.environ.get("DJANGO_DEBUG_TOOLBAR", default="False")=="True")
 PS_VERSION = (os.environ.get("PS_VERSION"))
 PS_SITE_TITLE = (os.environ.get("PS_SITE_TITLE"))
 PS_BLD_ENVVER = (os.environ.get("PS_BLD_ENVVER"))
 DOCKER_TAG = (os.environ.get("DOCKER_TAG"))
 GIT_VERSION = (os.environ.get("GIT_VERSION"))
 #DEBUG = False
-INTERNAL_IPS = ['127.0.0.1', ]
+if DEBUG and DJANGO_DEBUG_TOOLBAR:
+    import socket  
+    hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
+    INTERNAL_IPS = [ip[: ip.rfind(".")] + ".1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
+else:
+    INTERNAL_IPS = ['127.0.0.1', ]
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split()
+if DEBUG and DJANGO_DEBUG_TOOLBAR:
+    ALLOWED_HOSTS += INTERNAL_IPS
 # These are non routable local ip address so not neccessary to add to invalid hosts
 # METADATA_URI = os.environ.get("ECS_CONTAINER_METADATA_URI")
 # if (METADATA_URI is not None) and (METADATA_URI != ''):
@@ -83,6 +91,9 @@ INSTALLED_APPS = [
     'allauth.socialaccount.providers.github',
 #    'allauth.socialaccount.providers.google',
 ]
+if DEBUG and DJANGO_DEBUG_TOOLBAR:
+    INSTALLED_APPS.append('debug_toolbar')
+
 CRISPY_TEMPLATE_PACK = 'bootstrap'
 
 # allauth
@@ -209,6 +220,10 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware'
 ]
 
+if DEBUG and DJANGO_DEBUG_TOOLBAR:
+    MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
+
+
 ROOT_URLCONF = 'ps_web.urls'
 
 TEMPLATES = [
@@ -294,7 +309,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/dev/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
@@ -369,6 +384,9 @@ CELERY_RESULT_BACKEND = 'django-db'
 #CELERY_result_backend = 'django-db'
 CELERY_CACHE_BACKEND = 'default'
 #CELERY_cache_backend = 'default'# django setting.
+#CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600,'polling_interval': 10,'socker_timeout':15}  # Poll every 10 seconds (default is 1 second)
+CELERY_ACKS_LATE = True
+CELERYD_PREFETCH_MULTIPLIER = 1 
 
 # using django-redis cache backend
 CACHES = {
