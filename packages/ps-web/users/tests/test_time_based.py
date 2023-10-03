@@ -211,10 +211,9 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
             #LOG.info(f"partial_month_whole_days:{partial_month_whole_days} expected:{expected['partial_month_whole_days']}")
             assert(partial_month_whole_days == expected['partial_month_whole_days'])
 
-            ddt,hrly_fc,daily_fc,monthly_fc,fc_hourly_tm_bal,fc_daily_tm_bal,fc_monthly_tm_bal = create_forecast( orgAccountObj=orgAccountObj,
+            hrly_fc,daily_fc,monthly_fc,fc_hourly_tm_bal,fc_daily_tm_bal,fc_monthly_tm_bal = create_forecast( orgAccountObj=orgAccountObj,
                                                                                                                     hourlyRate=test_rate,
-                                                                                                                    daily_days_to_forecast=31)
-            assert(ddt==A_LONG_TIME_FROM_NOW)
+                                                                                                                  daily_days_to_forecast=31)
             #LOG.info(f"hrly_fc:{hrly_fc}")
             hrly_fc_dict = json.loads(hrly_fc)
             #LOG.info(f"hrly_fc_dict['tm'][{len(hrly_fc_dict['tm'])-1}]:{hrly_fc_dict['tm'][len(hrly_fc_dict['tm'])-1]}")
