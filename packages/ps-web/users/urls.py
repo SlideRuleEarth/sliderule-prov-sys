@@ -1,7 +1,5 @@
 from __future__ import absolute_import, unicode_literals
 
-from django_celery_results import views as celery_views
-
 # Uncomment the next two lines to enable the admin:
 from django.contrib import admin
 from django.http import Http404
@@ -37,8 +35,6 @@ urlpatterns = [
      path('accounts/profile/', views.userProfile, name="user-profile"),
      path('prov_sys_admin/', views.provSysAdmin, name="prov-sys-admin"),
      path('disable_provisioning/', views.disableProvisioning, name="disable-provisioning"),
-     re_path(r'^(?P<task_id>[\w\d\-]+)/done/?$', celery_views.is_task_successful, name='celery-is-task-successful'),
-     re_path(r'^(?P<task_id>[\w\d\-]+)/status/?$', celery_views.task_status, name='celery-task-status'),
      path('', views.browse, name="browse")
 ]
 

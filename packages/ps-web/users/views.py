@@ -7,7 +7,6 @@ import ast
 import json
 import os
 import redis
-from django_celery_results import views as celery_views
 from django.http import  HttpResponse
 from datetime import timezone
 from dateutil import tz
@@ -20,8 +19,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,create_org_queue,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,forever_loop_main_task,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
+from .utils import get_db_org_cost,create_org_queue,create_org_worker,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,schedule_forever
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,loop_iter,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -590,7 +589,7 @@ def orgAccountCreate(request):
         if request.user.groups.filter(name='PS_Developer').exists():
             if request.method == 'POST':
                 form = OrgAccountForm(request.POST)
-                new_org,msg,emsg,p = add_org_cluster_orgcost(form,True)
+                new_org,msg,emsg,q = add_org_cluster_orgcost(form,start_main_loop=True)
                 if msg != '':
                     messages.info(request,msg)
                 if emsg != '':
@@ -833,16 +832,17 @@ def add_org_cluster_orgcost(f,start_main_loop=False):
                 domain = os.environ.get("DOMAIN")
                 app.redirect_uris += '\n{}'.format(f"https://{new_org.name}.{domain}/redirect_uri/")
                 app.save()
-            p = create_org_queue(new_org)
+            q = create_org_queue(new_org)
+            w = create_org_worker(new_org)
             if start_main_loop:
-                forever_loop_main_task.apply_async((new_org.name,0),queue=get_org_queue_name(new_org))
+                schedule_forever(q, func=loop_iter, exit_func=get_PROVISIONING_DISABLED, kwargs={'name':new_org.name,'loop_count':0})
         else:
             emsg = f"Input Errors:{f.errors.as_text}"
     except Exception as e:
         LOG.exception("caught exception:")
         emsg = "Caught exception:"+repr(e)
     
-    return new_org,msg,emsg,p
+    return new_org,msg,emsg,q
 
 
 

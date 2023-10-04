@@ -16,7 +16,6 @@ import os
 import environ
 import requests
 from django.contrib.messages import constants as messages
-from celery.schedules import crontab
 
 MESSAGE_TAGS = {
         messages.DEBUG: 'alert-secondary',
@@ -81,7 +80,7 @@ INSTALLED_APPS = [
     'captcha',
     'django_celery_results',
     'crispy_forms',
-    'django_celery_beat',
+#    'django_celery_beat',
     'django.contrib.sites',
     'oauth2_provider',
     'corsheaders',
@@ -90,6 +89,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'allauth.socialaccount.providers.github',
 #    'allauth.socialaccount.providers.google',
+    'django_rq',
 ]
 if DEBUG and DJANGO_DEBUG_TOOLBAR:
     INSTALLED_APPS.append('debug_toolbar')
@@ -292,6 +292,9 @@ LOGIN_URL = '/accounts/login/'
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+
 # Internationalization
 # https://docs.djangoproject.com/en/dev/topics/i18n/
 
@@ -339,7 +342,11 @@ LOGGING = {
         'verbose': {
             'format': '[{asctime}] [{levelname}] [{filename}:{lineno:d}:{funcName}] [{message}]',
             'style': '{',
-        }
+        },
+        "rq_console": {
+            "format": "%(asctime)s %(message)s",
+            "datefmt": "%H:%M:%S",
+        },
     },
     'handlers': {
         'console': {
@@ -357,6 +364,12 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose'
         },
+        "rq_console": {
+            "level": "DEBUG",
+            "class": "rq.logutils.ColorizingStreamHandler",
+            "formatter": "rq_console",
+            "exclude": ["%(asctime)s"],
+        },
         # 'file': {
         #     'level': 'INFO',
         #     'class': 'logging.FileHandler',
@@ -369,64 +382,85 @@ LOGGING = {
             # 'handlers': ['console', 'file'],
             'handlers': ['console'],
             'propagate': True,
-        }
+        },
+        "rq.worker": {
+            "handlers": ["rq_console"],
+            "level": "DEBUG"
+        },
     }
 }
-#PHONENUMBER_DEFAULT_REGION = 'E164'
-PHONENUMBER_DEFAULT_FORMAT = 'NATIONAL'
-PHONENUMBER_DEFAULT_REGION = "US"
-CELERY_RESULT_EXPIRED = timedelta(days=4)
-#CELERY_result_expired = timedelta(days=15)
-CELERY_RESULT_EXTENDED = True
-#CELERY_result_extended = True
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = 'django-db'
-#CELERY_result_backend = 'django-db'
-CELERY_CACHE_BACKEND = 'default'
-#CELERY_cache_backend = 'default'# django setting.
-#CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600,'polling_interval': 10,'socker_timeout':15}  # Poll every 10 seconds (default is 1 second)
-CELERY_ACKS_LATE = True
-CELERYD_PREFETCH_MULTIPLIER = 1 
 
 # using django-redis cache backend
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/1",
+        "LOCATION": f"redis://{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', '6379')}/{os.environ.get('REDIS_DB', '0')}", #<-- redis://redis:6379/0
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }
     }
 }
 
-DJANGO_CELERY_BEAT_TZ_AWARE = True
-CELERY_TASK_DEFAULT_QUEUE = 'default'
-CELERYBEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
-CELERY_BEAT_SCHEDULE = {
-
-    # This 'hourly processing' matches Periodic task col in the DB (see admin panel)
-    'hourly processing': {
-        # task matches name in @shared_task(name="") decorater
-        'task': 'hourly_processing',
-        'schedule': crontab(minute=30),
-        'queue': 'default',
-        'options' :{'queue': 'default'}
-    },
-    # This 'flush expired refresh tokens' matches Periodic task col in the DB (see admin panel)
-    'flush expired refresh tokens': {
-        # task matches name in @shared_task(name="") decorater
-        'task': 'flush_expired_refresh_tokens',
-        'schedule': crontab(minute=15),
-        'queue': 'default',
-        'options' :{'queue': 'default'}
-    },
-    'purge_ps_cmd_rslts' : { 
-        'task': 'purge_ps_cmd_rslts',
-        'schedule': crontab(minute=0,hour=0),
-        'queue': 'default',
-        'options' :{'queue': 'default'}
-    }
+RQ_QUEUES = {   
+    'default': { 'USE_REDIS_CACHE': 'default' },
 }
+
+
+#PHONENUMBER_DEFAULT_REGION = 'E164'
+PHONENUMBER_DEFAULT_FORMAT = 'NATIONAL'
+PHONENUMBER_DEFAULT_REGION = "US"
+
+
+# CELERY_RESULT_EXPIRED = timedelta(days=4)
+# #CELERY_result_expired = timedelta(days=15)
+# CELERY_RESULT_EXTENDED = True
+# #CELERY_result_extended = True
+# CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+# CELERY_RESULT_BACKEND = 'django-db'
+# #CELERY_result_backend = 'django-db'
+# CELERY_CACHE_BACKEND = 'default'
+# #CELERY_cache_backend = 'default'# django setting.
+# #CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600,'polling_interval': 10,'socker_timeout':15}  # Poll every 10 seconds (default is 1 second)
+# CELERY_ACKS_LATE = True
+# CELERYD_PREFETCH_MULTIPLIER = 1 
+#
+# DJANGO_CELERY_BEAT_TZ_AWARE = True
+# CELERY_TASK_DEFAULT_QUEUE = 'default'
+# CELERYBEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+# CELERY_BEAT_SCHEDULE = {
+#     # This 'hourly processing' matches Periodic task col in the DB (see admin panel)
+#     'hourly processing': {
+#         # task matches name in @shared_task(name="") decorater
+#         'task': 'hourly_processing',
+#         'schedule': crontab(minute=30),
+#         'queue': 'default',
+#         'options' :{'queue': 'default'}
+#     },
+#     # This 'flush expired refresh tokens' matches Periodic task col in the DB (see admin panel)
+#     'flush expired refresh tokens': {
+#         # task matches name in @shared_task(name="") decorater
+#         'task': 'flush_expired_refresh_tokens',
+#         'schedule': crontab(minute=15),
+#         'queue': 'default',
+#         'options' :{'queue': 'default'}
+#     },
+#     'purge_ps_cmd_rslts' : { 
+#         'task': 'purge_ps_cmd_rslts',
+#         'schedule': crontab(minute=0,hour=0),
+#         'queue': 'default',
+#         'options' :{'queue': 'default'}
+#     }
+# }
+
+RQ_QUEUES = {
+    'default': {
+        'HOST': os.environ.get("REDIS_HOST", "redis"),
+        'PORT': os.environ.get("REDIS_PORT", "6379"),
+        'DB': os.environ.get("REDIS_DB", "0"),
+        'DEFAULT_TIMEOUT': 360,
+    },
+}
+
 OAUTH2_PROVIDER = {
     "OIDC_ENABLED": True,
     "OIDC_RSA_PRIVATE_KEY": os.environ.get("DJANGO_OIDC_RSA_PRIVATE_KEY", '').replace('\\n', '\n'),

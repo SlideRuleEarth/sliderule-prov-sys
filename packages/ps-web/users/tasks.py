@@ -1,6 +1,5 @@
-from celery import shared_task,Task, app
 from users.models import PsCmdResult,OwnerPSCmd
-from django_celery_results.models import TaskResult
+#from django_celery_results.models import TaskResult
 from users.models import OrgAccount,PsCmdResult, Cluster, GranChoice, OrgAccount, OrgCost, User, OrgNumNode, PsCmdResult, Membership
 from django.core.exceptions import ValidationError
 from datetime import date, datetime, timedelta, timezone, tzinfo
@@ -24,7 +23,6 @@ from django.db.models import Max, Sum
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth import get_user_model
 from decimal import *
-from celery.schedules import crontab
 from uuid import UUID
 from time import sleep
 from users.global_constants import *
@@ -32,6 +30,7 @@ import redis
 import json
 import logging
 from django.core.cache import cache
+from django_rq import job
 
 LOG = logging.getLogger('django')
 #LOG.propagate = False
@@ -1052,21 +1051,19 @@ def ad_hoc_cost_reconcile_for_org(orgObj):
     create_all_forecasts(orgObj)
 
 
-@shared_task(name="force_ad_hoc_cost_reconcile_uuid",bind=True)  # name is referenced in settings.py
-def force_ad_hoc_cost_reconcile_uuid(self,uuid):
-    LOG.info(f"Started -- force_ad_hoc_cost_reconcile_uuid({uuid}) {self.request.id}")
-    orgObj = OrgAccount.objects.get(id=uuid)
-    ad_hoc_cost_reconcile_for_org(orgObj)
-    LOG.info(f"Finished -- force_ad_hoc_cost_reconcile_uuid({uuid}) {self.request.id}")
+# def force_ad_hoc_cost_reconcile_uuid(uuid):
+#     LOG.info(f"Started -- force_ad_hoc_cost_reconcile_uuid({uuid}) ")
+#     orgObj = OrgAccount.objects.get(id=uuid)
+#     ad_hoc_cost_reconcile_for_org(orgObj)
+#     LOG.info(f"Finished -- force_ad_hoc_cost_reconcile_uuid({uuid})")
 
 
-@shared_task(name="force_ad_hoc_cost_reconcile",bind=True)  # name is referenced in settings.py
-def force_ad_hoc_cost_reconcile(self):
-    LOG.info(f"Started -- force_ad_hoc_cost_reconcile {self.request.id}")
-    orgs_qs = OrgAccount.objects.all()
-    for orgObj in orgs_qs:
-        ad_hoc_cost_reconcile_for_org(orgObj)
-    LOG.info(f"Finished -- force_ad_hoc_cost_reconcile {self.request.id}")
+# def force_ad_hoc_cost_reconcile():
+#     LOG.info(f"Started -- force_ad_hoc_cost_reconcile ")
+#     orgs_qs = OrgAccount.objects.all()
+#     for orgObj in orgs_qs:
+#         ad_hoc_cost_reconcile_for_org(orgObj)
+#     LOG.info(f"Finished -- force_ad_hoc_cost_reconcile ")
 
 def cost_accounting(orgObj):
     try:
@@ -1542,7 +1539,7 @@ def loop_iter(orgAccountObj,loop_count):
     orgAccountObj.refresh_from_db()
     is_idle = process_prov_sys_tbls(orgAccountObj)
     if is_idle:
-        sleep(1) # ~2hz when idle
+        sleep(0.5) # ~2hz when idle
     #
     # The complexity below is to lower the rate of DB transactions 
     # but keeps relevant info for diagnostics
@@ -1562,18 +1559,16 @@ def purge_old_PsCmdResultsForOrg(this_org):
     PsCmdResult.objects.filter(expiration__lte=(purge_time)).filter(org=this_org).delete()    
     LOG.info(f"ended with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name}")
 
-@shared_task(name="purge_ps_cmd_rslts",bind=True)  # name is referenced in settings.py
-def purge_ps_cmd_rslts(self):
-    LOG.info(f"Started -- purge_ps_cmd_rslts {self.request.id}")
-    orgs_qs = OrgAccount.objects.all()
-    LOG.info("orgs_qs:%s", repr(orgs_qs))
-    for orgObj in orgs_qs:
-        purge_old_PsCmdResultsForOrg(orgObj)
-    LOG.info(f"Finished -- purge_ps_cmd_rslts {self.request.id}")
+# def purge_ps_cmd_rslts():
+#     LOG.info(f"Started -- purge_ps_cmd_rslts ")
+#     orgs_qs = OrgAccount.objects.all()
+#     LOG.info("orgs_qs:%s", repr(orgs_qs))
+#     for orgObj in orgs_qs:
+#         purge_old_PsCmdResultsForOrg(orgObj)
+#     LOG.info(f"Finished -- purge_ps_cmd_rslts ")
 
-@shared_task(name="hourly_processing",bind=True)  # name is referenced in settings.py
-def hourly_processing(self):
-    LOG.info(f"hourly_processing {self.request.id} started")
+def hourly_processing():
+    LOG.info(f"hourly_processing started")
     try:
         perform_cost_accounting_for_all_orgs() # updates forecasts
         reconcile_all_orgs() # computes balance and FYTD cost
@@ -1582,52 +1577,49 @@ def hourly_processing(self):
             owner_ps_cmd = OwnerPSCmd.objects.create(user=orgAccountObj.owner, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
             owner_ps_cmd.save()
             LOG.info(f"Destroy {orgAccountObj.name} queued for processing because it ran out of funds")
-        LOG.info(f"hourly_processing {self.request.id} finished")
+        LOG.info(f"hourly_processing finished")
         return True
     except Exception as e:
         LOG.exception('Exception caught')
-        LOG.error(f"hourly_processing {self.request.id} finished with an exception")
+        LOG.error(f"hourly_processing finished with an exception")
         return False
 
-@shared_task(name="flush_expired_refresh_tokens",bind=True)  # name is referenced in settings.py
-def refresh_token_maintenance(self):
-    LOG.info(f"flush_expired_refresh_tokens {self.request.id} started")
+def refresh_token_maintenance():
+    LOG.info(f"flush_expired_refresh_tokens started")
     try:
         flush_expired_refresh_tokens()
-        LOG.info(f"flush_expired_refresh_tokens {self.request.id} finished")
+        LOG.info(f"flush_expired_refresh_tokens finished")
         return True
     except Exception as e:
         LOG.exception('Exception caught')
         return False
 
+# def forever_loop_main_task(self, name, loop_count):
+#     '''
+#     This is the main loop for each org.
+#     '''
+#     orgAccountObj = OrgAccount.objects.get(name=name)
+#     result = True
+#     task_idle = True
+#     check_redis(log_label=f"forever_loop_main_task name:{name} loop_count:{loop_count}")
+#     try:
+#         LOG.info(f"forever_loop_main_task {self.request.id} STARTED for {orgAccountObj.name}")
+#         while task_idle and not get_PROVISIONING_DISABLED():
+#             task_idle, loop_count = loop_iter(orgAccountObj, loop_count)
+#     except Exception as e:
+#         LOG.exception(f'forever_loop_main_task - Exception caught while processing:{orgAccountObj.name}')
+#         sleep(5)  # wait 5 seconds before trying again
+#         result = False
+#     # we can exit above if the task is NOT idle (i.e. it executed a cmd) and provisioning is disabled
+#     try:
+#         if not get_PROVISIONING_DISABLED():
+#             sleep(1)
+#             LOG.info(f"forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception or PS_CMD because PROVISIONING_DISABLED is False!")
+#             forever_loop_main_task.apply_async((orgAccountObj.name, orgAccountObj.loop_count), queue=get_org_queue_name(orgAccountObj))
+#         else:
+#             LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because PROVISIONING_DISABLED is True!")
+#     except Exception:
+#         LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because we cannot connect to redis!")
 
-@shared_task(name="forever_loop_main_task", bind=True)
-def forever_loop_main_task(self, name, loop_count):
-    '''
-    This is the main loop for each org.
-    '''
-    orgAccountObj = OrgAccount.objects.get(name=name)
-    result = True
-    task_idle = True
-    check_redis(log_label=f"forever_loop_main_task name:{name} loop_count:{loop_count}")
-    try:
-        LOG.info(f"forever_loop_main_task {self.request.id} STARTED for {orgAccountObj.name}")
-        while task_idle and not get_PROVISIONING_DISABLED():
-            task_idle, loop_count = loop_iter(orgAccountObj, loop_count)
-    except Exception as e:
-        LOG.exception(f'forever_loop_main_task - Exception caught while processing:{orgAccountObj.name}')
-        sleep(5)  # wait 5 seconds before trying again
-        result = False
-    # we can exit above if the task is NOT idle (i.e. it executed a cmd) and provisioning is disabled
-    try:
-        if not get_PROVISIONING_DISABLED():
-            sleep(1)
-            LOG.info(f"forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception or PS_CMD because PROVISIONING_DISABLED is False!")
-            forever_loop_main_task.apply_async((orgAccountObj.name, orgAccountObj.loop_count), queue=get_org_queue_name(orgAccountObj))
-        else:
-            LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because PROVISIONING_DISABLED is True!")
-    except Exception:
-        LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because we cannot connect to redis!")
-
-    LOG.info(f"forever_loop_main_task {self.request.id} FINISHED for {orgAccountObj.name} with result:{result} @ loop_count:{loop_count}")
-    return result
+#     LOG.info(f"forever_loop_main_task {self.request.id} FINISHED for {orgAccountObj.name} with result:{result} @ loop_count:{loop_count}")
+#     return result

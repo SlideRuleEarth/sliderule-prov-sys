@@ -8,7 +8,7 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core import mail
 from users.forms import OrgAccountForm
-from users.utils import init_celery,create_org_queue
+from users.utils import create_org_queue
 from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.views import add_org_cluster_orgcost
 from datetime import timezone,datetime
@@ -28,7 +28,7 @@ from django.urls import reverse
 import time_machine
 import json
 import logging
-from ps_web.celery import app  
+#from ps_web.celery import app  
 import random
 import string
 import re
@@ -208,9 +208,9 @@ def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num
     client.logout()
     return True
 
-def is_celery_working():
-    result = app.control.broadcast('ping', reply=True, limit=1)
-    return bool(result)  # True if at least one result
+# def is_celery_working():
+#     result = app.control.broadcast('ping', reply=True, limit=1)
+#     return bool(result)  # True if at least one result
 
 
 def create_test_org(name, 

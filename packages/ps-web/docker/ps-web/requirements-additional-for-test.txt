@@ -4,9 +4,7 @@ time-machine<3
 pytest-django<5
 pipdeptree
 pytest-mock
-flower<2
 coverage
-django-debug-toolbar
 
 
 
