@@ -13,7 +13,7 @@ from decimal import *
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership,initialize_test_org,log_ONN,fake_sync_clusterObj_to_orgAccountObj,call_SetUp
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
-from users.tasks import loop_iter,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
+from users.tasks import process_state_change,need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user
 from users.views import add_org_cluster_orgcost
 from time import sleep
 from django.contrib import messages
@@ -302,7 +302,7 @@ def test_org_ONN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(OwnerPSCmd.objects.count()==0)
 
     loop_count=0
-    task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+    task_idle, loop_count = process_state_change(orgAccountObj)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(loop_count==1)
@@ -473,7 +473,7 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     orgAccountObj.save()
     num_owner_ps_cmd=0
     num_onn=0
-    task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+    task_idle, loop_count = process_state_change(orgAccountObj)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(loop_count==1)
@@ -861,7 +861,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
 
 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
@@ -887,7 +887,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     for app in Application.objects.all():
         logger.info(f"name:{app.name} uris:{app.redirect_uris}")      
     assert Application.objects.count() == 1 
-    orgAccountObj,msg,emsg,p = add_org_cluster_orgcost(form)
+    orgAccountObj,msg,emsg = add_org_cluster_orgcost(form)
     logger.info(f"msg:{msg} emsg:{emsg} ")
     assert(emsg=='')
     assert('Owner TestUser (ownertestuser) now owns new org/cluster:test_create' in msg)

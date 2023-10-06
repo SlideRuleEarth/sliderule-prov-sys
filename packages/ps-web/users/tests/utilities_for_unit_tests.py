@@ -8,7 +8,6 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core import mail
 from users.forms import OrgAccountForm
-from users.utils import create_org_queue
 from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.views import add_org_cluster_orgcost
 from datetime import timezone,datetime
@@ -16,13 +15,14 @@ from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
 from django.contrib.messages import get_messages
 
-from users.tasks import init_new_org_memberships,loop_iter,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED
+from users.tasks import init_new_org_memberships,process_state_change,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED
 from django.core import serializers
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from oauth2_provider.models import Application
 from google.protobuf.json_format import MessageToDict
 from google.protobuf import json_format
+from django.core.cache import cache
 
 from django.urls import reverse
 import time_machine
@@ -32,7 +32,7 @@ import logging
 import random
 import string
 import re
-
+from time import sleep
 from users import ps_client
 import ps_server_pb2
 import ps_server_pb2_grpc
@@ -72,6 +72,19 @@ def mock_django_email_backend(mocker):
     # Use Django's locmem email backend for testing
     test_email_backend = 'django.core.mail.backends.locmem.EmailBackend'
     mocker.patch('django_amazon_ses.EmailBackend', mail.get_connection(backend=test_email_backend))
+
+
+def check_redis_for_testing(logger,log_label):
+    logger.info(f"{log_label} check_redis_for_testing")
+    try:
+        client = cache.client.get_client()  # Get the underlying Redis client
+        while not client.ping():  # Call the ping method on the Redis client
+            logger.critical(f"{log_label} waiting for redis to come up...")
+            sleep(1)
+        logger.info(f"{log_label} redis is up")
+    except Exception as e:
+        logger.critical(f"{log_label} check_redis_for_testing got this exception:{str(e)}")
+
 
 def the_TEST_USER():
     return get_user_model().objects.get(username=TEST_USER)
@@ -347,7 +360,7 @@ def init_test_environ(  name=None,
     this_logger.info(f"form_errors:{form.errors.as_data()}")
     assert form.errors.as_data() == {}
     assert form.is_valid() 
-    new_orgAccountObj,msg,emsg,p = add_org_cluster_orgcost(form)  # this is atomic
+    new_orgAccountObj,msg,emsg = add_org_cluster_orgcost(form)  # this is atomic
     new_orgAccountObj.fytd_accrued_cost = fytd_accrued_cost
     new_orgAccountObj.most_recent_charge_time= most_recent_charge_time
     new_orgAccountObj.most_recent_credit_time= most_recent_credit_time
@@ -374,7 +387,7 @@ def init_test_environ(  name=None,
     clusterObj = Cluster.objects.get(org=new_orgAccountObj)
     this_logger.info(f"org:{new_orgAccountObj.name} provision_env_ready:{clusterObj.provision_env_ready} clusterObj.cur_version:{clusterObj.cur_version} orgAccountObj.version:{new_orgAccountObj.version} ")       
     assert clusterObj.cur_version == new_orgAccountObj.version
-    check_redis(log_label="init_test_environ")
+    check_redis_for_testing(log_label="init_test_environ",logger=this_logger)
     set_PROVISIONING_DISABLED('False')
     return new_orgAccountObj,new_orgAccountObj.owner
 
@@ -516,13 +529,17 @@ def process_onn_api(client,
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
         assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change just queued
         num=0
+        num_idle=0
         task_idle = True
         for _ in range(num_iters):
             num = num + 1
-            idle, loop_count = loop_iter(orgAccountObj,loop_count)
-            if not idle:
+            idle, loop_count = process_state_change(orgAccountObj)
+            if idle:
+                num_idle = num_idle + 1
+            else:
                 task_idle = False
         assert(num==num_iters)
+        assert(num_idle==(num_iters-expected_change_ps_cmd))
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
@@ -568,16 +585,21 @@ def process_owner_ps_cmd(client,
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt + 1) # url was an owner ps_cmd always increments
         assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt))
-        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a loop_iter 
-        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a loop_iter 
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a process_state_change 
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a process_state_change 
         assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change 
         num=0
+        num_idle=0
         for _ in range(num_iters):
             num = num + 1
-            task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+            task_idle, loop_count = process_state_change(orgAccountObj)
+            if task_idle:
+                num_idle = num_idle + 1
+        orgAccountObj.refresh_from_db() 
         assert(num==num_iters)
-        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a loop_iter else no change just queued
-        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a loop_iter else no change just queued
+        assert(num_idle==(num_iters-EXPECTED_PS_CMD_PROCESSED))
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a process_state_change else no change just queued
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a process_state_change else no change just queued
         assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
         assert(loop_count == s_loop_count+num_iters)
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd + EXPECTED_PS_CMD_PROCESSED)
@@ -616,19 +638,19 @@ def process_org_configure(client,
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) 
         assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt))
-        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a loop_iter 
-        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a loop_iter 
-        assert(orgAccountObj.num_ps_cmd_successful == s_orgAccountObj_num_ps_cmd_successful) # only changes after we do a loop_iter 
-        assert(orgAccountObj.num_setup_cmd == s_orgAccountObj_num_setup_cmd) # only changes after we do a loop_iter 
-        assert(orgAccountObj.num_setup_cmd_successful == s_orgAccountObj_num_setup_cmd_successful) # only changes after we do a loop_iter 
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a process_state_change 
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a process_state_change 
+        assert(orgAccountObj.num_ps_cmd_successful == s_orgAccountObj_num_ps_cmd_successful) # only changes after we do a process_state_change 
+        assert(orgAccountObj.num_setup_cmd == s_orgAccountObj_num_setup_cmd) # only changes after we do a process_state_change 
+        assert(orgAccountObj.num_setup_cmd_successful == s_orgAccountObj_num_setup_cmd_successful) # only changes after we do a process_state_change 
         assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change 
         num=0
         for _ in range(num_iters):
             num = num + 1
-            task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+            task_idle, loop_count = process_state_change(orgAccountObj)
         assert(num==num_iters)
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) 
-        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a loop_iter else no change just queued
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a process_state_change else no change just queued
 #        assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
         assert(loop_count == s_loop_count+num_iters)
     return loop_count
@@ -698,7 +720,7 @@ def process_onn_expires(orgAccountObj,
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         
         for _ in range(num_iters):
-            task_idle, f_loop_count = loop_iter(orgAccountObj,s_loop_count)
+            task_idle, f_loop_count = process_state_change(orgAccountObj)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(f_loop_count==(s_loop_count+1))

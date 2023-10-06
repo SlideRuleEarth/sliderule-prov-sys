@@ -3,8 +3,8 @@ import logging
 import os
 import socket
 from redis import Redis
-from rq import Queue
-from rq_scheduler import Scheduler
+from rq import Queue, Worker
+from rq.job import Job
 from datetime import datetime
 import time
 
@@ -23,10 +23,11 @@ import requests
 from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
-from .tasks import get_ps_versions, get_org_queue_name_str, loop_iter, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis,hourly_processing,refresh_token_maintenance
+from .tasks import get_ps_versions, enqueue_process_state_change, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis,hourly_processing,refresh_token_maintenance,scheduler
 from oauth2_provider.models import AbstractApplication
 from users.global_constants import *
-from django_rq import get_queue,get_worker
+from django_rq import get_queue
+from django.core.cache import cache
 
 LOG = logging.getLogger('django')
 VERSIONS = []
@@ -163,137 +164,33 @@ def get_new_tokens(org):
         'access_lifetime': str(api_settings.ACCESS_TOKEN_LIFETIME.total_seconds()),
     }
 
-# def create_org_queue(orgAccountObj):
-#     hostname = socket.gethostname()
-#     LOG.info(f"hostname:{hostname}")
-#     qn = get_org_queue_name_str(orgAccountObj.name)
-#     LOG.info(f"creating queue {qn}")
-#     SHELL_CMD=f"celery -A ps_web worker -n {orgAccountObj.name}@{hostname} -l error -E -Q {qn} --concurrency=1".split(" ")
-#     LOG.info(f"subprocess--> {SHELL_CMD}")
-#     return subprocess.Popen(SHELL_CMD)
-
-# init_celery is run from docker-entrypoint.sh using Django manage.py custom command
-# def init_celery():
-#     LOG.critical("environ DEBUG:%s",os.environ.get("DEBUG"))
-#     LOG.critical("environ DOCKER_TAG:%s",os.environ.get("DOCKER_TAG"))
-#     LOG.critical("environ GIT_VERSION:%s",os.environ.get("GIT_VERSION"))
-#     LOG.critical(f"environ PS_WEB_LOG_LEVEL:{os.environ.get('PS_WEB_LOG_LEVEL')}")
-#     LOG.critical(f"DOMAIN:{os.environ.get('DOMAIN')} {type(os.environ.get('DOMAIN'))}")
-
-#     f = open('requirements.freeze.txt')
-#     LOG.info(f"{f.read()}")
-
-#     hostname = socket.gethostname()
-#     LOG.info(f"hostname:{hostname}")
-#     domain = os.environ.get("DOMAIN")
-#     check_redis(log_label="init_celery")
-#     set_PROVISIONING_DISABLED('False')
-#     LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED()}")
-
-#     if 'localhost' in domain: 
-#         SHELL_CMD=f"celery -A ps_web flower --url_prefix=flower".split(" ")
-#         LOG.info(f"subprocess--> {SHELL_CMD}")
-#         subprocess.Popen(SHELL_CMD)
-
-#     SHELL_CMD=f"celery -A ps_web worker -n default@{hostname} -l error -E -Q default".split(" ")
-#     LOG.info(f"subprocess--> {SHELL_CMD}")
-#     subprocess.Popen(SHELL_CMD)
-
-#     SHELL_CMD = f"celery -A ps_web beat -l error --scheduler django_celery_beat.schedulers:DatabaseScheduler".split(" ")
-#     LOG.info(f"subprocess--> {SHELL_CMD}")
-#     subprocess.Popen(SHELL_CMD)
-
-#     orgs_qs = OrgAccount.objects.all()
-#     LOG.info("orgs_qs:%s", repr(orgs_qs))
-#     for orgAccountObj in orgs_qs:
-#         try:
-#             if orgAccountObj.name == 'uninitialized':
-#                 LOG.error(f"Ignoring uninitialized OrgAccount.id:{OrgAccount.id}")
-#             else:
-#                 p = create_org_queue(orgAccountObj)
-#                 orgAccountObj.loop_count = 0 # reset this but not the others
-#                 orgAccountObj.num_ps_cmd = 0
-#                 orgAccountObj.num_ps_cmd_successful = 0
-#                 orgAccountObj.num_owner_ps_cmd = 0
-#                 orgAccountObj.num_onn = 0
-#                 orgAccountObj.save(update_fields=['loop_count','num_ps_cmd','num_ps_cmd_successful','num_owner_ps_cmd','num_onn'])
-#                 loop_count = orgAccountObj.loop_count
-#                 LOG.info(f"Entering forever loop for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd} num_onn:{orgAccountObj.num_onn}")
-#                 clusterObj = Cluster.objects.get(org=orgAccountObj)
-#                 clusterObj.provision_env_ready = False # this forces a SetUp 
-#                 clusterObj.save(update_fields=['provision_env_ready'])
-#                 LOG.info(f"Setting provision_env_ready to False to force initialization for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd} num_onn:{orgAccountObj.num_onn}")
-#                 forever_loop_main_task.apply_async((orgAccountObj.name,loop_count),queue=get_org_queue_name(orgAccountObj))
-#         except Exception as e:
-#             LOG.error(f"Caught an exception creating queues: {e}")
-#         LOG.info(f"forked subprocess--> {SHELL_CMD}")
-
-
-def get_redis_host():
-    return os.environ.get("REDIS_HOST", "redis")
-def get_redis_port():
-    return os.environ.get("REDIS_PORT", "6379")
-def get_redis_db():
-    return os.environ.get("REDIS_DB", "0")
-
-def log_job_status(job):
-    # Get the job's status
-    status = job.get_status()
-    
-    # Log and handle different statuses
-    if status == 'finished':
-        LOG.info("Job completed successfully!")
-    elif status == 'failed':
-        LOG.error("Job failed!")
-    elif status == 'started':
-        LOG.info("Job has started...")
-    elif status == 'queued':
-        LOG.info("Job is queued.")
-    elif status == 'deferred':
-        LOG.warning("Job is deferred.")
-    else:
-        LOG.warning("Job has an unknown status: %s" % status)
-            
-
-def schedule_forever(q, func, exit_func, args=None, kwargs=None, polling_interval=None):
-    '''
-    Schedule a job to run repeatedly forever, monitoring its status and handling it accordingly.
-    '''
-    polling_interval = polling_interval or 0.5
-    args = args or []
-    kwargs = kwargs or {}
-    check_redis(log_label=f"schedule_forever name:{q.name}")
-    while not exit_func():
-        try:
-            job = q.enqueue(func=func, args=args, kwargs=kwargs)
-            last_status = None
-            # Monitor the job status and log/handle accordingly
-            while True:  
-                status = job.get_status()
-                if status != last_status:
-                    log_job_status(job)
-                last_status = status                
-                if status in ['finished', 'failed']:
-                    break  # Break the loop once we reach a terminal status                
-                time.sleep(polling_interval)                
-        except Exception as e:
-            LOG.error(f"Caught an exception: {e}")
-            break
-    LOG.critical(f"Exiting schedule_forever name:{q.name}")
-
-def create_org_queue(orgAccountObj):
+                
+def create_worker(worker_name,queue_name):
     hostname = socket.gethostname()
     LOG.info(f"hostname:{hostname}")
-    qn = get_org_queue_name_str(orgAccountObj.name)
-    LOG.info(f"creating queue {qn}")
-    # Create the RQ queue. It uses the defined cached connection
-    return get_queue(name=orgAccountObj.name)
+    LOG.info(f"creating worker {worker_name}")
+    # Create an two default workers for each org. 
+    SHELL_CMD=f"python manage.py rqworker {queue_name}".split(" ")
+    LOG.info(f"subprocess--> {SHELL_CMD}")
+    subprocess.Popen(SHELL_CMD)
 
-def create_org_worker(orgAccountObj):
-    hostname = socket.gethostname()
-    LOG.info(f"hostname:{hostname}")
-    # Create the RQ worker. 
-    return get_worker(queue=get_queue(name=orgAccountObj.name),name=orgAccountObj.name)
+def log_scheduled_jobs():
+
+    list_of_job_instances = scheduler.get_jobs()
+
+    # Iterate through each job instance and log details
+    for job in list_of_job_instances:
+        LOG.info(f"Job ID: {job.id}")
+        LOG.info(f"Function to be called: {job.func_name}")
+        LOG.info(f"Arguments: {job.args}")
+        LOG.info(f"Keyword Arguments: {job.kwargs}")
+        LOG.info(f"meta: {job.meta}")
+        LOG.info(f"Is job scheduled: {job.is_scheduled}")
+        LOG.info(f"Job creation time: {job.created_at}")
+        LOG.info(f"Job enqueued time: {job.enqueued_at}")
+        LOG.info(f"Job timeout: {job.timeout}")
+        LOG.info("-" * 20)
+
 
 def init_redis_queues():
     LOG.critical("environ DEBUG:%s",os.environ.get("DEBUG"))
@@ -313,7 +210,7 @@ def init_redis_queues():
     domain = os.environ.get("DOMAIN")
     if 'localhost' in domain:
         LOG.info("localhost in domain")
-    check_redis(log_label="init_queues")
+    check_redis(log_label="init_redis_queues")
     set_PROVISIONING_DISABLED('False')
     LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED()}")
     # uses the default queue
@@ -323,24 +220,19 @@ def init_redis_queues():
 
 
     # Create the RQ scheduler. It uses the defined cached connection
-    LOG.info("Creating RQ scheduler")
-    default_queue = get_queue('default')
-    scheduler = Scheduler(queue=default_queue, connection=default_queue.connection)
 
     scheduler.cron(
         cron_string="30 * * * *",   # A cron string (e.g. "0 0 * * 0")
         func=hourly_processing,     # Function to be queued
         repeat=None,                # Repeat this number of times (None means repeat forever)
-        result_ttl=300,             # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
-        ttl=200,                    # Specifies the maximum queued time (in seconds) before it's discarded. Defaults to None (infinite TTL).
+        result_ttl=3600,             # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
     )
 
     scheduler.cron(
         cron_string="15 * * * *",       # A cron string (e.g. "0 0 * * 0")
         func=refresh_token_maintenance, # Function to be queued
         repeat=None,                    # Repeat this number of times (None means repeat forever)
-        result_ttl=300,                 # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
-        ttl=200,                        # Specifies the maximum queued time (in seconds) before it's discarded. Defaults to None (infinite TTL).
+        result_ttl=3600,                 # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
     )
     LOG.info("Running the RQ scheduler")
     # uses the default queue
@@ -355,7 +247,6 @@ def init_redis_queues():
             if orgAccountObj.name == 'uninitialized':
                 LOG.error(f"Ignoring uninitialized OrgAccount.id:{OrgAccount.id}")
             else:
-                q = create_org_queue(orgAccountObj)
                 orgAccountObj.loop_count = 0 # reset this but not the others
                 orgAccountObj.num_ps_cmd = 0
                 orgAccountObj.num_ps_cmd_successful = 0
@@ -363,15 +254,27 @@ def init_redis_queues():
                 orgAccountObj.num_onn = 0
                 orgAccountObj.save(update_fields=['loop_count','num_ps_cmd','num_ps_cmd_successful','num_owner_ps_cmd','num_onn'])
                 loop_count = orgAccountObj.loop_count
-                LOG.info(f"Entering forever loop for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd} num_onn:{orgAccountObj.num_onn}")
                 clusterObj = Cluster.objects.get(org=orgAccountObj)
                 clusterObj.provision_env_ready = False # this forces a SetUp 
                 clusterObj.save(update_fields=['provision_env_ready'])
                 LOG.info(f"Setting provision_env_ready to False to force initialization for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd} num_onn:{orgAccountObj.num_onn}")
-                schedule_forever(q, func=loop_iter, exit_func=get_PROVISIONING_DISABLED, kwargs={'name':orgAccountObj.name,'loop_count':loop_count})
-        except Exception as e:
-            LOG.error(f"Caught an exception creating queues: {e}")
-        LOG.info(f"forked subprocess--> {SHELL_CMD}")
+                enqueue_process_state_change(orgAccountObj.name)
+        except Exception as ex:
+            LOG.exception(f"Caught an exception creating queues for {orgAccountObj.name}: {str(ex)}")
+
+    num_default_workers = os.environ.get("NUM_DEFAULT_WORKERS",5)
+    for i in range(int(num_default_workers)):
+        create_worker(f"default_worker_{i}",'default')
+
+    num_sched_workers = os.environ.get("NUM_SCHED_WORKERS",5)
+    for i in range(int(num_sched_workers)):
+        create_worker(f"sched_worker_{i}",'scheduled')
+
+    num_cmd_workers = os.environ.get("NUM_CMD_WORKERS",5)
+    for i in range(int(num_cmd_workers)):
+        create_worker(f"cmd_worker_{i}",'cmd')
+
+    LOG.info(f"forked subprocess--> {SHELL_CMD}")
 
 def disable_provisioning(user,req_msg):
     error_msg=''

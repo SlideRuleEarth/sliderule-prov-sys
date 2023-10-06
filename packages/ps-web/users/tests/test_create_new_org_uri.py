@@ -72,4 +72,8 @@ def test_org_form_create_uri(tasks_module):
 
     assert Application.objects.count() == 1 
 
-    new_org,msg,emsg,p = add_org_cluster_orgcost(form)
+    new_org,msg,emsg = add_org_cluster_orgcost(form)
+    assert new_org is not None
+    logger.info(f"msg:{msg} emsg:{emsg}")
+    assert msg is not None    
+    assert emsg is ""

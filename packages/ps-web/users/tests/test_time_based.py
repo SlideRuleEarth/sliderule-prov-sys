@@ -1,7 +1,6 @@
 import unittest
 import pytest
 from users.tests.global_test import GlobalTestCase
-from users.utils import create_org_queue,init_redis_queues
 from users.tasks import getGranChoice,getFiscalStartDate,reconcile_org,get_org_cost_data,create_forecast
 from users.models import OrgAccount,OrgCost,GranChoice
 from datetime import date, datetime, timedelta, timezone, tzinfo

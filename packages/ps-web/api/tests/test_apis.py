@@ -212,7 +212,7 @@ def check_disable_provisioning_rsp(json_data,alternate_port):
     assert json_data['alternate_port'] == alternate_port
     return True
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 #@pytest.mark.ps_server_stubbed
 @pytest.mark.ps_disable # will shut down the provisioning system

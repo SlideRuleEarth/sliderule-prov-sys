@@ -21,7 +21,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenBackendError
-from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED
+from users.tasks import process_num_nodes_api,update_cur_num_nodes,remove_num_node_requests,set_PROVISIONING_DISABLED,enqueue_process_state_change
 from users.utils import user_in_one_of_these_groups,disable_provisioning
 from users.global_constants import *
 from oauth2_provider.views.generic import ProtectedResourceView
@@ -361,6 +361,7 @@ class ClusterConfigView(generics.UpdateAPIView):
                                 orgAccountObj.max_node_cap = max_nodes
                                 orgAccountObj.save(update_fields=['min_node_cap', 'max_node_cap'])
                                 jrsp = {'status': "SUCCESS","msg":f"updated min-max nodes for {org_name} {user.username} to {orgAccountObj.min_node_cap}-{orgAccountObj.max_node_cap}"}
+                                enqueue_process_state_change(orgAccountObj.name)
                             else:
                                 http_status = status.HTTP_400_BAD_REQUEST
                                 error_msg = f"INVALID min_nodes provided:{min_nodes} must be >= 0 and <= max_node given (i.e. {max_nodes}) and <= {orgAccountObj.admin_max_node_cap}"

@@ -16,7 +16,6 @@ from users.models import Membership
 from users.forms import OrgAccountForm
 from users.tasks import init_new_org_memberships,init_new_org_memberships
 from users.views import add_org_cluster_orgcost
-from users.utils import create_org_queue
 module_name = 'views'
 # discover the src directory to import the file being tested
 parent_dir = pathlib.Path(__file__).parent.resolve()
@@ -81,8 +80,6 @@ def test_new_org(name, point_of_contact_name, email, max_allowance,monthly_allow
         'is_public':is_public})
     logger.info(f"{form.errors.as_data()}")
     assert form.is_valid() 
-    new_org,msg,emsg,p = add_org_cluster_orgcost(form)  # this is atomic
-    assert p.pid is not None
-    p.terminate()
-
+    new_org,msg,emsg = add_org_cluster_orgcost(form)  # this is atomic
+    assert new_org is not None
 

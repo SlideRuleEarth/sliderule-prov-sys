@@ -9,7 +9,7 @@ from decimal import *
 from django.urls import reverse
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user
-from users.tasks import loop_iter
+from users.tasks import process_state_change
 # Import the fixtures
 from users.tests.utilities_for_unit_tests import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME
 from users.models import OwnerPSCmd,OrgNumNode,OrgAccount,PsCmdResult
@@ -124,7 +124,7 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     
     
   
-    task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+    task_idle, loop_count = process_state_change(orgAccountObj)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(loop_count==1)
@@ -135,7 +135,7 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     assert(orgAccountObj.num_onn==1)
     
 
-    task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+    task_idle, loop_count = process_state_change(orgAccountObj)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(task_idle)
@@ -196,7 +196,7 @@ def test_org_ONN(caplog,client,mock_email_backend,initialize_test_environ):
     
     
   
-    task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+    task_idle, loop_count = process_state_change(orgAccountObj)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(loop_count==1)

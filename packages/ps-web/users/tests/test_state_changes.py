@@ -16,7 +16,7 @@ from django.urls import reverse
 from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,process_onn_expires,process_owner_ps_cmd,process_owner_ps_Destroy_cmd,process_owner_ps_Refresh_cmd,process_owner_ps_Update_cmd
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.forms import OrgAccountForm
-from users.tasks import loop_iter,init_new_org_memberships,init_new_org_memberships,process_prov_sys_tbls,get_org_queue_name,get_or_create_OrgNumNodes
+from users.tasks import process_state_change,init_new_org_memberships,init_new_org_memberships,process_prov_sys_tbls,get_org_queue_name,get_or_create_OrgNumNodes
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from allauth.account.decorators import verified_email_required
@@ -321,7 +321,7 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize_test_environ):
+def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initialize_test_environ):
     '''
         This procedure will various cases for the main loop
     '''
@@ -360,7 +360,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
                                     expected_status='QUEUED')
         
         #
-        # This tests when multiple calls to api are processed between a loop_iter
+        # This tests when multiple calls to api are processed between a process_state_change
         #
         loop_count,response = process_onn_api(client=client,
                                     orgAccountObj=orgAccountObj,
@@ -390,13 +390,13 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         # Note: local var loop_count get updated every pass 
         # BUT model object orgAccountObj only gets 
         # updated every 10 secs for loop_count
-        # (i.e. 20 calls to loop_iter)
+        # (i.e. 20 calls to process_state_change)
         # This is to reduce the db i/o rate
         #
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
 
-        task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+        task_idle, loop_count = process_state_change(orgAccountObj)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(loop_count==1)
@@ -406,8 +406,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         assert(orgAccountObj.num_owner_ps_cmd==0)
         assert(orgAccountObj.num_onn==1)
 
-        # this gets updated ever ten seconds (i.e. 50 calls to loop_iter)
-        assert(orgAccountObj.loop_count==0)
+        assert(orgAccountObj.loop_count==1)
 
         # verify setup occurred
         assert(clusterObj.provision_env_ready)
@@ -418,12 +417,10 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         assert(orgAccountObj.num_ps_cmd==1) # update cmd
         assert(orgAccountObj.desired_num_nodes==4)
         assert(orgAccountObj.num_ps_cmd_successful==1)
-        task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+        task_idle, loop_count = process_state_change(orgAccountObj)
         assert(loop_count==2)
         
-        #clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
-        #orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
-        assert(orgAccountObj.loop_count==0)# udpates are throttled every 20
+        assert(orgAccountObj.loop_count==1)
         assert(orgAccountObj.num_onn==1)
         # nothing else changes
         assert(OwnerPSCmd.objects.count()==0)
@@ -448,16 +445,16 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 
         assert(OwnerPSCmd.objects.count()==1) 
         assert(OrgNumNode.objects.count()==3)
-        assert(orgAccountObj.num_owner_ps_cmd==0) #not until loop_iter
+        assert(orgAccountObj.num_owner_ps_cmd==0) #not until process_state_change
         assert(orgAccountObj.num_onn==1)
         assert(orgAccountObj.num_ps_cmd==1)
         assert(orgAccountObj.num_ps_cmd_successful==1)
         assert(orgAccountObj.desired_num_nodes==4)
         assert(loop_count==2)
-         #not until loop_iter
+         #not until process_state_change
         assert(orgAccountObj.num_onn==1)
 
-        task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+        task_idle, loop_count = process_state_change(orgAccountObj)
         assert(loop_count==3)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
@@ -565,7 +562,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 
 
 #         #
-#         # This tests when multiple calls to api are processed between a loop_iter
+#         # This tests when multiple calls to api are processed between a process_state_change
 #         #
 #         loop_count,response = process_onn_api(client,
 #                                     orgAccountObj,
@@ -591,7 +588,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
 #         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
 
-#         task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+#         task_idle, loop_count = process_state_change(orgAccountObj)
 #         assert(loop_count==1)
         
 #         assert(orgAccountObj.num_onn==1)
@@ -602,7 +599,7 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         assert(orgAccountObj.num_owner_ps_cmd==0)
 #         assert(orgAccountObj.num_onn==1)
 
-#         # this gets updated ever ten seconds (i.e. 50 calls to loop_iter)
+#         # this gets updated ever ten seconds (i.e. 50 calls to process_state_change)
 #         assert(orgAccountObj.loop_count==0)
 
 #         # this on gets updated every time a ps cmd is processed
@@ -623,14 +620,14 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
 #         assert(OwnerPSCmd.objects.count()==1) 
 #         assert(OrgNumNode.objects.count()==3)
-#         assert(orgAccountObj.num_owner_ps_cmd==0) #not until loop_iter
+#         assert(orgAccountObj.num_owner_ps_cmd==0) #not until process_state_change
 #         assert(orgAccountObj.num_onn==1)
 #         assert(orgAccountObj.num_ps_cmd==1)
 #         assert(orgAccountObj.num_ps_cmd_successful==1)
 
 
 
-#         task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+#         task_idle, loop_count = process_state_change(orgAccountObj)
 
 #         assert(OwnerPSCmd.objects.count()==0) 
 #         assert(OrgNumNode.objects.count()==0)  # deploy should clear this
@@ -663,13 +660,13 @@ def test_mainloop(caplog,client,verified_TEST_USER,mock_email_backend,initialize
 #                                                 num_iters=0)
 #     assert(OwnerPSCmd.objects.count()==1) 
 #     assert(OrgNumNode.objects.count()==0)
-#     assert(orgAccountObj.num_owner_ps_cmd==0) #not until loop_iter
+#     assert(orgAccountObj.num_owner_ps_cmd==0) #not until process_state_change
 #     assert(orgAccountObj.num_onn==0)
 #     assert(orgAccountObj.num_ps_cmd==0)
 #     assert(orgAccountObj.num_ps_cmd_successful==0)
 #     assert(loop_count==0)
 
-#     task_idle, loop_count = loop_iter(orgAccountObj,loop_count)
+#     task_idle, loop_count = process_state_change(orgAccountObj)
 #     assert(loop_count==1)
 #     clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
 #     orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this

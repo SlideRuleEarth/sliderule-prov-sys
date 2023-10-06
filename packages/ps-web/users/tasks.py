@@ -1,5 +1,12 @@
 from users.models import PsCmdResult,OwnerPSCmd
 #from django_celery_results.models import TaskResult
+from typing import Optional, Union
+from redis import Redis
+from redis.lock import Lock
+from rq.job import Job
+from rq import Queue, Worker
+from rq.connections import NoRedisConnectionException
+from django.db.models import F
 from users.models import OrgAccount,PsCmdResult, Cluster, GranChoice, OrgAccount, OrgCost, User, OrgNumNode, PsCmdResult, Membership
 from django.core.exceptions import ValidationError
 from datetime import date, datetime, timedelta, timezone, tzinfo
@@ -30,10 +37,15 @@ import redis
 import json
 import logging
 from django.core.cache import cache
-from django_rq import job
+from rq_scheduler import Scheduler
+import django_rq
+
 
 LOG = logging.getLogger('django')
 #LOG.propagate = False
+LOG.info("Creating RQ scheduler")
+sched_queue = django_rq.get_queue('scheduled')
+scheduler = Scheduler(queue=sched_queue, connection=sched_queue.connection)
 
 def check_redis(log_label):
     try:
@@ -44,7 +56,6 @@ def check_redis(log_label):
     except Exception as e:
         LOG.critical(f"{log_label} check_redis got this exception:{str(e)}")
         sleep(5)
-
 
 def set_PROVISIONING_DISABLED(val):
     try:
@@ -429,6 +440,7 @@ def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
         if created:
             if expire_date is not None:
                 msg = f"Created new entry for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
+                scheduler.enqueue_at(expire_date,enqueue_process_state_change,org.name)
             else:
                 msg = f"Created new entry for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} with NO expiration"
         else:         
@@ -475,6 +487,7 @@ def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cm
                 jstatus = 'QUEUED'
             jrsp = {'status':jstatus,"msg":msg,'error_msg':''}
             status = 200
+            enqueue_process_state_change(orgAccountObj.name)
         else:
             emsg = f"FAILED to process request for {name} {user} {desired_num_nodes} {expire_time} - Server Error"
             jrsp = {'status':'FAILED',"msg":'','error_msg':emsg}
@@ -680,7 +693,7 @@ def calculate_ddt(label, dollar_balance, dollar_allowance, dollar_hourly_burn_ra
 
     # If past end time, log and return end time
     formatted_end_time = end_time.strftime('%Y-%m-%d %H:%M:%S')
-    LOG.info(log_template.format(time=formatted_end_time))
+    #LOG.info(log_template.format(time=formatted_end_time))
     return end_time
 
 
@@ -720,10 +733,8 @@ def update_burn_rates(orgAccountObj):
 
         orgAccountObj.save(update_fields=['min_hrly','cur_hrly','max_hrly'])
         #LOG.info(f"{orgAccountObj.name} forecast min/cur/max hrly burn rate {orgAccountObj.min_hrly}/{orgAccountObj.cur_hrly}/{orgAccountObj.max_hrly}")
-
-        
-        LOG.info(f"{orgAccountObj.name} min_hrly: {orgAccountObj.min_hrly} cur_hrly: {orgAccountObj.cur_hrly} max_hrly: {orgAccountObj.max_hrly}")
-        LOG.info(f"{orgAccountObj.name}  min_ddt: {datetime.strftime(orgAccountObj.min_ddt, FMT)} cur_ddt: {datetime.strftime(orgAccountObj.cur_ddt, FMT)} max_ddt: {datetime.strftime(orgAccountObj.max_ddt, FMT)}")
+        #LOG.info(f"{orgAccountObj.name} min_hrly: {orgAccountObj.min_hrly} cur_hrly: {orgAccountObj.cur_hrly} max_hrly: {orgAccountObj.max_hrly}")
+        #LOG.info(f"{orgAccountObj.name}  min_ddt: {datetime.strftime(orgAccountObj.min_ddt, FMT)} cur_ddt: {datetime.strftime(orgAccountObj.cur_ddt, FMT)} max_ddt: {datetime.strftime(orgAccountObj.max_ddt, FMT)}")
 
  
     except Exception as e:
@@ -732,7 +743,7 @@ def update_burn_rates(orgAccountObj):
 
 def update_all_burn_rates():
     orgs_qs = OrgAccount.objects.all()
-    LOG.info("orgs_qs:%s", repr(orgs_qs))
+    #LOG.info("orgs_qs:%s", repr(orgs_qs))
     for o in orgs_qs:
         update_burn_rates(o)
 
@@ -1051,6 +1062,33 @@ def ad_hoc_cost_reconcile_for_org(orgObj):
     create_all_forecasts(orgObj)
 
 
+def hourly_processing():
+    LOG.info(f"hourly_processing started")
+    try:
+        perform_cost_accounting_for_all_orgs() # updates forecasts
+        reconcile_all_orgs() # computes balance and FYTD cost
+        # Now find all Orgs that ran out of funds (i.e. the are Broke)
+        for orgAccountObj in find_broke_orgs():
+            owner_ps_cmd = OwnerPSCmd.objects.create(user=orgAccountObj.owner, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
+            owner_ps_cmd.save()
+            LOG.info(f"Destroy {orgAccountObj.name} queued for processing because it ran out of funds")
+        LOG.info(f"hourly_processing finished")
+        return True
+    except Exception as e:
+        LOG.exception('Exception caught')
+        LOG.error(f"hourly_processing finished with an exception")
+        return False
+
+def refresh_token_maintenance():
+    LOG.info(f"flush_expired_refresh_tokens started")
+    try:
+        flush_expired_refresh_tokens()
+        LOG.info(f"flush_expired_refresh_tokens finished")
+        return True
+    except Exception as e:
+        LOG.exception('Exception caught')
+        return False
+
 # def force_ad_hoc_cost_reconcile_uuid(uuid):
 #     LOG.info(f"Started -- force_ad_hoc_cost_reconcile_uuid({uuid}) ")
 #     orgObj = OrgAccount.objects.get(id=uuid)
@@ -1135,6 +1173,7 @@ def remove_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
                 onn.delete()
         jrsp = {'status': "SUCCESS","msg":f"{user.username} cleaned all PENDING org node reqs for {orgAccountObj.name} "}
         LOG.info(f"{user.username} cleaned up OrgNumNode for {orgAccountObj.name} {'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
+        enqueue_process_state_change(orgAccountObj.name)
         return jrsp
     except Exception as e:
         LOG.exception("caught exception:")
@@ -1529,29 +1568,127 @@ def  process_prov_sys_tbls(orgAccountObj):
         sleep(COOLOFF_SECS)
     return (orgAccountObj.num_ps_cmd == start_cmd_cnt) # task is idle if no new commands were processed 
 
-def loop_iter(orgAccountObj,loop_count):
+def process_state_change(org_name):
     '''
-    This is called from the main loop.
-    The process_prov_sys_tbls function can block when processing ps_cmds
-    so the timing of ~2hz is only when it is idle.
+    This function is scheduled anytime a state change occurs for an org
     '''
-    #LOG.info(f"BEFORE {'{:>10}'.format(loop_count)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
-    orgAccountObj.refresh_from_db()
+    orgAccountObj = OrgAccount.objects.get(name=org_name)
+    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}'))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
     is_idle = process_prov_sys_tbls(orgAccountObj)
+    idle_cnt = int(cache.get(f"idle_cnt_{orgAccountObj.name}"))
     if is_idle:
-        sleep(0.5) # ~2hz when idle
-    #
-    # The complexity below is to lower the rate of DB transactions 
-    # but keeps relevant info for diagnostics
-    #
-    if ((loop_count % 20) == 0): # about once every ten seconds OR 2 times a second * 10 seconds
-        orgAccountObj.loop_count = loop_count
-        orgAccountObj.save(update_fields=['loop_count'])
-    if ((loop_count % 7200) == 0): # about once every hour OR 2 times a second * 3600 seconds in an hour = 18000
-        LOG.info(f"{orgAccountObj.name} loop_count:{loop_count} orgAccountObj.loop_count:{orgAccountObj.loop_count} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
-    loop_count=loop_count+1
-    #LOG.info(f"AFTER  {'{:>10}'.format(loop_count)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
-    return is_idle,loop_count
+        LOG.info(f"{orgAccountObj.name} is idle")
+        cache.set(f"idle_cnt_{orgAccountObj.name}",idle_cnt+1)
+
+    orgAccountObj.loop_count = orgAccountObj.loop_count + 1
+    orgAccountObj.save()
+    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}'))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    return is_idle,orgAccountObj.loop_count
+
+
+def process_state_change(org_name):
+    '''
+    Process state changes for an organization account.
+
+    Args:
+        org_name (str): Name of the organization.
+
+    Returns:
+        tuple: A tuple containing a boolean indicating whether the org is idle 
+               and an integer of the loop count.
+    '''
+    try:
+        orgAccountObj = OrgAccount.objects.get(name=org_name)
+    except OrgAccount.DoesNotExist:
+        LOG.error(f"OrgAccount with name {org_name} does not exist.")
+        return False, 0
+    
+    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}', 0))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    
+    is_idle = process_prov_sys_tbls(orgAccountObj)
+    
+    idle_cnt = int(cache.get(f"idle_cnt_{orgAccountObj.name}", 0))
+    if is_idle:
+        LOG.info(f"{orgAccountObj.name} is idle")
+        cache.set(f"idle_cnt_{orgAccountObj.name}", idle_cnt+1)
+    
+    OrgAccount.objects.filter(name=org_name).update(loop_count=F('loop_count') + 1) # F make this inline and an atomic update
+    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count+1)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}', 0))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    return is_idle, orgAccountObj.loop_count+1 # +1 because we updated the loop_count above inline
+
+
+def get_redis_host():
+    return os.environ.get("REDIS_HOST", "redis")
+def get_redis_port():
+    return os.environ.get("REDIS_PORT", "6379")
+def get_redis_db():
+    return os.environ.get("REDIS_DB", "0")
+
+def log_job_status(job):
+    # Get the job's status
+    status = job.get_status()
+    
+    # Log and handle different statuses
+    if status == 'finished':
+        LOG.info("Job completed successfully!")
+    elif status == 'failed':
+        LOG.error("Job failed!")
+    elif status == 'started':
+        LOG.info("Job has started...")
+    elif status == 'queued':
+        LOG.info("Job is queued.")
+    elif status == 'deferred':
+        LOG.warning("Job is deferred.")
+    else:
+        LOG.warning("Job has an unknown status: %s" % status)
+
+def enqueue_process_state_change(name: str) -> bool:
+    '''
+    Enqueue a job for name to run the process_state_change function.
+
+    This function will chain jobs for name together, ensuring the next job will
+    not start until the previous one is done.
+
+    Parameters:
+    - name: str, The name for which the process_state_change job should be enqueued.
+
+    Returns:
+    - bool: True if the job was enqueued successfully, False otherwise.
+    '''
+    LOG.info(f"enqueue_process_state_change for {name}")
+
+    if get_PROVISIONING_DISABLED():
+        LOG.critical(f"enqueue_process_state_change NOT enqueued for {name} because PROVISIONING_DISABLED is True")
+        return False
+    
+    redis_key = f"process_state_change:{name}:job_id"
+    
+    with cache.lock(f"enqueue_lock:{name}", timeout=10):
+        try:
+            last_job_id = cache.get(redis_key)
+            depends_on = None
+            if last_job_id:
+                cmd_queue = django_rq.get_queue('cmd')
+                last_job = Job.fetch(last_job_id,connection=cmd_queue.connection)
+                LOG.info(f"last_job_id:{last_job_id} last_job:{last_job}")
+                if last_job.is_queued or last_job.is_started or last_job.is_deferred:
+                    depends_on = last_job
+        except (ConnectionError, KeyError) as e:  # Example of specific exceptions
+            LOG.error(f"Failed to fetch or handle the last job for {name}. Error: {str(e)}", exc_info=True)  # Include traceback
+            return False 
+        except NoRedisConnectionException as e:
+            LOG.error(f"Failed to connect to redis for {name} last_job_id:{last_job_id}. Error: {str(e)}", exc_info=True)    
+            return False   
+        try:
+            cmd_queue = django_rq.get_queue('cmd')
+            new_job = cmd_queue.enqueue(process_state_change, name, depends_on=depends_on)
+            cache.set(redis_key, new_job.get_id())
+        except Exception as e:
+            LOG.error(f"Failed to enqueue the job for {name}. Error: {str(e)}")
+            return False
+        
+    LOG.info(f"Job for {name} enqueued with ID: {new_job.get_id()} depends_on: {depends_on}")
+    return True
 
 def purge_old_PsCmdResultsForOrg(this_org):
     purge_time = datetime.now(timezone.utc)-timedelta(days=this_org.pcqr_retention_age_in_days)
@@ -1559,67 +1696,3 @@ def purge_old_PsCmdResultsForOrg(this_org):
     PsCmdResult.objects.filter(expiration__lte=(purge_time)).filter(org=this_org).delete()    
     LOG.info(f"ended with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name}")
 
-# def purge_ps_cmd_rslts():
-#     LOG.info(f"Started -- purge_ps_cmd_rslts ")
-#     orgs_qs = OrgAccount.objects.all()
-#     LOG.info("orgs_qs:%s", repr(orgs_qs))
-#     for orgObj in orgs_qs:
-#         purge_old_PsCmdResultsForOrg(orgObj)
-#     LOG.info(f"Finished -- purge_ps_cmd_rslts ")
-
-def hourly_processing():
-    LOG.info(f"hourly_processing started")
-    try:
-        perform_cost_accounting_for_all_orgs() # updates forecasts
-        reconcile_all_orgs() # computes balance and FYTD cost
-        # Now find all Orgs that ran out of funds (i.e. the are Broke)
-        for orgAccountObj in find_broke_orgs():
-            owner_ps_cmd = OwnerPSCmd.objects.create(user=orgAccountObj.owner, org=orgAccountObj, ps_cmd='Destroy', create_time=datetime.now(timezone.utc))
-            owner_ps_cmd.save()
-            LOG.info(f"Destroy {orgAccountObj.name} queued for processing because it ran out of funds")
-        LOG.info(f"hourly_processing finished")
-        return True
-    except Exception as e:
-        LOG.exception('Exception caught')
-        LOG.error(f"hourly_processing finished with an exception")
-        return False
-
-def refresh_token_maintenance():
-    LOG.info(f"flush_expired_refresh_tokens started")
-    try:
-        flush_expired_refresh_tokens()
-        LOG.info(f"flush_expired_refresh_tokens finished")
-        return True
-    except Exception as e:
-        LOG.exception('Exception caught')
-        return False
-
-# def forever_loop_main_task(self, name, loop_count):
-#     '''
-#     This is the main loop for each org.
-#     '''
-#     orgAccountObj = OrgAccount.objects.get(name=name)
-#     result = True
-#     task_idle = True
-#     check_redis(log_label=f"forever_loop_main_task name:{name} loop_count:{loop_count}")
-#     try:
-#         LOG.info(f"forever_loop_main_task {self.request.id} STARTED for {orgAccountObj.name}")
-#         while task_idle and not get_PROVISIONING_DISABLED():
-#             task_idle, loop_count = loop_iter(orgAccountObj, loop_count)
-#     except Exception as e:
-#         LOG.exception(f'forever_loop_main_task - Exception caught while processing:{orgAccountObj.name}')
-#         sleep(5)  # wait 5 seconds before trying again
-#         result = False
-#     # we can exit above if the task is NOT idle (i.e. it executed a cmd) and provisioning is disabled
-#     try:
-#         if not get_PROVISIONING_DISABLED():
-#             sleep(1)
-#             LOG.info(f"forever_loop_main_task {self.request.id} RE-STARTED for {orgAccountObj.name} after Exception or PS_CMD because PROVISIONING_DISABLED is False!")
-#             forever_loop_main_task.apply_async((orgAccountObj.name, orgAccountObj.loop_count), queue=get_org_queue_name(orgAccountObj))
-#         else:
-#             LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because PROVISIONING_DISABLED is True!")
-#     except Exception:
-#         LOG.critical(f"forever_loop_main_task NOT RE-STARTED for {orgAccountObj.name} because we cannot connect to redis!")
-
-#     LOG.info(f"forever_loop_main_task {self.request.id} FINISHED for {orgAccountObj.name} with result:{result} @ loop_count:{loop_count}")
-#     return result

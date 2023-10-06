@@ -27,12 +27,10 @@ from django.conf import settings
 admin.autodiscover()
 
 urlpatterns = [
+    path('django-rq/', include('django_rq.urls')),
     path('accounts/', include('allauth.urls')),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('', include('users.urls')),
     path('captcha/', include('captcha.urls'))
 ]
-if settings.DEBUG and settings.DJANGO_DEBUG_TOOLBAR:
-    import debug_toolbar
-    urlpatterns.insert(0, path('__debug__/', include(debug_toolbar.urls)))

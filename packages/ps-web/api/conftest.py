@@ -2,11 +2,12 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER
-from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user
+from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user,check_redis_for_testing
 from users.tests.conftest import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME,setup_logging
 from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import Group
 from django.conf import settings
+from django.core.cache import cache
 
 
 import logging
@@ -45,12 +46,16 @@ def developer_TEST_USER(setup_logging):
 def verified_TEST_USER(create_TEST_USER):
     return verify_user(create_TEST_USER)
 
+
 @pytest.fixture
 def initialize_test_environ(setup_logging,request):
     logger = setup_logging
     version = 'latest'
     is_public = True
     settings.DEBUG = True
+
+    check_redis_for_testing(logger=logger,log_label="initialize_test_environ")
+
     if hasattr(request, "param"):
         if 'version' in request.param:
             version = request.param['version']

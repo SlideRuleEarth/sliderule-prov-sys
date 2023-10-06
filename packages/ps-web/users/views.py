@@ -19,8 +19,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,create_org_queue,create_org_worker,get_ps_server_versions_from_env,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,schedule_forever
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,loop_iter,get_org_queue_name,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
+from .utils import get_db_org_cost,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,log_scheduled_jobs
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,process_state_change,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -39,7 +39,8 @@ from .tasks import cost_accounting, init_new_org_memberships
 from django.contrib.auth import get_user_model
 from allauth.account.decorators import verified_email_required
 from oauth2_provider.models import Application
-
+from django_rq import get_queue,enqueue
+import requests
 
 # logging.basicConfig(
 #     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -274,6 +275,7 @@ def orgRefreshCluster(request, pk):
                     msg = f"Refresh {orgAccountObj.name} queued for processing"
                 messages.info(request, msg)             
                 LOG.info(msg)
+                enqueue_process_state_change(orgAccountObj.name)
             except Exception as e:
                 status = 500
                 LOG.exception("caught exception:")
@@ -325,6 +327,7 @@ def orgDestroyCluster(request, pk):
                     msg = f"Destroy {orgAccountObj.name} queued for processing"
                 messages.info(request, msg)             
                 LOG.info(msg)
+                enqueue_process_state_change(orgAccountObj.name)
             except Exception as e:
                 status = 500
                 LOG.exception("caught exception:")
@@ -349,6 +352,7 @@ def clearOrgNumNodesReqs(request, pk):
             if jrsp['status'] == 'SUCCESS':
                 messages.info(request,jrsp['msg'])
                 LOG.info(jrsp['msg'])
+                enqueue_process_state_change(orgAccountObj.name)
             else:
                 messages.error(request,jrsp['error_msg']) 
                 LOG.error(jrsp['error_msg'])          
@@ -374,6 +378,7 @@ def clearActiveNumNodeReq(request, pk):
                 for active_onn in active_onns:
                     active_onn.delete()
                 messages.info(request,"Successfully deleted active Org Num Node requests")
+                enqueue_process_state_change(orgAccountObj.name)
             else:
                 messages.info(request,"No active Org Num Node request to delete")
         return redirect('org-manage-cluster',pk=orgAccountObj.id)
@@ -400,6 +405,7 @@ def orgConfigure(request, pk):
                     config_form.save()
                     updated = True
                     messages.success(request,f'org {orgAccountObj.name} cfg updated successfully')
+                    enqueue_process_state_change(orgAccountObj.name)
                 else:
                     emsg = f"Input Errors:{config_form.errors.as_text}"
                     messages.warning(request, emsg)
@@ -589,9 +595,10 @@ def orgAccountCreate(request):
         if request.user.groups.filter(name='PS_Developer').exists():
             if request.method == 'POST':
                 form = OrgAccountForm(request.POST)
-                new_org,msg,emsg,q = add_org_cluster_orgcost(form,start_main_loop=True)
+                new_org,msg,emsg = add_org_cluster_orgcost(form,start=True)
                 if msg != '':
                     messages.info(request,msg)
+                    enqueue_process_state_change(new_org.name)
                 if emsg != '':
                     messages.error(request,emsg)
                 return redirect('browse')
@@ -799,13 +806,11 @@ def cancelMembership(request, pk):
     context = {'object': membershipObj}
     return render(request, 'users/confirm_cancel_membership.html', context)
 
-def add_org_cluster_orgcost(f,start_main_loop=False):
+def add_org_cluster_orgcost(f,start=False):
     emsg=''
     msg=''
-    p=None
     new_org=None
     try:
-        start_main_loop = start_main_loop or False
         init_accounting_tm = datetime.now(timezone.utc)-timedelta(days=366) # force update
         if f.is_valid():
             new_org = f.save(commit=False)
@@ -832,17 +837,14 @@ def add_org_cluster_orgcost(f,start_main_loop=False):
                 domain = os.environ.get("DOMAIN")
                 app.redirect_uris += '\n{}'.format(f"https://{new_org.name}.{domain}/redirect_uri/")
                 app.save()
-            q = create_org_queue(new_org)
-            w = create_org_worker(new_org)
-            if start_main_loop:
-                schedule_forever(q, func=loop_iter, exit_func=get_PROVISIONING_DISABLED, kwargs={'name':new_org.name,'loop_count':0})
+            enqueue_process_state_change(new_org.name)  # initializes the processing state
         else:
             emsg = f"Input Errors:{f.errors.as_text}"
     except Exception as e:
         LOG.exception("caught exception:")
         emsg = "Caught exception:"+repr(e)
     
-    return new_org,msg,emsg,q
+    return new_org,msg,emsg
 
 
 
