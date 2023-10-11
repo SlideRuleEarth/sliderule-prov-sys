@@ -281,8 +281,6 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     else:
         assert False, f"initial_version:{initial_version} not supported"
 
-    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
-
     assert OrgAccount.objects.count() == 1
     orgAccountObj.save()
 
@@ -293,7 +291,8 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     assert orgAccountObj.num_ps_cmd_successful == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert orgAccountObj.num_onn == 0
-
+    logger.info(f"orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+    assert orgAccountObj.desired_num_nodes == 0
     # setup necessary form data
     form_data = {
         'is_public': initial_is_public,
@@ -305,16 +304,7 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
         'provisioning_suspended': False,
     }
 
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=0,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
-                                        )
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Update (min nodes is 1)
 
     # assert the form was successful
     # refresh the OrgAccount object
@@ -331,7 +321,6 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     assert orgAccountObj.allow_deploy_by_token == True
     assert orgAccountObj.destroy_when_no_nodes == True
 
-
     assert PsCmdResult.objects.count() == 2 # SetUp - Refresh 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
@@ -346,16 +335,14 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
         'add_onn-ttl_minutes': 15,
     }
     loop_count,response = process_onn_api(client=client,
-                                orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
-                                view_name='org-manage-cluster',
-                                url_args=[orgAccountObj.id],
-                                access_token=None,
-                                data=form_data,
-                                loop_count=loop_count,
-                                num_iters=3, 
-                                expected_change_ps_cmd=1,
-                                expected_status='QUEUED')
+                                            orgAccountObj=orgAccountObj,
+                                            view_name='org-manage-cluster',
+                                            url_args=[orgAccountObj.id],
+                                            access_token=None,
+                                            data=form_data,
+                                            num_iters=3, 
+                                            expected_change_ps_cmd=1,
+                                            expected_status='QUEUED')
 
     assert PsCmdResult.objects.count() == 3 # SetUp - Update - Update
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -376,16 +363,7 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
     }
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=loop_count,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Refresh 
-                                        ) 
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Refresh (min nodes is 1)
 
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert(orgAccountObj.is_public == initial_is_public) 
@@ -421,12 +399,10 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     }
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3,
                                 expected_change_ps_cmd=0, # same desired_num_nodes so no change
                                 expected_status='QUEUED')
@@ -453,7 +429,6 @@ def test_change_version_with_user_view(setup_logging, client,initialize_test_env
     }
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
@@ -524,16 +499,7 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
         'provisioning_suspended': False,
     }
 
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=0,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
-                                        )
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Update (min nodes is 1)
 
     # assert the form was successful
     # refresh the OrgAccount object
@@ -566,12 +532,10 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     }
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=1, # Update (to 3)
                                 expected_status='QUEUED')
@@ -595,16 +559,7 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
     }
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=loop_count,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Refresh
-                                        ) 
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Refresh (min nodes is 1)
 
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert(orgAccountObj.is_public == new_is_public) 
@@ -640,12 +595,10 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     }
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3,
                                 expected_change_ps_cmd=0, # same desired_num_nodes so no change
                                 expected_status='QUEUED')
@@ -674,12 +627,10 @@ def test_change_is_public_with_user_view(setup_logging, client,initialize_test_e
     }
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=2, # different Destroy Update
                                 expected_status='QUEUED',
@@ -746,16 +697,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
         'provisioning_suspended': False,
     }
 
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=0,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
-                                        )
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Update (min nodes is 1)
     # assert the form was successful
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -783,12 +725,10 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
     }
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=0, # Error
                                 expected_status='FAILED',
@@ -807,12 +747,10 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
 
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
                                 expected_status='QUEUED',
@@ -826,12 +764,10 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
 
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=1, # update to max (i.e. 3)
                                 expected_status='QUEUED',
@@ -878,16 +814,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
         'provisioning_suspended': False,
     }
 
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=0,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
-                                        )
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Update (min nodes is 1)
     # assert the form was successful
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -919,12 +846,10 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
                                 expected_status='QUEUED',
@@ -941,12 +866,10 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=1,# bumps to 2
                                 expected_status='QUEUED',
@@ -1014,16 +937,7 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
         'provisioning_suspended': False,
     }
 
-    loop_count = process_org_configure(client,
-                                        orgAccountObj,
-                                        new_time=datetime.now(timezone.utc),
-                                        view_name='org-configure',
-                                        url_args=[org_account_id],
-                                        data=form_data,
-                                        loop_count=0,
-                                        num_iters=3,
-                                        expected_change_ps_cmd=2 # SetUp - Update (min nodes is 1)
-                                        )
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2) # SetUp - Update (min nodes is 1)
     # assert the form was successful
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -1055,12 +969,10 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
 
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
                                 expected_status='QUEUED',
@@ -1075,12 +987,10 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
 
     loop_count,response = process_onn_api(client=client,
                                 orgAccountObj=orgAccountObj,
-                                new_time=datetime.now(timezone.utc),
                                 view_name='org-manage-cluster',
                                 url_args=[orgAccountObj.id],
                                 access_token=None,
                                 data=form_data,
-                                loop_count=loop_count,
                                 num_iters=3, 
                                 expected_change_ps_cmd=1,# bumps to 2
                                 expected_status='QUEUED',

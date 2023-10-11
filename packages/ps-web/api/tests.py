@@ -103,7 +103,6 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')   
 
-    loop_count=0
     orgAccountObj.num_owner_ps_cmd=0
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
@@ -176,7 +175,6 @@ def test_org_ONN(caplog,client,mock_email_backend,initialize_test_environ):
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')   
 
-    loop_count=0
     orgAccountObj.num_owner_ps_cmd=0
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0

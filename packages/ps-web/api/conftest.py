@@ -64,7 +64,8 @@ def initialize_test_environ(setup_logging,request):
     
     logger.info(f"init version: {version}")
     logger.info(f"is_public: {is_public}")
-    orgAccountObj,owner = init_test_environ(name=TEST_ORG_NAME,
+    orgAccountObj,owner = init_test_environ(the_logger=logger,
+                                            name=TEST_ORG_NAME,
                                             org_owner=None,
                                             max_allowance=20000, 
                                             monthly_allowance=1000,

@@ -23,7 +23,7 @@ import requests
 from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
-from .tasks import get_ps_versions, enqueue_process_state_change, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis,hourly_processing,refresh_token_maintenance,scheduler
+from .tasks import get_ps_versions, enqueue_process_state_change, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis,hourly_processing,refresh_token_maintenance,get_scheduler
 from oauth2_provider.models import AbstractApplication
 from users.global_constants import *
 from django_rq import get_queue
@@ -176,7 +176,7 @@ def create_worker(worker_name,queue_name):
 
 def log_scheduled_jobs():
 
-    list_of_job_instances = scheduler.get_jobs()
+    list_of_job_instances = get_scheduler().get_jobs()
 
     # Iterate through each job instance and log details
     for job in list_of_job_instances:
@@ -219,16 +219,16 @@ def init_redis_queues():
     subprocess.Popen(SHELL_CMD)
 
 
-    # Create the RQ scheduler. It uses the defined cached connection
+    # Create the RQ get_scheduler(). It uses the defined cached connection
 
-    scheduler.cron(
+    get_scheduler().cron(
         cron_string="30 * * * *",   # A cron string (e.g. "0 0 * * 0")
         func=hourly_processing,     # Function to be queued
         repeat=None,                # Repeat this number of times (None means repeat forever)
         result_ttl=3600,             # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
     )
 
-    scheduler.cron(
+    get_scheduler().cron(
         cron_string="15 * * * *",       # A cron string (e.g. "0 0 * * 0")
         func=refresh_token_maintenance, # Function to be queued
         repeat=None,                    # Repeat this number of times (None means repeat forever)
@@ -274,7 +274,7 @@ def init_redis_queues():
     for i in range(int(num_cmd_workers)):
         create_worker(f"cmd_worker_{i}",'cmd')
 
-    LOG.info(f"forked subprocess--> {SHELL_CMD}")
+    LOG.info("Finished init_redis_queues")
 
 def disable_provisioning(user,req_msg):
     error_msg=''

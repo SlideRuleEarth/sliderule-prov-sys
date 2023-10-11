@@ -31,6 +31,7 @@ services:
     container_name: redis
   django-app:
     environment:
+      - DEBUG=True
       - CELERY_BROKER_URL=redis://redis:6379/0   
       - TZ=America/New_York
       - SITE_ID=2
@@ -54,6 +55,8 @@ services:
       - GRPC_TIMEOUT_SECS=1800
       - COOLOFF_SECS=0
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - MFA_PLACEHOLDER=123456
     expose:
       - 8000

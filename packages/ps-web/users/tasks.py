@@ -42,10 +42,17 @@ import django_rq
 
 
 LOG = logging.getLogger('django')
-#LOG.propagate = False
-LOG.info("Creating RQ scheduler")
-sched_queue = django_rq.get_queue('scheduled')
-scheduler = Scheduler(queue=sched_queue, connection=sched_queue.connection)
+
+_scheduler = None
+
+def get_scheduler():
+    global _scheduler
+    if _scheduler is None:
+        LOG.info("Creating RQ scheduler")
+        sched_queue = django_rq.get_queue('scheduled')
+        _scheduler = Scheduler(queue=sched_queue, connection=sched_queue.connection)
+    return _scheduler
+
 
 def check_redis(log_label):
     try:
@@ -110,6 +117,18 @@ def format_num_nodes_tbl(org):
 def sort_ONN_by_nn_exp(orgAccountObj):
     return OrgNumNode.objects.filter(org=orgAccountObj).order_by('-desired_num_nodes','expiration')
 
+def log_highest_nodes_per_user(highest_nodes_per_user,orgAccountObj):
+    msg = '['
+    n=0
+    for entry in highest_nodes_per_user:
+        #LOG.critical(f"entry:{entry}")
+        if n != 0:
+            msg = msg + ","
+        msg = msg + "{" + f"org:{orgAccountObj} {User.objects.get(id=entry['user']).username},{entry['max_nodes']}" + "}"
+        n = n + 1
+    msg = msg + "]"
+    LOG.info(f"highest_nodes_per_user for {orgAccountObj}:{msg}")
+
 def sum_of_highest_nodes_for_each_user(orgAccountObj):
     '''
         This routine is used to determine the number of nodes to use for the cluster.
@@ -132,6 +151,7 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
                .values_list('id', flat=True))
         string_ids = [str(id) for id in ids]  # Convert each UUID to string
         ids_list.extend(string_ids)
+    log_highest_nodes_per_user(highest_nodes_per_user,orgAccountObj)
     # Sum up the highest nodes for all users within the OrgAccount
     num_nodes_to_deploy = sum(entry['max_nodes'] for entry in highest_nodes_per_user)
     if (int(num_nodes_to_deploy) < orgAccountObj.min_node_cap):
@@ -440,7 +460,7 @@ def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
         if created:
             if expire_date is not None:
                 msg = f"Created new entry for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
-                scheduler.enqueue_at(expire_date,enqueue_process_state_change,org.name)
+                get_scheduler().enqueue_at(expire_date,enqueue_process_state_change,org.name)
             else:
                 msg = f"Created new entry for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} with NO expiration"
         else:         
@@ -1656,6 +1676,7 @@ def enqueue_process_state_change(name: str) -> bool:
     - bool: True if the job was enqueued successfully, False otherwise.
     '''
     LOG.info(f"enqueue_process_state_change for {name}")
+    #import pdb; pdb.set_trace()
 
     if get_PROVISIONING_DISABLED():
         LOG.critical(f"enqueue_process_state_change NOT enqueued for {name} because PROVISIONING_DISABLED is True")

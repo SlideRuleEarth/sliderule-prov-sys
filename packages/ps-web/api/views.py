@@ -12,6 +12,7 @@ from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.exceptions import InvalidToken
 from datetime import datetime, timezone, timedelta
 from users.models import Membership, OrgAccount, User, Cluster, OrgNumNode
 from users.ps_errors import ClusterDeployAuthError
@@ -40,9 +41,22 @@ class DummySerializer(serializers.Serializer):
 
 
 def get_user_in_token(request):
+    """
+    Authenticate the user based on the JWT token provided in the request.
+    
+    Parameters:
+        request: The HTTP request object containing the JWT token.
+    
+    Returns:
+        tuple: A tuple containing a response dictionary, HTTP status code,
+        and user object extracted from the token.
+    """
     jrsp = {'status': '','error_msg': "", 'msg': ""}
     try:
-        #LOG.info(f"{name} {request}")
+        LOG.info(f"request: {request}")
+        #if settings.DEBUG:
+        LOG.info(f"Request headers: {request.headers}")
+
         status = 200
         msg = ''
         user_in_token = None
@@ -68,6 +82,12 @@ def get_user_in_token(request):
         LOG.exception("caught ValidationError exception:")
         jrsp = {'status': "FAILED","error_msg":"invalid token ve"}
         status=400
+    except InvalidToken as e:
+        LOG.info(f"{request}")
+        LOG.error(f"caught InvalidToken exception:{str(e)}")
+        LOG.exception("caught InvalidToken exception:")
+        jrsp = {'status': "FAILED","error_msg":"invalid token"}
+        status=401
     except Exception as e:
         LOG.exception("caught exception:")
         jrsp = {'status': "FAILED","error_msg":"Server Error"}
@@ -222,8 +242,9 @@ class DesiredNumNodesTTLView(generics.CreateAPIView):
         Expired entries are immediately removed from the pool and the number of nodes are adjusted if needed.
     '''
     serializer_class = DummySerializer
-    def create(self, request, org_name, desired_num_nodes, ttl=None, *args, **kwargs):
+    def create(self, request, org_name, desired_num_nodes, ttl, *args, **kwargs):
         try:
+            LOG.info(f"{org_name} {desired_num_nodes} {ttl}")
             jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
             if http_status == status.HTTP_200_OK:
                 if active:

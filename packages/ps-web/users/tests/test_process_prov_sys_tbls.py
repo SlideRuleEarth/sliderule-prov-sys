@@ -301,7 +301,6 @@ def test_org_ONN_redundant(caplog,client,mock_email_backend,initialize_test_envi
     assert(json_data['status']=='QUEUED')   
     assert(OwnerPSCmd.objects.count()==0)
 
-    loop_count=0
     task_idle, loop_count = process_state_change(orgAccountObj)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
@@ -467,7 +466,6 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     assert(OwnerPSCmd.objects.count()==0)
 
 
-    loop_count=0
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
     orgAccountObj.save()
@@ -509,85 +507,71 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     assert(response.status_code == 200)   
     json_data = json.loads(response.content)
     access_token = json_data['access']   
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,3,17],
                                 access_token=access_token,
                                 data=None,
-                                loop_count=0,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,4,16],
                                 access_token=access_token,
                                 data=None,
-                                loop_count=0,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,15],
                                 access_token=access_token,
                                 data=None,
-                                loop_count=0,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
     
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,25],
                                 access_token=access_token,
                                 data=None,
-                                loop_count=0,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,20],
                                 access_token=access_token,
                                 data=None,
-                                loop_count=0,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,21],
                                 access_token=access_token,
                                 data=None,
-                                loop_count=0,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
                                 expected_status='QUEUED')
 
-    loop_count,response = process_onn_api(client,
-                                orgAccountObj,
-                                datetime.now(timezone.utc),
+    loop_count,response = process_onn_api(client=client,
+                                orgAccountObj=orgAccountObj,
                                 view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,18],
                                 access_token=access_token,
-                                loop_count=0,
                                 data=None,
                                 num_iters=0,
                                 expected_change_ps_cmd=0,
@@ -721,13 +705,15 @@ def verify_new_entries_in_ONN(orgAccountObj,client):
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6)
     assert(len(cnnro_ids)==3)
+    freeze_time = datetime.now(timezone.utc)
     assert verify_api_user_makes_onn_ttl( client=client,
                                     orgAccountObj=orgAccountObj,
                                     user=the_DEV_TEST_USER(),
                                     password=DEV_TEST_PASSWORD,
                                     desired_num_nodes=2, # not highest
                                     ttl_minutes=15,
-                                    expected_change_ps_cmd=0)  # no change
+                                    expected_change_ps_cmd=0,
+                                    expected_status='QUEUED')  # no change
 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
@@ -739,7 +725,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client):
                                     password=DEV_TEST_PASSWORD,
                                     desired_num_nodes=2, # same as before
                                     ttl_minutes=15,
-                                    expected_change_ps_cmd=0) # no change
+                                    expected_change_ps_cmd=0,
+                                    expected_status='REDUNDANT') # no change same time
 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
@@ -829,7 +816,7 @@ def verify_new_entries_in_ONN(orgAccountObj,client):
 
     assert(sum_of_all_users_dnn==9)
     assert(len(cnnro_ids)==3)
-
+    return True
 
 
 def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,client):
@@ -840,7 +827,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
     json_data = json.loads(response.content)
-    logger.info(f"rsp:{json_data}")
+    logger.info(f"org-token-obtain-pair rsp:{json_data}")
     assert(json_data['access_lifetime']=='3600.0')   
     assert(json_data['refresh_lifetime']=='86400.0')   
 
@@ -851,17 +838,17 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
 
     url = reverse('org-cfg',args=[orgAccountObj.name,0,orgAccountObj.admin_max_node_cap])
     response = client.put(url,headers=headers)
-    logger.info(f"status:{response.status_code} response:{response.json()}")
+    logger.info(f"org-cfg status:{response.status_code} response:{response.json()}")
     orgAccountObj.refresh_from_db()
     assert(response.status_code == 200)   
     assert(orgAccountObj.min_node_cap == 0)
     assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
 
-    verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client)
+    assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client))
+    return True
 
 
-
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
@@ -869,7 +856,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
         This procedure will test logic for sum_of_highest_nodes_for_each_user for two different orgs
     '''
 
-    verify_sum_of_highest_nodes_for_each_user_default_test_org(get_test_org(),client)
+    assert verify_sum_of_highest_nodes_for_each_user_default_test_org(get_test_org(),client)
 
     # create a new org and initialize like init_test_environ and then mix it up 
     form = OrgAccountForm(data={
@@ -891,6 +878,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     logger.info(f"msg:{msg} emsg:{emsg} ")
     assert(emsg=='')
     assert('Owner TestUser (ownertestuser) now owns new org/cluster:test_create' in msg)
+    orgAccountObj.max_node_cap = 18
     assert(call_SetUp(orgAccountObj))
     assert(fake_sync_clusterObj_to_orgAccountObj(orgAccountObj))
     clusterObj = Cluster.objects.get(org=orgAccountObj)
@@ -900,12 +888,17 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==0) # for new org
     
-    verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client)
+    assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client))
     onn = log_ONN()
-    assert len(onn) == 22
+    assert len(onn) == 20
     assert onn[0].desired_num_nodes == 4
-    assert onn[11].desired_num_nodes == 4
-
+    assert onn[4].desired_num_nodes == 3
+    assert onn[7].desired_num_nodes == 2
+    assert onn[10].desired_num_nodes == 4
+    assert onn[14].desired_num_nodes == 3
+    assert onn[17].desired_num_nodes == 2
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
+    assert (sum_of_all_users_dnn == 9) # for test_create org
 
     # now test out of bounds requests, and see that it is clamped
 
@@ -923,6 +916,6 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==orgAccountObj.max_node_cap) # clamped
 
     onn = log_ONN()
-    assert len(onn) == 23
+    assert len(onn) == 21
     assert onn[0].desired_num_nodes == 4
-    assert onn[5].desired_num_nodes == LARGE_REQ
+    assert onn[4].desired_num_nodes == LARGE_REQ

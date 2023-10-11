@@ -49,6 +49,55 @@ def teardown_module(tasks_module):
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
+def test_simple_cfg_org(caplog,client,initialize_test_environ):
+    '''
+        This procedure will test the cfg org
+    '''
+    caplog.set_level(logging.DEBUG)
+    time_now = datetime.now(timezone.utc)
+    caplog.set_level(logging.DEBUG)
+    url = reverse('org-token-obtain-pair')
+    data = {'username': OWNER_USER, 'password': OWNER_PASSWORD, 'org_name': 'wrongOrgName'}
+    response = client.post(url,data)
+    assert (response.status_code == 403) # first pass is wrong org
+    data = {'username': OWNER_USER, 'password': TEST_PASSWORD, 'org_name': TEST_ORG_NAME}
+    response = client.post(url,data)
+    assert (response.status_code == 401) # wrong password
+    data = {'username': OWNER_USER, 'password': OWNER_PASSWORD, 'org_name': TEST_ORG_NAME}
+    response = client.post(url,data)
+    assert (response.status_code == 200) # first pass is 
+
+    json_data = json.loads(response.content)
+    logger.info(f"org-token-obtain-pair rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0')   
+
+    headers = {
+        'Authorization': f"Bearer {json_data['access']}",
+        'Accept': 'application/json'  # Specify JSON response
+    }
+    orgAccountObj = get_test_org()
+    url = reverse('org-cfg',args=[orgAccountObj.name,0,orgAccountObj.admin_max_node_cap])
+    response = client.put(url,headers=headers)
+    logger.info(f"org-cfg status:{response.status_code} response:{response.json()}")
+    orgAccountObj.refresh_from_db()
+    assert(response.status_code == 200)   
+    assert(orgAccountObj.min_node_cap == 0)
+    assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
+
+    url = reverse('org-cfg',args=[orgAccountObj.name,1,orgAccountObj.admin_max_node_cap-1])
+    response = client.put(url,headers=headers)
+    logger.info(f"org-cfg status:{response.status_code} response:{response.json()}")
+    orgAccountObj.refresh_from_db()
+    assert(response.status_code == 200)   
+    assert(orgAccountObj.min_node_cap == 1)
+    assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap-1)
+
+
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
 def test_config_org(caplog,client,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test the config min-max nodes api

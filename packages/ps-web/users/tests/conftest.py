@@ -4,12 +4,13 @@ import boto3
 from django.contrib.auth import get_user_model
 from django.core import mail
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER,create_test_user
-from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,get_test_org,call_SetUp
+from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,get_test_org,call_SetUp,check_redis_for_testing
 from users.models import Cluster
 from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import Group
 from django.contrib.sites.models import Site
 from django.contrib.sites.shortcuts import get_current_site
+from django.conf import settings
 
 import logging
 from importlib import import_module
@@ -101,6 +102,9 @@ def initialize_test_environ(setup_logging,request):
     logger = setup_logging
     version = 'latest'
     is_public = False
+    settings.DEBUG = True
+
+    check_redis_for_testing(logger=logger,log_label="initialize_test_environ")
 
     if hasattr(request, "param"):
         if 'version' in request.param:
@@ -122,6 +126,6 @@ def initialize_test_environ(setup_logging,request):
                                             most_recent_recon_time=datetime.now(timezone.utc),
                                             version=version,
                                             is_public=is_public)
-    logger.info(f"org:{orgAccountObj.name} owner:{orgAccountObj.owner.username}")
+    logger.info(f"finished initializing org:{orgAccountObj.name} owner:{orgAccountObj.owner.username}")
 
 
