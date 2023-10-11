@@ -5,9 +5,9 @@ DOCKER_TAG ?= $(VERSION)
 PYTEST_ARGS ?= 
 NGINX_CONF ?= dev
 DB_BACKUP_DIR = $(ROOT)/db_backups
-PS_SERVER_SOURCE_DIR = $(ROOT)/../../packages/ps-server
-PS_WEB_SOURCE_DIR = $(ROOT)/../../packages/ps-web
-PS_NGINX_SOURCE_DIR = $(ROOT)/../../packages/ps-web # nginx docker is built in web directory
+PS_SERVER_SOURCE_DIR = $(ROOT)/../../packages/ps_server
+PS_WEB_SOURCE_DIR = $(ROOT)/../../packages/ps_web
+PS_NGINX_SOURCE_DIR = $(ROOT)/../../packages/ps_web # nginx docker is built in web directory
 REPO ?= $(DOCKER_REPO) 
 BLD_ENVVER = $(shell cd ../../; git --git-dir .git --work-tree . describe --abbrev --dirty --always --tags --long)
 # PS_BRANCH is the branch of ps-server to use for fetching the init_aws_localstack.py script
