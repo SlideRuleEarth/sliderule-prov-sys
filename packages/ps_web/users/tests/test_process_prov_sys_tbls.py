@@ -726,7 +726,7 @@ def verify_new_entries_in_ONN(orgAccountObj,client):
                                     desired_num_nodes=2, # same as before
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0,
-                                    expected_status='REDUNDANT') # no change same time
+                                    expected_status='QUEUED') # we guarentee unique time inside this routine
 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
@@ -848,7 +848,7 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
     return True
 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
@@ -890,13 +890,13 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     
     assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client))
     onn = log_ONN()
-    assert len(onn) == 20
+    assert len(onn) == 22
     assert onn[0].desired_num_nodes == 4
-    assert onn[4].desired_num_nodes == 3
-    assert onn[7].desired_num_nodes == 2
-    assert onn[10].desired_num_nodes == 4
-    assert onn[14].desired_num_nodes == 3
-    assert onn[17].desired_num_nodes == 2
+    assert onn[5].desired_num_nodes == 3
+    assert onn[8].desired_num_nodes == 2
+    assert onn[11].desired_num_nodes == 4
+    assert onn[16].desired_num_nodes == 3
+    assert onn[19].desired_num_nodes == 2
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert (sum_of_all_users_dnn == 9) # for test_create org
 
@@ -916,6 +916,10 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_email_backend, i
     assert(sum_of_all_users_dnn==orgAccountObj.max_node_cap) # clamped
 
     onn = log_ONN()
-    assert len(onn) == 21
+    assert len(onn) == 23
     assert onn[0].desired_num_nodes == 4
-    assert onn[4].desired_num_nodes == LARGE_REQ
+    assert onn[5].desired_num_nodes == LARGE_REQ
+    assert onn[9].desired_num_nodes == 2
+    assert onn[12].desired_num_nodes == 4
+    assert onn[17].desired_num_nodes == 3
+    assert onn[20].desired_num_nodes == 2

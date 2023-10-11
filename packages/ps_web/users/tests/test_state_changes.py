@@ -503,7 +503,7 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
 
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 @pytest.mark.parametrize("provisioning_disabled, expected_result", [
@@ -511,10 +511,10 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
     (False, True)
 ])
 def test_enqueue_process_state_change(provisioning_disabled, expected_result):
-    with patch("ps_web.tasks.get_PROVISIONING_DISABLED", return_value=provisioning_disabled), \
-         patch("ps_web.tasks.django_rq") as mock_django_rq, \
-         patch("ps_web.tasks.cache") as mock_cache, \
-         patch("ps_web.tasks.Job") as mock_Job:
+    with patch("users.tasks.get_PROVISIONING_DISABLED", return_value=provisioning_disabled), \
+         patch("users.tasks.django_rq") as mock_django_rq, \
+         patch("users.tasks.cache") as mock_cache, \
+         patch("users.tasks.Job") as mock_Job:
 
         # If needed, set further behavior on the mocks, e.g.,
         # mock_Job.fetch.return_value.is_queued = True

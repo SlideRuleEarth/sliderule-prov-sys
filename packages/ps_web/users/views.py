@@ -403,7 +403,11 @@ def orgConfigure(request, pk):
                         LOG.info(f"Field: {field}, Value: {value}")
                     LOG.info(f"orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes}")
                     config_form.save()
-                    updated = True
+                    # Force the cluster env to be reinitialized
+                    clusterObj = Cluster.objects.get(org=orgAccountObj)
+                    clusterObj.provision_env_ready = False
+                    clusterObj.save()
+                    LOG.info(f"saved clusterObj for orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} ")
                     messages.success(request,f'org {orgAccountObj.name} cfg updated successfully')
                     enqueue_process_state_change(orgAccountObj.name)
                 else:
@@ -418,17 +422,6 @@ def orgConfigure(request, pk):
                 emsg = "Server ERROR"
                 messages.error(request, emsg)
         orgAccountObj = get_orgAccountObj(pk)
-        try:
-            if updated:
-                # Force the cluster env to be reinitialized
-                clusterObj = Cluster.objects.get(org=orgAccountObj)
-                clusterObj.provision_env_ready = False
-                clusterObj.save()
-                LOG.info(f"saved clusterObj for orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} ")
-        except Exception as e:
-            LOG.exception("caught exception:")
-            emsg = "Server ERROR"
-            messages.error(request, emsg)
 
         LOG.info(f"{request.user.username} orgAccountObj:{request.method} {orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes}")
         LOG.info("redirect to org-manage-cluster")

@@ -1588,23 +1588,6 @@ def  process_prov_sys_tbls(orgAccountObj):
         sleep(COOLOFF_SECS)
     return (orgAccountObj.num_ps_cmd == start_cmd_cnt) # task is idle if no new commands were processed 
 
-def process_state_change(org_name):
-    '''
-    This function is scheduled anytime a state change occurs for an org
-    '''
-    orgAccountObj = OrgAccount.objects.get(name=org_name)
-    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}'))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
-    is_idle = process_prov_sys_tbls(orgAccountObj)
-    idle_cnt = int(cache.get(f"idle_cnt_{orgAccountObj.name}"))
-    if is_idle:
-        LOG.info(f"{orgAccountObj.name} is idle")
-        cache.set(f"idle_cnt_{orgAccountObj.name}",idle_cnt+1)
-
-    orgAccountObj.loop_count = orgAccountObj.loop_count + 1
-    orgAccountObj.save()
-    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}'))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
-    return is_idle,orgAccountObj.loop_count
-
 
 def process_state_change(org_name):
     '''
@@ -1622,8 +1605,9 @@ def process_state_change(org_name):
     except OrgAccount.DoesNotExist:
         LOG.error(f"OrgAccount with name {org_name} does not exist.")
         return False, 0
+    key = f"idle_cnt_{orgAccountObj.name}"
     
-    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}', 0))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
     
     is_idle = process_prov_sys_tbls(orgAccountObj)
     
@@ -1633,7 +1617,7 @@ def process_state_change(org_name):
         cache.set(f"idle_cnt_{orgAccountObj.name}", idle_cnt+1)
     
     OrgAccount.objects.filter(name=org_name).update(loop_count=F('loop_count') + 1) # F make this inline and an atomic update
-    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count+1)}/{'{:>10}'.format(cache.get(f'idle_cnt_{orgAccountObj.name}', 0))} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count+1)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
     return is_idle, orgAccountObj.loop_count+1 # +1 because we updated the loop_count above inline
 
 

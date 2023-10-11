@@ -23,6 +23,7 @@ from oauth2_provider.models import Application
 from google.protobuf.json_format import MessageToDict
 from google.protobuf import json_format
 from django.core.cache import cache
+from unittest.mock import Mock, call
 
 from django.urls import reverse
 import time_machine
@@ -484,7 +485,7 @@ def process_onn_api(client,
                     expected_html_status=None):
     if new_time is None:
         #logger.critical(f"new_time is None ")
-        sleep(0.1) # guarantee a new time
+        sleep(1)
         new_time = datetime.now(timezone.utc)
     logger.info(f"process_onn_api view_name:{view_name} url_args:{url_args} access_token:{access_token} data:{data} loop_count:{orgAccountObj.loop_count} num_iters:{num_iters} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_org_account_num_onn_change:{expected_org_account_num_onn_change} expected_html_status:{expected_html_status}")
     logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
@@ -511,6 +512,7 @@ def process_onn_api(client,
         logger.info(f"new time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
         if access_token is not None:
             assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT' or expected_status == 'FAILED') 
+            logger.info(f"url:{url} data:{data}")
             if 'put' in view_name:
                 response = client.put(url,headers=headers)
             else:
@@ -615,39 +617,42 @@ def process_owner_ps_cmd(client,
     return loop_count
 
 
-def process_org_configure(  client,
+def process_org_configure(client,
                             orgAccountObj,
                             data,
-                            expected_change_ps_cmd):
+                            expected_change_ps_cmd,
+                            mock_enqueue,
+                            call_cnt):
     url = reverse('org-configure',args=[orgAccountObj.id])
     logger.info(f"using url:{url}")
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
     s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
-    logger.info(f"using s_OrgNumNode_cnt:{s_OrgNumNode_cnt} s_OwnerPSCmd_cnt:{s_OwnerPSCmd_cnt} s_orgAccountObj_num_onn:{s_orgAccountObj_num_onn} s_orgAccountObj_num_owner_ps_cmd:{s_orgAccountObj_num_owner_ps_cmd} s_orgAccountObj_num_ps_cmd:{s_orgAccountObj_num_ps_cmd} s_orgAccountObj_num_setup_cmd:{s_orgAccountObj_num_setup_cmd} s_orgAccountObj_num_ps_cmd_successful:{s_orgAccountObj_num_ps_cmd_successful} s_orgAccountObj_num_setup_cmd_successful:{s_orgAccountObj_num_setup_cmd_successful}")
-    response = client.post(url,data=data, HTTP_ACCEPT='application/json')
-    logger.info(f"response.status_code:{response.status_code}")
-    assert((response.status_code == 200) or (response.status_code == 302))
-    # logger.info(f"dir(response):{dir(response)}")
-    # logger.info(f"Response status code: {response.status_code}")
-    # logger.info(f"Response content: {response.content}")
-    # logger.info(f"Response headers: {response.headers}")        
-    # # json_data = json.loads(response.content)
-    sleep(0.1) # allow time for the process_state_change to run
-    clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
-    orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
-    assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) 
-    assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt))
-    assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a process_state_change 
-    assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a process_state_change 
-    assert(orgAccountObj.num_ps_cmd_successful == s_orgAccountObj_num_ps_cmd_successful) # only changes after we do a process_state_change 
-    assert(orgAccountObj.num_setup_cmd == s_orgAccountObj_num_setup_cmd) # only changes after we do a process_state_change 
-    assert(orgAccountObj.num_setup_cmd_successful == s_orgAccountObj_num_setup_cmd_successful) # only changes after we do a process_state_change 
-    assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change 
-    assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) 
-    assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + expected_change_ps_cmd ) # only changes if we did a process_state_change else no change just queued
+    tm = datetime.now(timezone.utc)
+    logger.info(f"using time:{tm.strftime(FMT)}") 
+    with time_machine.travel(tm,tick=True):
+        response = client.post(url,data=data, HTTP_ACCEPT='application/json')
+        logger.info(f"response.status_code:{response.status_code}")
+        assert((response.status_code == 200) or (response.status_code == 302))
+        # logger.info(f"dir(response):{dir(response)}")
+        # logger.info(f"Response status code: {response.status_code}")
+        # logger.info(f"Response content: {response.content}")
+        # logger.info(f"Response headers: {response.headers}")        
+        # # json_data = json.loads(response.content)
+        assert mock_enqueue.call_count == call_cnt
+        assert mock_enqueue.call_args == call(orgAccountObj.name)
+        process_state_change(orgAccountObj.name) # call it synchronously
+        clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
+        assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) 
+        assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt))
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)  
+        assert(orgAccountObj.num_ps_cmd_successful == s_orgAccountObj_num_ps_cmd_successful+2)
+        assert(orgAccountObj.num_setup_cmd == s_orgAccountObj_num_setup_cmd+1)  
+        assert(orgAccountObj.num_setup_cmd_successful == s_orgAccountObj_num_setup_cmd_successful+1) 
+        assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn+1) # no change 
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + expected_change_ps_cmd) 
     return True
-
 
 def process_owner_ps_Update_cmd(client,
                                 orgAccountObj,

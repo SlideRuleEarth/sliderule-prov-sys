@@ -64,16 +64,16 @@ ps-server-test-stub-stage : ps-server-test-stub-clean-stage # stage the files fo
 	mkdir -p docker/ps-server-test-stub/stage
 	echo PS_SERVER_DOCKER_TAG=django-unit-tests >> docker/ps-server-test-stub/stage/.ps_server_versions
 	echo PS_SERVER_GIT_VERSION=$(ENVVER) >> docker/ps-server-test-stub/stage/.ps_server_versions
-	cp ../../packages/ps-server/docker/ps-server/Dockerfile docker/ps-server-test-stub/stage/Dockerfile
+	cp ../../packages/ps_server/docker/ps-server/Dockerfile docker/ps-server-test-stub/stage/Dockerfile
 	awk '/COPY .\/stage\/ps_server.py \/ps_server\// { print; print "COPY ./stage/users/ /ps_server/users/"; next }1' docker/ps-server-test-stub/stage/Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp docker/ps-server-test-stub/Dockerfile
-	cp -R ../../packages/ps-server/test_misc/ docker/ps-server-test-stub/stage/test_misc/
+	cp -R ../../packages/ps_server/test_misc/ docker/ps-server-test-stub/stage/test_misc/
 	cp docker/ps-server-test-stub/docker-entrypoint.sh docker/ps-server-test-stub/stage/
 	cp docker/ps-server-test-stub/requirements.txt docker/ps-server-test-stub/stage/
 	cp ps_server_test_stub/ps_server.py docker/ps-server-test-stub/stage/ps_server.py
 	cp -R ../ps_server/protos docker/ps-server-test-stub/stage/
 	mkdir -p docker/ps-server-test-stub/stage/users/tests
-	cp ../../packages/ps-web/users/global_constants.py docker/ps-server-test-stub/stage/users/global_constants.py
-	cp ../../packages/ps-web/users/tests/global_test_constants.py docker/ps-server-test-stub/stage/users/tests/global_test_constants.py
+	cp ../../packages/ps_web/users/global_constants.py docker/ps-server-test-stub/stage/users/global_constants.py
+	cp ../../packages/ps_web/users/tests/global_test_constants.py docker/ps-server-test-stub/stage/users/tests/global_test_constants.py
 	touch docker/ps-server-test-stub/stage/users/__init__.py
 	touch docker/ps-server-test-stub/stage/users/tests/__init__.py
 #   this is to make sure imports of constants to the ps-server stub match current ps-web
