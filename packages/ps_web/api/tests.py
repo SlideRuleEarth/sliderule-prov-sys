@@ -9,7 +9,6 @@ from decimal import *
 from django.urls import reverse
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user
-from users.tasks import process_state_change
 # Import the fixtures
 from users.tests.utilities_for_unit_tests import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME
 from users.models import OwnerPSCmd,OrgNumNode,OrgAccount,PsCmdResult
@@ -82,7 +81,7 @@ def test_org_token(caplog,client,mock_email_backend,initialize_test_environ):
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
+def test_org_ONN_ttl(caplog,client,mock_enqueue_synchronous,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test owner grabs token and can queue a ONN
     '''
@@ -119,26 +118,21 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
     assert(json_data['msg']!='')   
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
-    clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
-    
-    
-  
-    task_idle, loop_count = process_state_change(orgAccountObj)
+     
+    mock_enqueue_synchronous.assert_called_once_with(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    assert(loop_count==1)
+    assert(orgAccountObj.loop_count==1)
     assert(clusterObj.provision_env_ready)
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
     assert(orgAccountObj.num_ps_cmd_successful==1) 
     assert(orgAccountObj.num_onn==1)
     
-
-    task_idle, loop_count = process_state_change(orgAccountObj)
+    mock_enqueue_synchronous.assert_called_once_with(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    assert(task_idle)
-    assert(loop_count==2)   
+    assert(orgAccountObj.loop_count==2)   
 
     assert PsCmdResult.objects.count() == 1 # Update 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -154,7 +148,7 @@ def test_org_ONN_ttl(caplog,client,mock_email_backend,initialize_test_environ):
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN(caplog,client,mock_email_backend,initialize_test_environ):
+def test_org_ONN(caplog,client,mock_enqueue_synchronous,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test owner grabs token and can queue a ONN
     '''
@@ -191,13 +185,10 @@ def test_org_ONN(caplog,client,mock_email_backend,initialize_test_environ):
     assert(json_data['error_msg']=='') 
     logger.info(f"msg:{json_data['msg']}")  
     clusterObj.refresh_from_db() # The client.put above updated the DB so we need this
-    
-    
-  
-    task_idle, loop_count = process_state_change(orgAccountObj)
+    mock_enqueue_synchronous.assert_called_once_with(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    assert(loop_count==1)
+    assert(orgAccountObj.loop_count==1)
     assert(clusterObj.provision_env_ready)
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update

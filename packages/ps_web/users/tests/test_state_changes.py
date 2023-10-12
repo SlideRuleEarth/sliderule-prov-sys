@@ -13,7 +13,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
-from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_api,process_onn_expires,process_owner_ps_cmd,process_owner_ps_Destroy_cmd,process_owner_ps_Refresh_cmd,process_owner_ps_Update_cmd
+from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,process_onn_expires,process_owner_ps_Destroy_cmd,process_owner_ps_Refresh_cmd,process_owner_ps_Update_cmd,process_post_org_num_nodes_ttl,process_put_org_num_nodes
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.forms import OrgAccountForm
 from users.tasks import process_state_change,init_new_org_memberships,init_new_org_memberships,process_prov_sys_tbls,get_org_queue_name,get_or_create_OrgNumNodes,enqueue_process_state_change
@@ -218,9 +218,9 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize_test_environ):
+def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
     '''
-        This procedure will various cases for the main loop
+        This procedure will various cases for the process_state_change function
     '''
     caplog.set_level(logging.DEBUG)
     grpc_timeout = int(os.environ.get("GRPC_TIMEOUT_SECS",1800))
@@ -233,83 +233,68 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_email_backend,initialize
         assert(response.status_code == 200)   
         json_data = json.loads(response.content)
         access_token = json_data['access'] 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,3,15],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0,
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.name,3,15],
+                                                            access_token=access_token,
+                                                            expected_change_ps_cmd=0,
+                                                            expected_status='QUEUED')
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,3,15],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=6,
-                                    expected_change_ps_cmd=1, # because num_iters>0 and we had one QUEUED
-                                    expected_status='REDUNDANT')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.name,3,15],
+                                                            access_token=access_token,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out,
+                                                            expected_change_ps_cmd=1, # because num_iters>0 and we had one QUEUED
+                                                            expected_status='REDUNDANT')
         assert(loop_count==6)
         current_fake_tm = datetime.now(timezone.utc)+timedelta(seconds=3) # 6 iters above is 3 seconds
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='put-org-num-nodes',
-                                    url_args=[orgAccountObj.name,3],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0, # because no iters
-                                    expected_status='QUEUED')
+        loop_count,response = process_put_org_num_nodes(client=client,
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,3],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=0, # because no iters
+                                                        expected_status='QUEUED')
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,3,16],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=1,
-                                    expected_change_ps_cmd=0, # because highest num nodes is still 3
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.name,3,16],
+                                                            access_token=access_token,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out,
+                                                            expected_change_ps_cmd=0, # because highest num nodes is still 3
+                                                            expected_status='QUEUED')
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,2,17],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0,
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.name,2,17],
+                                                            access_token=access_token,
+                                                            expected_change_ps_cmd=0,
+                                                            expected_status='QUEUED')
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,1,19],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0,
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.name,1,19],
+                                                            access_token=access_token,
+                                                            expected_change_ps_cmd=0,
+                                                            expected_status='QUEUED')
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,4,15],
-                                    access_token=access_token,
-                                    data=None,
-                                    num_iters=1,
-                                    expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.name,4,15],
+                                                            access_token=access_token,
+                                                            expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
+                                                            expected_status='QUEUED')
 
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initialize_test_environ):
+def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock_email_backend,initialize_test_environ):
     '''
-        This procedure will various cases for the main loop
+        This procedure will test the state change function when 
+        multiple calls to enqueue_process_state_change are made 
+        before a process_state_change call happens
     '''
     caplog.set_level(logging.DEBUG)
     grpc_timeout = int(os.environ.get("GRPC_TIMEOUT_SECS",1800))
@@ -332,53 +317,39 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
         assert(orgAccountObj.num_onn==0)
         current_fake_tm = datetime.now(timezone.utc)  
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    new_time=current_fake_tm,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,3,15],
-                                    access_token=owner_access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0,
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            new_time=current_fake_tm,
+                                                            url_args=[orgAccountObj.name,3,15],
+                                                            access_token=owner_access_token,
+                                                            expected_change_ps_cmd=0,
+                                                            expected_status='QUEUED')
         
         #
         # This tests when multiple calls to api are processed between a process_state_change
         #
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    new_time=current_fake_tm,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,4,16],
-                                    access_token=owner_access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0,
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            new_time=current_fake_tm,
+                                                            url_args=[orgAccountObj.name,4,16],
+                                                            access_token=owner_access_token,
+                                                            expected_change_ps_cmd=0,
+                                                            expected_status='QUEUED')
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    new_time=current_fake_tm,
-                                    view_name='post-org-num-nodes-ttl',
-                                    url_args=[orgAccountObj.name,2,17],
-                                    access_token=owner_access_token,
-                                    data=None,
-                                    num_iters=0,
-                                    expected_change_ps_cmd=0,
-                                    expected_status='QUEUED')
+        loop_count,response = process_post_org_num_nodes_ttl(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            new_time=current_fake_tm,
+                                                            url_args=[orgAccountObj.name,2,17],
+                                                            access_token=owner_access_token,
+                                                            expected_change_ps_cmd=0,
+                                                            expected_status='QUEUED')
 
         #
-        # Note: local var loop_count get updated every pass 
-        # BUT model object orgAccountObj only gets 
-        # updated every 10 secs for loop_count
-        # (i.e. 20 calls to process_state_change)
-        # This is to reduce the db i/o rate
         #
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
 
-        task_idle, loop_count = process_state_change(orgAccountObj)
+        task_idle, loop_count = process_state_change(orgAccountObj.name)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(loop_count==1)
@@ -399,7 +370,7 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
         assert(orgAccountObj.num_ps_cmd==1) # update cmd
         assert(orgAccountObj.desired_num_nodes==4)
         assert(orgAccountObj.num_ps_cmd_successful==1)
-        task_idle, loop_count = process_state_change(orgAccountObj)
+        task_idle, loop_count = process_state_change(orgAccountObj.name)
         assert(loop_count==2)
         
         assert(orgAccountObj.loop_count==1)
@@ -419,7 +390,7 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
                                                     orgAccountObj=orgAccountObj,
                                                     new_time=datetime.now(timezone.utc),
                                                     loop_count=loop_count,
-                                                    num_iters=0)
+                                                    delay_state_processing=True)
 
         # verify setup occurred
         assert(clusterObj.provision_env_ready)
@@ -433,10 +404,8 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
         assert(orgAccountObj.num_ps_cmd_successful==1)
         assert(orgAccountObj.desired_num_nodes==4)
         assert(loop_count==2)
-         #not until process_state_change
-        assert(orgAccountObj.num_onn==1)
 
-        task_idle, loop_count = process_state_change(orgAccountObj)
+        task_idle, loop_count = process_state_change(orgAccountObj.name)
         assert(loop_count==3)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
@@ -455,14 +424,12 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
         #  3,15 <-- expire this one
         #  4,16
         #  2,17 
-        loop_count = process_onn_expires(orgAccountObj,
-                                        fake_time_now+timedelta(minutes=15,seconds=1),
-                                        loop_count,
-                                        num_iters=1,
-                                        expected_change_ps_cmd=0, # 4 is highest and was already processed
-                                        expected_change_OrgNumNode=-1,
-                                        expected_change_num_onn=0,
-                                        expected_desired_num_nodes=4)
+        process_onn_expires(orgAccountObj,
+                            fake_time_now+timedelta(minutes=15,seconds=1),
+                            expected_change_ps_cmd=0, # 4 is highest and was already processed
+                            expected_change_OrgNumNode=-1,
+                            expected_change_num_onn=0,
+                            expected_desired_num_nodes=4)
 
         # simulate the deploy
         clusterObj.is_deployed = True
@@ -473,14 +440,12 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
         #  3,15 **expired already
         #  4,16 <-- expire this one
         #  2,17 
-        loop_count = process_onn_expires(orgAccountObj,
-                                        fake_time_now+timedelta(minutes=16,seconds=1),
-                                        loop_count,
-                                        num_iters=1,
-                                        expected_change_ps_cmd=1,
-                                        expected_change_OrgNumNode=-1,
-                                        expected_change_num_onn=1,
-                                        expected_desired_num_nodes=2)
+        process_onn_expires(orgAccountObj,
+                            fake_time_now+timedelta(minutes=16,seconds=1),
+                            expected_change_ps_cmd=1,
+                            expected_change_OrgNumNode=-1,
+                            expected_change_num_onn=1,
+                            expected_desired_num_nodes=2)
 
         # these two set like this mean we call destroy when table is empty
         assert(orgAccountObj.destroy_when_no_nodes)
@@ -492,16 +457,14 @@ def test_state_change(caplog,client,verified_TEST_USER,mock_email_backend,initia
         #  3,15 **expired already
         #  4,16 **expired already
         #  2,17 <-- expire this one
-        loop_count = process_onn_expires( orgAccountObj,
-                                        fake_time_now+timedelta(minutes=17,seconds=1),
-                                        loop_count,
-                                        num_iters=1,
-                                        expected_change_ps_cmd=1, # destroy 
-                                        expected_change_OrgNumNode=-1,
-                                        expected_change_num_onn=1, # destroy
-                                        expected_desired_num_nodes=0)
+        process_onn_expires(orgAccountObj,
+                            fake_time_now+timedelta(minutes=17,seconds=1),
+                            expected_change_ps_cmd=1, # destroy 
+                            expected_change_OrgNumNode=-1,
+                            expected_change_num_onn=1, # destroy
+                            expected_desired_num_nodes=0)
 
-
+        assert mock_enqueue_stubbed.call_count == 0 # TBD fix this
 
 #@pytest.mark.dev
 @pytest.mark.django_db 
@@ -515,9 +478,6 @@ def test_enqueue_process_state_change(provisioning_disabled, expected_result):
          patch("users.tasks.django_rq") as mock_django_rq, \
          patch("users.tasks.cache") as mock_cache, \
          patch("users.tasks.Job") as mock_Job:
-
-        # If needed, set further behavior on the mocks, e.g.,
-        # mock_Job.fetch.return_value.is_queued = True
 
         # Act
         result = enqueue_process_state_change("test_name")

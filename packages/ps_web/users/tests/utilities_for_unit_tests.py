@@ -198,7 +198,7 @@ def verify_user(the_user):
 
     return the_user
 
-def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num_nodes,ttl_minutes,expected_change_ps_cmd,expected_status='QUEUED'):
+def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num_nodes,ttl_minutes,expected_change_ps_cmd,delay_state_processing=True, mock_enqueue_stubbed_out=None,expected_status='QUEUED'):
     '''
     This routine tests the org-num-nodes-ttl api with a testuser with assumed password TEST_PASSWORD
     '''
@@ -209,20 +209,16 @@ def verify_api_user_makes_onn_ttl(client,orgAccountObj,user,password,desired_num
     json_data = json.loads(response.content)
     logger.info(f"org-token-obtain-pair rsp:{json_data}")
     access_token = json_data['access']   
-    response = process_onn_api(client=client,
-                                orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
-                                url_args=[orgAccountObj.name,desired_num_nodes,ttl_minutes],
-                                access_token=access_token,
-                                data=None,
-                                num_iters=3,
-                                expected_change_ps_cmd=expected_change_ps_cmd,
-                                expected_status=expected_status)
+    response = process_post_org_num_nodes_ttl(  client=client,
+                                                orgAccountObj=orgAccountObj,
+                                                url_args=[orgAccountObj.name,desired_num_nodes,ttl_minutes],
+                                                access_token=access_token,
+                                                delay_state_processing=delay_state_processing,
+                                                mock_enqueue_stubbed_out=mock_enqueue_stubbed_out,
+                                                expected_change_ps_cmd=expected_change_ps_cmd,
+                                                expected_status=expected_status)
     return True
 
-# def is_celery_working():
-#     result = app.control.broadcast('ping', reply=True, limit=1)
-#     return bool(result)  # True if at least one result
 
 
 def create_test_org(name, 
@@ -471,30 +467,35 @@ def getOrgAccountObjCnts(orgAccountObj):
 def getObjectCnts():
     return OwnerPSCmd.objects.count(),OrgNumNode.objects.count()
 
-def process_onn_api(client,
-                    orgAccountObj,
-                    view_name,
-                    url_args,
-                    access_token,
-                    data,
-                    num_iters,
-                    expected_change_ps_cmd,
-                    expected_status,
-                    new_time=None,
-                    expected_org_account_num_onn_change=None,
-                    expected_html_status=None):
+def process_post_org_num_nodes_ttl( client,
+                                    orgAccountObj,
+                                    url_args,
+                                    access_token,
+                                    expected_change_ps_cmd,
+                                    expected_status,
+                                    data=None,
+                                    delay_state_processing=True,
+                                    mock_enqueue_stubbed_out=None,
+                                    new_time=None,
+                                    expected_org_account_num_onn_change=None,
+                                    expected_html_status=None):
+    '''
+    This routine will test calling the view API --> post-org-num-nodes-ttl  
+    with the given url args or parameters/data. 
+    It assumes the enqueue_process_state_change is stubbed out
+    '''
     if new_time is None:
         #logger.critical(f"new_time is None ")
         sleep(1)
         new_time = datetime.now(timezone.utc)
-    logger.info(f"process_onn_api view_name:{view_name} url_args:{url_args} access_token:{access_token} data:{data} loop_count:{orgAccountObj.loop_count} num_iters:{num_iters} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_org_account_num_onn_change:{expected_org_account_num_onn_change} expected_html_status:{expected_html_status}")
+    logger.info(f"process_post_org_num_nodes_ttl url_args:{url_args} access_token:{access_token} data:{data} loop_count:{orgAccountObj.loop_count} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_org_account_num_onn_change:{expected_org_account_num_onn_change} expected_html_status:{expected_html_status}")
     logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
     expected_num_onn_change = 0
     # backwards compatibility
     expected_org_account_num_onn_change = expected_org_account_num_onn_change or expected_change_ps_cmd
     expected_html_status = expected_html_status or 200
     logger.info(f"url_args:{url_args}")
-    url = reverse(view_name,args=url_args)
+    url = reverse('post-org-num-nodes-ttl',args=url_args)
     logger.info(f"using url:{url}")
     s_loop_count = orgAccountObj.loop_count
     loop_count = s_loop_count
@@ -513,10 +514,7 @@ def process_onn_api(client,
         if access_token is not None:
             assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT' or expected_status == 'FAILED') 
             logger.info(f"url:{url} data:{data}")
-            if 'put' in view_name:
-                response = client.put(url,headers=headers)
-            else:
-                response = client.post(url,headers=headers)
+            response = client.post(url,headers=headers)
             assert(response.status_code == expected_html_status) 
             json_data = json.loads(response.content)
             assert(json_data['status'] == expected_status)   
@@ -538,24 +536,27 @@ def process_onn_api(client,
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # no change just queued
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
         assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change just queued
-        num=0
-        num_idle=0
-        task_idle = True
-        for _ in range(num_iters):
-            num = num + 1
-            idle, loop_count = process_state_change(orgAccountObj)
-            if idle:
-                num_idle = num_idle + 1
-            else:
-                task_idle = False
+        num_iters = 0
+        if not delay_state_processing:
+            num_iters = mock_enqueue_stubbed_out.call_count
+            num=0
+            num_idle=0
+            task_idle = True
+            for _ in range(num_iters):
+                num = num + 1
+                idle, loop_count = process_state_change(orgAccountObj.name)
+                if idle:
+                    num_idle = num_idle + 1
+                else:
+                    task_idle = False
         assert(num==num_iters)
         assert(num_idle==(num_iters-expected_change_ps_cmd))
+        assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(loop_count == orgAccountObj.loop_count)
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
         assert(orgAccountObj.num_ps_cmd == (s_orgAccountObj_num_ps_cmd + expected_change_ps_cmd)) # processed an update ps_cmd
-        assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
         if num_iters==0:
             assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
             assert(orgAccountObj.loop_count == s_loop_count)
@@ -566,19 +567,223 @@ def process_onn_api(client,
             assert(orgAccountObj.loop_count == (s_loop_count + num_iters))
     return orgAccountObj.loop_count,response
 
-def process_owner_ps_cmd(client,
+def process_put_org_num_nodes(  client,
+                                orgAccountObj,
+                                url_args,
+                                access_token,
+                                data,
+                                expected_change_ps_cmd,
+                                expected_status,
+                                delay_state_processing=True,
+                                mock_enqueue_stubbed_out=None,
+                                new_time=None,
+                                expected_org_account_num_onn_change=None,
+                                expected_html_status=None):
+    '''
+    This routine will test calling the view ( API --> put-org-num-nodes ) 
+    with the given url args or parameters/data. 
+    It assumes the enqueue_process_state_change is stubbed out
+    '''
+    if new_time is None:
+        #logger.critical(f"new_time is None ")
+        sleep(1)
+        new_time = datetime.now(timezone.utc)
+    logger.info(f"process_put_org_num_nodes  url_args:{url_args} access_token:{access_token} data:{data} loop_count:{orgAccountObj.loop_count}  delay_state_processing:{delay_state_processing} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_org_account_num_onn_change:{expected_org_account_num_onn_change} expected_html_status:{expected_html_status}")
+    logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
+    expected_num_onn_change = 0
+    # backwards compatibility
+    expected_org_account_num_onn_change = expected_org_account_num_onn_change or expected_change_ps_cmd
+    expected_html_status = expected_html_status or 200
+    logger.info(f"url_args:{url_args}")
+    url = reverse('put-org-num-nodes',args=url_args)
+    logger.info(f"using url:{url}")
+    s_loop_count = orgAccountObj.loop_count
+    loop_count = s_loop_count
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    s_OwnerPSCmd_cnt = OwnerPSCmd.objects.count()
+    s_OrgNumNode_cnt = OrgNumNode.objects.count()
+    s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
+    logger.info(f"using s_OrgNumNode_cnt:{s_OrgNumNode_cnt} s_OwnerPSCmd_cnt:{s_OwnerPSCmd_cnt} s_orgAccountObj_num_onn:{s_orgAccountObj_num_onn} s_orgAccountObj_num_owner_ps_cmd:{s_orgAccountObj_num_owner_ps_cmd} s_orgAccountObj_num_ps_cmd:{s_orgAccountObj_num_ps_cmd} s_orgAccountObj_num_setup_cmd:{s_orgAccountObj_num_setup_cmd} s_orgAccountObj_num_ps_cmd_successful:{s_orgAccountObj_num_ps_cmd_successful} s_orgAccountObj_num_setup_cmd_successful:{s_orgAccountObj_num_setup_cmd_successful}")
+    headers = {
+        'Authorization': f"Bearer {access_token}",
+        'Accept': 'application/json'  # Specify JSON response
+    }
+    logger.info(f"old time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
+    with time_machine.travel(new_time,tick=True):
+        logger.info(f"new time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
+        if access_token is not None:
+            assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT' or expected_status == 'FAILED') 
+            logger.info(f"url:{url} data:{data}")
+            response = client.put(url,headers=headers)
+            assert(response.status_code == expected_html_status) 
+            json_data = json.loads(response.content)
+            assert(json_data['status'] == expected_status)   
+            assert(json_data['msg']!='')   
+            assert(json_data['error_msg']=='')
+            if json_data['status'] == 'QUEUED':
+                expected_num_onn_change = 1
+        else:
+            if data is not None:
+                logger.info(f"url:{url} data:{data}")
+                response = client.post(url,data=data, HTTP_ACCEPT='application/json')
+                assert((response.status_code == expected_html_status) or (response.status_code == 302)) 
+                if expected_status != 'FAILED':
+                    expected_num_onn_change = 1 # if we get here we expect a change
+        clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this       
+        assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) # url was an onn api not an owner ps cmd, so no change
+        assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt + expected_num_onn_change))
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # no change just queued
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
+        assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change just queued
+        num_iters = 0
+        if not delay_state_processing:
+            num_iters = mock_enqueue_stubbed_out.call_count
+            num=0
+            num_idle=0
+            task_idle = True
+            for _ in range(num_iters):
+                num = num + 1
+                idle, loop_count = process_state_change(orgAccountObj.name)
+                if idle:
+                    num_idle = num_idle + 1
+                else:
+                    task_idle = False
+            assert(num==num_iters)
+            assert(num_idle==(num_iters-expected_change_ps_cmd))
+            assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
+        assert(idle==(expected_change_ps_cmd==0)),f"task_idle:{idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
+        clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
+        assert(loop_count == orgAccountObj.loop_count)
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
+        assert(orgAccountObj.num_ps_cmd == (s_orgAccountObj_num_ps_cmd + expected_change_ps_cmd)) # processed an update ps_cmd
+        if num_iters==0:
+            assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
+            assert(orgAccountObj.loop_count == s_loop_count)
+            assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
+        else:
+            logger.info(f"expected_org_account_num_onn_change:{expected_org_account_num_onn_change} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+            assert(orgAccountObj.num_onn==(s_orgAccountObj_num_onn + expected_org_account_num_onn_change))
+            assert(orgAccountObj.loop_count == (s_loop_count + num_iters))
+    return orgAccountObj.loop_count,response
+
+
+def process_org_manage_cluster_onn( client,
+                                    orgAccountObj,
+                                    url_args,
+                                    access_token,
+                                    data,
+                                    expected_change_ps_cmd,
+                                    expected_status,
+                                    delay_state_processing=True,
+                                    mock_enqueue_stubbed_out=None,
+                                    new_time=None,
+                                    expected_org_account_num_onn_change=None,
+                                    expected_html_status=None):
+    '''
+    This routine will test calling the view ( WEB --> org-manage-cluster ) 
+    with the given url args or parameters/data. While it assumes the 
+    '''
+    if new_time is None:
+        #logger.critical(f"new_time is None ")
+        sleep(1)
+        new_time = datetime.now(timezone.utc)
+    logger.info(f"process_org_manage_cluster_onn url_args:{url_args} access_token:{access_token} data:{data} loop_count:{orgAccountObj.loop_count} delay_state_processing:{delay_state_processing} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_org_account_num_onn_change:{expected_org_account_num_onn_change} expected_html_status:{expected_html_status}")
+    logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
+    expected_num_onn_change = 0
+    # backwards compatibility
+    expected_org_account_num_onn_change = expected_org_account_num_onn_change or expected_change_ps_cmd
+    expected_html_status = expected_html_status or 200
+    logger.info(f"url_args:{url_args}")
+    url = reverse('org-manage-cluster',args=url_args)
+    logger.info(f"using url:{url}")
+    s_loop_count = orgAccountObj.loop_count
+    loop_count = s_loop_count
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    s_OwnerPSCmd_cnt = OwnerPSCmd.objects.count()
+    s_OrgNumNode_cnt = OrgNumNode.objects.count()
+    s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
+    logger.info(f"using s_OrgNumNode_cnt:{s_OrgNumNode_cnt} s_OwnerPSCmd_cnt:{s_OwnerPSCmd_cnt} s_orgAccountObj_num_onn:{s_orgAccountObj_num_onn} s_orgAccountObj_num_owner_ps_cmd:{s_orgAccountObj_num_owner_ps_cmd} s_orgAccountObj_num_ps_cmd:{s_orgAccountObj_num_ps_cmd} s_orgAccountObj_num_setup_cmd:{s_orgAccountObj_num_setup_cmd} s_orgAccountObj_num_ps_cmd_successful:{s_orgAccountObj_num_ps_cmd_successful} s_orgAccountObj_num_setup_cmd_successful:{s_orgAccountObj_num_setup_cmd_successful}")
+    headers = {
+        'Authorization': f"Bearer {access_token}",
+        'Accept': 'application/json'  # Specify JSON response
+    }
+    logger.info(f"old time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
+    with time_machine.travel(new_time,tick=True):
+        logger.info(f"new time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
+        if access_token is not None:
+            assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT' or expected_status == 'FAILED') 
+            logger.info(f"url:{url} data:{data}")
+            response = client.post(url,headers=headers)
+            assert(response.status_code == expected_html_status) 
+            json_data = json.loads(response.content)
+            assert(json_data['status'] == expected_status)   
+            assert(json_data['msg']!='')   
+            assert(json_data['error_msg']=='')
+            if json_data['status'] == 'QUEUED':
+                expected_num_onn_change = 1
+        else:
+            if data is not None:
+                logger.info(f"url:{url} data:{data}")
+                response = client.post(url,data=data, HTTP_ACCEPT='application/json')
+                assert((response.status_code == expected_html_status) or (response.status_code == 302)) 
+                if expected_status != 'FAILED':
+                    expected_num_onn_change = 1 # if we get here we expect a change
+        clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this       
+        assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) # url was an onn api not an owner ps cmd, so no change
+        assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt + expected_num_onn_change))
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # no change just queued
+        assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
+        assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change just queued
+        num_iters = 0
+        if not delay_state_processing:
+            num_iters = mock_enqueue_stubbed_out.call_count
+            num=0
+            num_idle=0
+            task_idle = True
+            for _ in range(num_iters):
+                num = num + 1
+                idle, loop_count = process_state_change(orgAccountObj.name)
+                if idle:
+                    num_idle = num_idle + 1
+                else:
+                    task_idle = False
+            assert(num==num_iters)
+            assert(num_idle==(num_iters-expected_change_ps_cmd))
+            assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
+        clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
+        assert(loop_count == orgAccountObj.loop_count)
+        assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
+        assert(orgAccountObj.num_ps_cmd == (s_orgAccountObj_num_ps_cmd + expected_change_ps_cmd)) # processed an update ps_cmd
+        if num_iters==0:
+            assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
+            assert(orgAccountObj.loop_count == s_loop_count)
+            assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
+        else:
+            logger.info(f"expected_org_account_num_onn_change:{expected_org_account_num_onn_change} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+            assert(orgAccountObj.num_onn==(s_orgAccountObj_num_onn + expected_org_account_num_onn_change))
+            #assert(orgAccountObj.loop_count == (s_loop_count + (num_iters-num_idle)))
+
+    return orgAccountObj.loop_count,response
+
+
+def do_owner_ps_cmd(client,
                         orgAccountObj,
                         new_time,
                         view_name,
                         url_args,
                         data,
                         loop_count,
-                        num_iters):
+                        delay_state_processing,
+                        mock_enqueue_stubbed_out=None):
     url = reverse(view_name,args=url_args)
     logger.info(f"using url:{url}")
     s_loop_count = loop_count
     EXPECTED_PS_CMD_PROCESSED = 0
-    if num_iters > 0:
+    if not delay_state_processing:
         EXPECTED_PS_CMD_PROCESSED = 1
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
@@ -599,16 +804,21 @@ def process_owner_ps_cmd(client,
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a process_state_change 
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a process_state_change 
         assert(orgAccountObj.num_onn == s_orgAccountObj_num_onn) # no change 
-        num=0
-        num_idle=0
-        for _ in range(num_iters):
-            num = num + 1
-            task_idle, loop_count = process_state_change(orgAccountObj)
-            if task_idle:
-                num_idle = num_idle + 1
+        num_iters = 0
+        if not delay_state_processing:
+            num=0
+            num_idle=0
+            num_iters = mock_enqueue_stubbed_out.call_count 
+            for _ in range(num_iters):
+                num = num + 1
+                task_idle, loop_count = process_state_change(orgAccountObj.name)
+                if task_idle:
+                    num_idle = num_idle + 1
+            assert(num==num_iters)
+            assert(num_idle==(num_iters-EXPECTED_PS_CMD_PROCESSED))
+        assert(task_idle==(EXPECTED_PS_CMD_PROCESSED==0)),f"task_idle:{task_idle} EXPECTED_PS_CMD_PROCESSED:{EXPECTED_PS_CMD_PROCESSED}"
+
         orgAccountObj.refresh_from_db() 
-        assert(num==num_iters)
-        assert(num_idle==(num_iters-EXPECTED_PS_CMD_PROCESSED))
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a process_state_change else no change just queued
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a process_state_change else no change just queued
         assert(orgAccountObj.num_onn==s_orgAccountObj_num_onn)
@@ -617,14 +827,15 @@ def process_owner_ps_cmd(client,
     return loop_count
 
 
-def process_org_configure(client,
+def process_org_configure(  client,
                             orgAccountObj,
                             data,
                             expected_change_ps_cmd,
-                            mock_enqueue,
-                            call_cnt):
+                            delay_state_processing=True,
+                            mock_enqueue_stubbed_out=None):
     url = reverse('org-configure',args=[orgAccountObj.id])
     logger.info(f"using url:{url}")
+    orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
     s_orgAccountObj_num_onn, s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
@@ -634,14 +845,14 @@ def process_org_configure(client,
         response = client.post(url,data=data, HTTP_ACCEPT='application/json')
         logger.info(f"response.status_code:{response.status_code}")
         assert((response.status_code == 200) or (response.status_code == 302))
+        if not delay_state_processing:
+            for _ in range(mock_enqueue_stubbed_out.call_count):
+               process_state_change(orgAccountObj.name)
         # logger.info(f"dir(response):{dir(response)}")
         # logger.info(f"Response status code: {response.status_code}")
         # logger.info(f"Response content: {response.content}")
         # logger.info(f"Response headers: {response.headers}")        
         # # json_data = json.loads(response.content)
-        assert mock_enqueue.call_count == call_cnt
-        assert mock_enqueue.call_args == call(orgAccountObj.name)
-        process_state_change(orgAccountObj.name) # call it synchronously
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) 
@@ -659,54 +870,65 @@ def process_owner_ps_Update_cmd(client,
                                 new_time,
                                 data,
                                 loop_count,
-                                num_iters):
-    return process_owner_ps_cmd(client=client,
+                                delay_state_processing=True,
+                                mock_enqueue_stubbed_out=None):
+    return do_owner_ps_cmd(client=client,
                                 orgAccountObj=orgAccountObj,
                                 new_time=new_time,
                                 view_name='org-update-cluster',
                                 url_args=[orgAccountObj.id],
                                 data=data,
                                 loop_count=loop_count,
-                                num_iters=num_iters)
+                                delay_state_processing=delay_state_processing,
+                                mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
 
 def process_owner_ps_Destroy_cmd(client,
                                 orgAccountObj,
                                 new_time,
                                 loop_count,
-                                num_iters):
-    return process_owner_ps_cmd(client=client,
+                                delay_state_processing=True,
+                                mock_enqueue_stubbed_out=None):
+    return do_owner_ps_cmd(client=client,
                                 orgAccountObj=orgAccountObj,
                                 new_time=new_time,
                                 view_name='org-destroy-cluster',
                                 url_args=[orgAccountObj.id],
                                 data=None,
                                 loop_count=loop_count,
-                                num_iters=num_iters)
+                                delay_state_processing=delay_state_processing,
+                                mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
 
 def process_owner_ps_Refresh_cmd(client,
                                 orgAccountObj,
                                 new_time,
                                 loop_count,
-                                num_iters):
-    return process_owner_ps_cmd(client=client,
+                                delay_state_processing=True,
+                                mock_enqueue_stubbed_out=None):
+    return do_owner_ps_cmd(client=client,
                                 orgAccountObj=orgAccountObj,
                                 new_time=new_time,
                                 view_name='org-refresh-cluster',
                                 url_args=[orgAccountObj.id],
                                 data=None,
                                 loop_count=loop_count,
-                                num_iters=num_iters)
+                                delay_state_processing=delay_state_processing,
+                                mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
 
 
 def process_onn_expires(orgAccountObj,
                         new_time,
-                        s_loop_count,
                         num_iters,
                         expected_change_ps_cmd,
                         expected_change_OrgNumNode,
                         expected_change_num_onn,
-                        expected_desired_num_nodes):
-    
+                        expected_desired_num_nodes,
+                        delay_state_processing=True,
+                        mock_enqueue_stubbed_out=None):
+    '''
+    This routine will test moving the time so that onn expires
+    It assumes using mock_enqueue_stubbed
+    It will call the process_state_change routine num_iters times
+    '''
     logger.info(f"using new_time:{new_time.strftime(FMT)}") 
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
@@ -717,11 +939,10 @@ def process_onn_expires(orgAccountObj,
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         
-        for _ in range(num_iters):
-            task_idle, f_loop_count = process_state_change(orgAccountObj)
+        if num_iters > 0:
+            task_idle, f_loop_count = process_state_change(orgAccountObj.name)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
-        assert(f_loop_count==(s_loop_count+1))
         assert(OwnerPSCmd.objects.count()==s_OwnerPSCmd_cnt)
         assert(OrgNumNode.objects.count()==(s_OrgNumNode_cnt + expected_change_OrgNumNode))
         assert(orgAccountObj.num_owner_ps_cmd==s_orgAccountObj_num_owner_ps_cmd)

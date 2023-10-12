@@ -20,7 +20,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import get_db_org_cost,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,log_scheduled_jobs
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,process_state_change,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -204,6 +204,7 @@ def orgManageCluster(request, pk):
                     if status == 200:
                         msg += jrsp['msg']
                         messages.success(request,msg)
+                        enqueue_process_state_change(orgAccountObj.name)
                     else:
                         messages.error(request,jrsp['error_msg'])
                 else:

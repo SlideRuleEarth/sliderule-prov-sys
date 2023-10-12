@@ -177,94 +177,84 @@ def test_reg_user_access_negative_test(caplog,client,mock_email_backend,initiali
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_account_cfg_success(caplog,client,mock_email_backend,initialize_test_environ):
-    with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
-         patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
-         patch("users.tasks.django_rq") as mock_django_rq, \
-         patch("users.tasks.cache") as mock_cache, \
-         patch("users.tasks.Job") as mock_Job:
-        assert OrgAccount.objects.count() == 1
-        org_account_id = get_test_org().id
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        assert(not orgAccountObj.is_public) 
-        assert(orgAccountObj.version == 'latest') 
+def test_org_account_cfg_success(caplog,mock_enqueue_synchronous,client,mock_email_backend,initialize_test_environ):
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(not orgAccountObj.is_public) 
+    assert(orgAccountObj.version == 'latest') 
 
-        assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
-        
-        # setup necessary form data
-        form_data = {
-            'is_public': True,
-            'version': 'v3',
-            'min_node_cap': 1,
-            'max_node_cap': 10,
-            'allow_deploy_by_token': True,
-            'destroy_when_no_nodes': True,
-            'provisioning_suspended': False,
-        }
-        # get the url
-        url = reverse('org-configure', args=[org_account_id])
-        # send the POST request
-        response = client.post(url, data=form_data)
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    
+    # setup necessary form data
+    form_data = {
+        'is_public': True,
+        'version': 'v3',
+        'min_node_cap': 1,
+        'max_node_cap': 10,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+    }
+    # get the url
+    url = reverse('org-configure', args=[org_account_id])
+    # send the POST request
+    response = client.post(url, data=form_data)
 
-        mock_enqueue.assert_called_once_with(orgAccountObj.name) 
+    mock_enqueue_synchronous.assert_called_once_with(orgAccountObj.name) 
 
-        # assert the form was successful
-        # refresh the OrgAccount object
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        assert response.status_code == 200 or response.status_code == 302
-        assert(orgAccountObj.is_public) 
-        assert(orgAccountObj.version == 'v3') 
-        clusterObj = Cluster.objects.get(org=orgAccountObj)
-        assert clusterObj.provision_env_ready == False
+    # assert the form was successful
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert response.status_code == 200 or response.status_code == 302
+    assert(orgAccountObj.is_public) 
+    assert(orgAccountObj.version == 'v3') 
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    assert clusterObj.provision_env_ready == False
 
 
 
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_account_cfg_fail(caplog,client,mock_email_backend,initialize_test_environ):
-    with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
-         patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
-         patch("users.tasks.django_rq") as mock_django_rq, \
-         patch("users.tasks.cache") as mock_cache, \
-         patch("users.tasks.Job") as mock_Job:
-        assert OrgAccount.objects.count() == 1
-        org_account_id = get_test_org().id
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        assert(not orgAccountObj.is_public) 
-        assert(orgAccountObj.version == 'latest') 
+def test_org_account_cfg_fail(caplog,client,mock_enqueue_synchronous,mock_email_backend,initialize_test_environ):
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(not orgAccountObj.is_public) 
+    assert(orgAccountObj.version == 'latest') 
 
-        assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
-        
-        # setup necessary form data
-        form_data = {
-            'is_public': True,
-            'version': 'v3',
-            'min_node_cap': 'BAD', ## <---- INVALID
-            'max_node_cap': 10,
-            'allow_deploy_by_token': True,
-            'destroy_when_no_nodes': True,
-            'provisioning_suspended': False,
-        }
-        # get the url
-        url = reverse('org-configure', args=[org_account_id])
-        # send the POST request
-        response = client.post(url, data=form_data)
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    
+    # setup necessary form data
+    form_data = {
+        'is_public': True,
+        'version': 'v3',
+        'min_node_cap': 'BAD', ## <---- INVALID
+        'max_node_cap': 10,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+    }
+    # get the url
+    url = reverse('org-configure', args=[org_account_id])
+    # send the POST request
+    response = client.post(url, data=form_data)
 
-        mock_enqueue.assert_not_called() 
+    mock_enqueue_synchronous.assert_not_called() 
 
-        # assert the form was unsuccessful
-        # refresh the OrgAccount object
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        assert response.status_code == 200 or response.status_code == 302
-        assert(not orgAccountObj.is_public) # i.e. unmodified
-        assert(orgAccountObj.version == 'latest')  # i.e. unmodified
+    # assert the form was unsuccessful
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert response.status_code == 200 or response.status_code == 302
+    assert(not orgAccountObj.is_public) # i.e. unmodified
+    assert(orgAccountObj.version == 'latest')  # i.e. unmodified
 
 
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_destroy_cluster_only_one(caplog,client,mock_email_backend,initialize_test_environ):
+def test_org_destroy_cluster_only_one(caplog,client,mock_enqueue_synchronous,mock_email_backend,initialize_test_environ):
     assert OrgAccount.objects.count() == 1
     org_account_id = get_test_org().id
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -289,11 +279,13 @@ def test_org_destroy_cluster_only_one(caplog,client,mock_email_backend,initializ
     response = client.post(url)
     assert response.status_code in (200, 302) # redirects to org-manage-cluster # redirects to org-manage-cluster
     assert OwnerPSCmd.objects.count() == 1    
+    assert mock_enqueue_synchronous.call_count == 1
+
 
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_refresh_cluster_only_one(caplog,client,mock_email_backend,initialize_test_environ):
+def test_org_refresh_cluster_only_one(caplog,client,mock_enqueue_synchronous,mock_email_backend,initialize_test_environ):
     assert OrgAccount.objects.count() == 1
     org_account_id = get_test_org().id
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -319,216 +311,206 @@ def test_org_refresh_cluster_only_one(caplog,client,mock_email_backend,initializ
     response = client.post(url)
     assert response.status_code in (200, 302) # redirects to org-manage-cluster # redirects to org-manage-cluster
     assert OwnerPSCmd.objects.count() == 1    
+    assert mock_enqueue_synchronous.call_count == 1
 
-@pytest.mark.dev
+##@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 @pytest.mark.parametrize('initialize_test_environ', [{'version': 'latest', 'is_public': False}, {'version': 'v3', 'is_public': True}], indirect=True)
-def test_change_version_with_user_view(setup_logging, client,initialize_test_environ):
-    with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
-         patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
-         patch("users.tasks.django_rq") as mock_django_rq, \
-         patch("users.tasks.cache") as mock_cache, \
-         patch("users.tasks.Job") as mock_Job:
-        logger = setup_logging
-        org_account_id = get_test_org().id
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        clusterObj = Cluster.objects.get(org=orgAccountObj)
-        assert(orgAccountObj.version == clusterObj.cur_version) # ensure initialization is correct 
-        initial_version = orgAccountObj.version
-        initial_is_public = orgAccountObj.is_public
-        if initial_version == 'latest':
-            new_version = 'v3' 
-        elif initial_version == 'v3':
-            new_version = 'latest'
-        else:
-            assert False, f"initial_version:{initial_version} not supported"
+def test_change_version_with_user_view(setup_logging, mock_enqueue_stubbed_out, client, initialize_test_environ):
+    logger = setup_logging
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    assert(orgAccountObj.version == clusterObj.cur_version) # ensure initialization is correct 
+    initial_version = orgAccountObj.version
+    initial_is_public = orgAccountObj.is_public
+    if initial_version == 'latest':
+        new_version = 'v3' 
+    elif initial_version == 'v3':
+        new_version = 'latest'
+    else:
+        assert False, f"initial_version:{initial_version} not supported"
 
-        assert OrgAccount.objects.count() == 1
-        orgAccountObj.save()
+    assert OrgAccount.objects.count() == 1
+    orgAccountObj.save()
 
-        assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
 
-        assert orgAccountObj.num_setup_cmd == 0
-        assert orgAccountObj.num_setup_cmd_successful == 0
-        assert orgAccountObj.num_ps_cmd_successful == 0
-        assert orgAccountObj.num_ps_cmd == 0
-        assert orgAccountObj.num_onn == 0
-        logger.info(f"orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
-        assert orgAccountObj.desired_num_nodes == 0
-        # setup necessary form data
-        form_data = {
-            'is_public': initial_is_public,
-            'version': initial_version, # First time we use the current version
-            'min_node_cap': 1,
-            'max_node_cap': 3,
-            'allow_deploy_by_token': True,
-            'destroy_when_no_nodes': True,
-            'provisioning_suspended': False,
-        }
+    assert orgAccountObj.num_setup_cmd == 0
+    assert orgAccountObj.num_setup_cmd_successful == 0
+    assert orgAccountObj.num_ps_cmd_successful == 0
+    assert orgAccountObj.num_ps_cmd == 0
+    assert orgAccountObj.num_onn == 0
+    logger.info(f"orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+    assert orgAccountObj.desired_num_nodes == 0
+    # setup necessary form data
+    form_data = {
+        'is_public': initial_is_public,
+        'version': initial_version, # First time we use the current version
+        'min_node_cap': 1,
+        'max_node_cap': 3,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+    }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue, call_cnt=1) # SetUp - Update (min nodes is 1)
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False,mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
 
-        # assert the form was successful
-        # refresh the OrgAccount object
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        assert(orgAccountObj.is_public == initial_is_public) 
-        assert(orgAccountObj.version == initial_version) 
-        assert orgAccountObj.num_setup_cmd == 1
-        assert orgAccountObj.num_setup_cmd_successful == 1
-        assert orgAccountObj.num_ps_cmd_successful == 2
-        assert orgAccountObj.num_ps_cmd == 2
-        assert orgAccountObj.num_onn == 1
-        assert orgAccountObj.min_node_cap == 1
-        assert orgAccountObj.max_node_cap == 3
-        assert orgAccountObj.allow_deploy_by_token == True
-        assert orgAccountObj.destroy_when_no_nodes == True
+    # assert the form was successful
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(orgAccountObj.is_public == initial_is_public) 
+    assert(orgAccountObj.version == initial_version) 
+    assert orgAccountObj.num_setup_cmd == 1
+    assert orgAccountObj.num_setup_cmd_successful == 1
+    assert orgAccountObj.num_ps_cmd_successful == 2
+    assert orgAccountObj.num_ps_cmd == 2
+    assert orgAccountObj.num_onn == 1
+    assert orgAccountObj.min_node_cap == 1
+    assert orgAccountObj.max_node_cap == 3
+    assert orgAccountObj.allow_deploy_by_token == True
+    assert orgAccountObj.destroy_when_no_nodes == True
 
-        assert PsCmdResult.objects.count() == 2 # SetUp - Refresh 
-        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
-        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
+    assert PsCmdResult.objects.count() == 2 # SetUp - Refresh 
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
 
+    form_data = {
+        'form_submit': 'add_onn',
+        'add_onn-desired_num_nodes': 3,
+        'add_onn-ttl_minutes': 15,
+    }
+    loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.id],
+                                                        access_token=None,
+                                                        data=form_data,
+                                                        expected_change_ps_cmd=1,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
 
-        form_data = {
-            'form_submit': 'add_onn',
-            'add_onn-desired_num_nodes': 3,
-            'add_onn-ttl_minutes': 15,
-        }
-        loop_count,response = process_onn_api(client=client,
-                                                orgAccountObj=orgAccountObj,
-                                                view_name='org-manage-cluster',
-                                                url_args=[orgAccountObj.id],
-                                                access_token=None,
-                                                data=form_data,
-                                                num_iters=3, 
-                                                expected_change_ps_cmd=1,
-                                                expected_status='QUEUED')
+    assert PsCmdResult.objects.count() == 3 # SetUp - Update - Update
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}") # update to 3
+    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
 
-        assert PsCmdResult.objects.count() == 3 # SetUp - Update - Update
-        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
-        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}") # update to 3
-        assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    # setup necessary form data
+    form_data = {
+        'is_public': initial_is_public,
+        'version': new_version,
+        'min_node_cap': 1,
+        'max_node_cap': 10,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+    }
+    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False,mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
 
-        # setup necessary form data
-        form_data = {
-            'is_public': initial_is_public,
-            'version': new_version,
-            'min_node_cap': 1,
-            'max_node_cap': 10,
-            'allow_deploy_by_token': True,
-            'destroy_when_no_nodes': True,
-            'provisioning_suspended': False,
-        }
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue, call_cnt=2) # SetUp - Refresh (min nodes is 1)
-
-        orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-        assert(orgAccountObj.is_public == initial_is_public) 
-        assert(orgAccountObj.version == new_version) 
-        assert orgAccountObj.num_setup_cmd == 2
-        assert orgAccountObj.num_setup_cmd_successful == 2
-        assert orgAccountObj.num_ps_cmd_successful == 5
-        assert orgAccountObj.num_ps_cmd == 5
-        assert orgAccountObj.num_onn == 2
-        assert orgAccountObj.min_node_cap == 1
-        assert orgAccountObj.max_node_cap == 10
-        assert orgAccountObj.allow_deploy_by_token == True
-        assert orgAccountObj.destroy_when_no_nodes == True
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(orgAccountObj.is_public == initial_is_public) 
+    assert(orgAccountObj.version == new_version) 
+    assert orgAccountObj.num_setup_cmd == 2
+    assert orgAccountObj.num_setup_cmd_successful == 2
+    assert orgAccountObj.num_ps_cmd_successful == 5
+    assert orgAccountObj.num_ps_cmd == 5
+    assert orgAccountObj.num_onn == 2
+    assert orgAccountObj.min_node_cap == 1
+    assert orgAccountObj.max_node_cap == 10
+    assert orgAccountObj.allow_deploy_by_token == True
+    assert orgAccountObj.destroy_when_no_nodes == True
 
 
-        assert PsCmdResult.objects.count() == 5 # SetUp - Refresh - Update - SetUp - Refresh 
-        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
-        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
-        logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
-        logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-        assert 'Refresh' in psCmdResultObjs[4].ps_cmd_summary_label
+    assert PsCmdResult.objects.count() == 5 # SetUp - Refresh - Update - SetUp - Refresh 
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+    logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[4].ps_cmd_summary_label
 
-        form_data = {
-            'form_submit': 'add_onn',
-            'add_onn-desired_num_nodes': 3, # NOTE: we did NOT change this here
-            'add_onn-ttl_minutes': 15,
-        }
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3,
-                                    expected_change_ps_cmd=0, # same desired_num_nodes so no change
-                                    expected_status='QUEUED')
+    form_data = {
+        'form_submit': 'add_onn',
+        'add_onn-desired_num_nodes': 3, # NOTE: we did NOT change this here
+        'add_onn-ttl_minutes': 15,
+    }
+    loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.id],
+                                                        access_token=None,
+                                                        data=form_data,
+                                                        expected_change_ps_cmd=0, # same desired_num_nodes so no change
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
 
-        assert orgAccountObj.num_onn == 2
-        assert orgAccountObj.desired_num_nodes == 3 # no change
-        assert PsCmdResult.objects.count() == 5 # NO CHANGE - SetUp - Update - Update - SetUp - Destroy - Update
-        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
-        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
-        logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
-        logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-        assert 'Refresh' in psCmdResultObjs[4].ps_cmd_summary_label
+    assert orgAccountObj.num_onn == 2
+    assert orgAccountObj.desired_num_nodes == 3 # no change
+    assert PsCmdResult.objects.count() == 5 # NO CHANGE - SetUp - Update - Update - SetUp - Destroy - Update
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+    logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[4].ps_cmd_summary_label
 
-        form_data = {
-            'form_submit': 'add_onn',
-            'add_onn-desired_num_nodes': 4, # This triggers a change!
-            'add_onn-ttl_minutes': 15,
-        }
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    loop_count=loop_count,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=2, # different desired_num_nodes Destroy Update
-                                    expected_org_account_num_onn_change=1, # Destroy is inline with the Update
-                                    expected_status='QUEUED')
-        assert orgAccountObj.num_onn == 3
-        assert PsCmdResult.objects.count() == 7 # SetUp - Refresh - Update - SetUp - Destroy - Update - Update
-        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
-        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
-        logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
-        logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-        assert 'Refresh' in psCmdResultObjs[4].ps_cmd_summary_label
-        logger.info(f"[5]:{psCmdResultObjs[5].ps_cmd_summary_label}")
-        assert 'Destroy' in psCmdResultObjs[5].ps_cmd_summary_label
-        logger.info(f"[6]:{psCmdResultObjs[6].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[6].ps_cmd_summary_label
+    form_data = {
+        'form_submit': 'add_onn',
+        'add_onn-desired_num_nodes': 4, # This triggers a change!
+        'add_onn-ttl_minutes': 15,
+    }
+    loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.id],
+                                                        access_token=None,
+                                                        data=form_data,
+                                                        loop_count=loop_count,
+                                                        expected_change_ps_cmd=2, # different desired_num_nodes Destroy Update
+                                                        expected_org_account_num_onn_change=1, # Destroy is inline with the Update
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
+    assert orgAccountObj.num_onn == 3
+    assert PsCmdResult.objects.count() == 7 # SetUp - Refresh - Update - SetUp - Destroy - Update - Update
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+    logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[4].ps_cmd_summary_label
+    logger.info(f"[5]:{psCmdResultObjs[5].ps_cmd_summary_label}")
+    assert 'Destroy' in psCmdResultObjs[5].ps_cmd_summary_label
+    logger.info(f"[6]:{psCmdResultObjs[6].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[6].ps_cmd_summary_label
 
-@pytest.mark.dev
+##@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 @pytest.mark.parametrize('initialize_test_environ', [{'version': 'latest', 'is_public': False}, {'version': 'v3', 'is_public': True}], indirect=True)
-def test_change_is_public_with_user_view_with_onns(setup_logging, client,initialize_test_environ):
-    with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
-         patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
-         patch("users.tasks.django_rq") as mock_django_rq, \
-         patch("users.tasks.cache") as mock_cache, \
-         patch("users.tasks.Job") as mock_Job:
+def test_change_is_public_with_user_view_with_onns(setup_logging, client,initialize_test_environ,mock_enqueue_stubbed_out):
         logger = setup_logging
         org_account_id = get_test_org().id
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -567,7 +549,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'provisioning_suspended': False,
         }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue, call_cnt=3) # SetUp - Update (min nodes is 1)
+        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
 
         # assert the form was successful
         # refresh the OrgAccount object
@@ -598,15 +580,16 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'add_onn-desired_num_nodes': 3,
             'add_onn-ttl_minutes': 15,
         }
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=1, # Update (to 3)
-                                    expected_status='QUEUED')
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            expected_change_ps_cmd=1, # Update (to 3)
+                                                            expected_status='QUEUED',
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
+        
 
         assert PsCmdResult.objects.count() == 3 # SetUp - Update (to 1) - Update (to 3)
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -627,7 +610,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
         }
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue, call_cnt=4) # SetUp - Refresh (min nodes is 1)
+        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
 
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
         assert(orgAccountObj.is_public == new_is_public) 
@@ -661,15 +644,15 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'add_onn-desired_num_nodes': 3, # NOTE: we did NOT change this here
             'add_onn-ttl_minutes': 15,
         }
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3,
-                                    expected_change_ps_cmd=0, # same desired_num_nodes so no change
-                                    expected_status='QUEUED')
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            expected_change_ps_cmd=0, # same desired_num_nodes so no change
+                                                            expected_status='QUEUED',
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
 
         assert orgAccountObj.num_onn == 2
 
@@ -693,16 +676,16 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'add_onn-desired_num_nodes': 4, # This triggers a change!
             'add_onn-ttl_minutes': 15,
         }
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=2, # different Destroy Update
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=1) # Destroy is inline so only 1
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            expected_change_ps_cmd=2, # different Destroy Update
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=1,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # Destroy is inline so only 1
         assert orgAccountObj.num_onn == 3
         assert PsCmdResult.objects.count() == 7 # + Destroy Update (new desired_num_nodes)
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -724,10 +707,10 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
 
         assert orgAccountObj.desired_num_nodes == 4    
 
-@pytest.mark.dev
+##@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
+def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_backend, mock_enqueue_stubbed_out, initialize_test_environ, developer_TEST_USER):
     with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
          patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
          patch("users.tasks.django_rq") as mock_django_rq, \
@@ -769,7 +752,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
         }
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue) # SetUp - Refresh (min nodes is 1)
+        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
         # assert the form was successful
         # refresh the OrgAccount object
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -795,17 +778,17 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
             'add_onn-desired_num_nodes': -1, # Error
             'add_onn-ttl_minutes': 15,
         }
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=0, # Error
-                                    expected_status='FAILED',
-                                    expected_org_account_num_onn_change=0,
-                                    expected_html_status=200) # But error message is displayed
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=0, # Error
+                                                            expected_status='FAILED',
+                                                            expected_org_account_num_onn_change=0,
+                                                            expected_html_status=200) # But error message is displayed
         # Get all messages from the response context
         stored_messages = [m.message for m in get_messages(response.wsgi_request)]
         assert any("Input Errors:" in message for message in stored_messages)
@@ -817,16 +800,16 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
             'add_onn-ttl_minutes': 15,
         }
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=0)  # entry queued
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=0)  # entry queued
     # test clamp to maximum
         form_data = {
             'form_submit': 'add_onn',
@@ -834,21 +817,21 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
             'add_onn-ttl_minutes': 15,
         }
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=1, # update to max (i.e. 3)
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=1) # changed; Clamped desired_num_nodes to max so no change 
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=1, # update to max (i.e. 3)
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=1) # changed; Clamped desired_num_nodes to max so no change 
 
-@pytest.mark.dev
+##@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
+def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_backend, mock_enqueue_stubbed_out, initialize_test_environ, developer_TEST_USER):
     with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
          patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
          patch("users.tasks.django_rq") as mock_django_rq, \
@@ -891,7 +874,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'provisioning_suspended': False,
         }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue, call_cnt=1) # SetUp - Update (min nodes is 1)
+        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False,mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
         # assert the form was successful
         # refresh the OrgAccount object
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -921,16 +904,16 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'add_onn-ttl_minutes': 15,
         }
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
         log_ONN()
         assert OrgNumNode.objects.count() == 1
 
@@ -941,16 +924,16 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'add_onn-ttl_minutes': 15,
         }
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=1,# bumps to 2
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=1,# bumps to 2
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
         log_ONN()
         assert OrgNumNode.objects.count() == 2
         url = reverse('clear-num-nodes-reqs',args=[orgAccountObj.id])
@@ -976,19 +959,18 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
 @pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, mock_email_backend, initialize_test_environ, developer_TEST_USER):
-    with patch('users.views.enqueue_process_state_change') as mock_enqueue, \
-         patch("users.tasks.get_PROVISIONING_DISABLED", return_value=False), \
-         patch("users.tasks.django_rq") as mock_django_rq, \
-         patch("users.tasks.cache") as mock_cache, \
-         patch("users.tasks.Job") as mock_Job:
+def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, mock_enqueue_stubbed_out, mock_email_backend, initialize_test_environ, developer_TEST_USER):
         '''
-            This procedure will test logic clear num nodes from the org-manage-cluster web page
+            This procedure will test logic clear num nodes from the 
+            org-manage-cluster web page
         '''
         logger = setup_logging
         org_account_id = get_test_org().id
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
+        s_call_cnt = mock_enqueue_stubbed_out.call_count
+        s_ps_cmd_rslt_cnt = PsCmdResult.objects.count() 
+        assert s_ps_cmd_rslt_cnt == 0
         assert(clusterObj.is_deployed == False)
         assert(orgAccountObj.version == clusterObj.cur_version) # ensure initialization is correct 
         initial_version = orgAccountObj.version
@@ -1019,10 +1001,11 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
             'provisioning_suspended': False,
         }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_enqueue=mock_enqueue, call_cnt=1) # SetUp - Update (min nodes is 1)
+        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False, mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
         # assert the form was successful
         # refresh the OrgAccount object
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+1
         assert(orgAccountObj.is_public == initial_is_public) 
         assert(orgAccountObj.version == initial_version) 
         assert orgAccountObj.num_setup_cmd == 1
@@ -1034,14 +1017,13 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
         assert orgAccountObj.max_node_cap == 3
         assert orgAccountObj.allow_deploy_by_token == True
         assert orgAccountObj.destroy_when_no_nodes == True
-        assert PsCmdResult.objects.count() == 2 # SetUp - Refresh 
+        assert PsCmdResult.objects.count() == s_ps_cmd_rslt_cnt + 2 # SetUp - Refresh 
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
-        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
+        logger.info(f"[{s_ps_cmd_rslt_cnt}]:{psCmdResultObjs[s_ps_cmd_rslt_cnt].ps_cmd_summary_label}")
+        assert 'Configure' in psCmdResultObjs[s_ps_cmd_rslt_cnt].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+        logger.info(f"[{s_ps_cmd_rslt_cnt+1}]:{psCmdResultObjs[s_ps_cmd_rslt_cnt+1].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[s_ps_cmd_rslt_cnt+1].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
         assert OrgNumNode.objects.count() == 0
-
         # test clamp to minimum
         form_data = {
             'form_submit': 'add_onn',
@@ -1049,52 +1031,63 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
             'add_onn-ttl_minutes': 15,
         }
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=0,# already set to min (i.e. 1) so no cmd issued
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
         log_ONN()
         assert OrgNumNode.objects.count() == 1
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+2
+        assert mock_enqueue_stubbed_out.call_args == call(orgAccountObj.name)
+
         form_data = {
             'form_submit': 'add_onn',
             'add_onn-desired_num_nodes': 2, 
             'add_onn-ttl_minutes': 15,
         }
 
-        loop_count,response = process_onn_api(client=client,
-                                    orgAccountObj=orgAccountObj,
-                                    view_name='org-manage-cluster',
-                                    url_args=[orgAccountObj.id],
-                                    access_token=None,
-                                    data=form_data,
-                                    num_iters=3, 
-                                    expected_change_ps_cmd=1,# bumps to 2
-                                    expected_status='QUEUED',
-                                    expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
+        loop_count,response = process_org_manage_cluster_onn(client=client,
+                                                            orgAccountObj=orgAccountObj,
+                                                            url_args=[orgAccountObj.id],
+                                                            access_token=None,
+                                                            data=form_data,
+                                                            delay_state_processing=False,
+                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out, 
+                                                            expected_change_ps_cmd=1,# bumps to 2
+                                                            expected_status='QUEUED',
+                                                            expected_org_account_num_onn_change=0)  # this counter is num onn processed not queued
         assert OrgNumNode.objects.count() == 2
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+3
+        assert mock_enqueue_stubbed_out.call_args == call(orgAccountObj.name)
 
         rtu = random_test_user()
         m = create_active_membership(orgAccountObj,rtu)
         m.refresh_from_db()
         log_ONN()
-        assert verify_api_user_makes_onn_ttl( client=client,
-                                        orgAccountObj=orgAccountObj,
-                                        user=rtu,
-                                        password=TEST_PASSWORD,
-                                        desired_num_nodes=1,
-                                        ttl_minutes=15,
-                                        expected_change_ps_cmd=1) 
+        ss_call_cnt = mock_enqueue_stubbed_out.call_count
+        assert ss_call_cnt == 4
+        assert verify_api_user_makes_onn_ttl(client=client,
+                                            orgAccountObj=orgAccountObj,
+                                            user=rtu,
+                                            password=TEST_PASSWORD,
+                                            desired_num_nodes=1,
+                                            ttl_minutes=15,
+                                            expected_change_ps_cmd=1,
+                                            delay_state_processing=False,
+                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
         log_ONN()
         assert OrgNumNode.objects.count() == 3
         clusterObj.refresh_from_db()
         assert len(clusterObj.cnnro_ids) == 2
-
+        assert mock_enqueue_stubbed_out.call_count == ss_call_cnt+1
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+4
+        assert mock_enqueue_stubbed_out.call_args == call(orgAccountObj.name)
 
         # Now negative test non owner user trying to remove entries
 
@@ -1103,10 +1096,9 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
 
         response = client.post(url,HTTP_ACCEPT='application/json')
         assert((response.status_code == 200) or (response.status_code == 302))
-
-        idle, loop_count = process_state_change(orgAccountObj)
-
         assert OrgNumNode.objects.count() == 3 # non owner cannot clear
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+5
+        assert mock_enqueue_stubbed_out.call_args == call(orgAccountObj.name)
 
 
         # log back in with owner 
@@ -1117,11 +1109,9 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
 
         response = client.post(url,HTTP_ACCEPT='application/json')
         assert((response.status_code == 200) or (response.status_code == 302))
-
-        idle, loop_count = process_state_change(orgAccountObj)
-        idle, loop_count = process_state_change(orgAccountObj)
-
         assert OrgNumNode.objects.count() == 2
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+6
+        assert mock_enqueue_stubbed_out.call_args == call(orgAccountObj.name)
 
         # now clear the active ones
 
@@ -1129,8 +1119,8 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
         logger.info(f"using url:{url}")
         response = client.post(url,HTTP_ACCEPT='application/json')
         assert((response.status_code == 200) or (response.status_code == 302))
-        idle, loop_count = process_state_change(orgAccountObj)
-        idle, loop_count = process_state_change(orgAccountObj)
         assert OrgNumNode.objects.count() == 0
         clusterObj.refresh_from_db()
         assert len(clusterObj.cnnro_ids) == 0
+        assert mock_enqueue_stubbed_out.call_count == s_call_cnt+7
+        assert mock_enqueue_stubbed_out.call_args == call(orgAccountObj.name)
