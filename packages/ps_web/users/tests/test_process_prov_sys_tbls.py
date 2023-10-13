@@ -234,7 +234,7 @@ def test_get_or_create_OrgNumNodes(caplog,client,mock_email_backend,initialize_t
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN_redundant(caplog,client,mock_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
+def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test logic for redundant ONN requests
     '''
@@ -509,7 +509,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     access_token = json_data['access']   
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,3,17],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -517,7 +516,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,4,16],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -525,7 +523,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,15],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -533,7 +530,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,25],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -541,7 +537,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,20],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -549,7 +544,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,21],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -557,7 +551,6 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
                                 orgAccountObj=orgAccountObj,
-                                view_name='post-org-num-nodes-ttl',
                                 url_args=[orgAccountObj.name,5,18],
                                 access_token=access_token,
                                 expected_change_ps_cmd=0,
@@ -658,7 +651,7 @@ def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_
                 for new_highest_onn_id in variables:
                     just_ONE_CASE(is_deployed, is_public, version, new_highest_onn_id)
 
-def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
+def verify_new_entries_in_ONN(orgAccountObj,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
 
     # now verify different users can make different requests
     assert verify_api_user_makes_onn_ttl( client=client,
@@ -669,7 +662,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     m = create_active_membership(orgAccountObj,the_DEV_TEST_USER())
     m.refresh_from_db()
     assert verify_api_user_makes_onn_ttl( client=client,
@@ -680,7 +674,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
     
     rtu = random_test_user()
     m = create_active_membership(orgAccountObj,rtu)
@@ -693,7 +688,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6)
     assert(len(cnnro_ids)==3)
@@ -707,7 +703,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     expected_change_ps_cmd=0,
                                     expected_status='QUEUED',
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)  # no change
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)  # no change
 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
@@ -722,7 +719,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     expected_change_ps_cmd=0,
                                     expected_status='QUEUED',
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) # we guarentee unique time inside this routine
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # we guarentee unique time inside this routine
 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
@@ -736,7 +734,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
     assert(len(cnnro_ids)==3)
@@ -749,7 +748,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                         ttl_minutes=15,
                                         expected_change_ps_cmd=0,
                                         delay_state_processing=False,
-                                        mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
+                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==6) # still 6
     log_ONN()
@@ -769,7 +769,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==7)
     assert(len(cnnro_ids)==3)
@@ -782,7 +783,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==8)
     assert(len(cnnro_ids)==3)
@@ -795,7 +797,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=0,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     log_ONN()
     uuid_objects = [uuid.UUID(uuid_str) for uuid_str in cnnro_ids]
@@ -813,7 +816,8 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out) 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
 
     log_ONN()
@@ -827,7 +831,7 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_enqueue_stubbed_out):
     return True
 
 
-def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,client,mock_enqueue_stubbed_out):
+def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
 
     #   First configure the default test org
     url = reverse('org-token-obtain-pair')
@@ -852,14 +856,14 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
     assert(orgAccountObj.min_node_cap == 0)
     assert(orgAccountObj.max_node_cap == orgAccountObj.admin_max_node_cap)
 
-    assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client, mock_enqueue_stubbed_out=mock_enqueue_stubbed_out))
+    assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out))
     return True
 
 
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_enqueue_stubbed_out, mock_email_backend, initialize_test_environ, developer_TEST_USER):
+def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_email_backend, initialize_test_environ, developer_TEST_USER):
     '''
         This procedure will test logic for sum_of_highest_nodes_for_each_user for two different orgs
     '''
@@ -896,7 +900,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_enqueue_stubbed_
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==0) # for new org
     
-    assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client, mock_enqueue_stubbed_out=mock_enqueue_stubbed_out))
+    assert(verify_new_entries_in_ONN(orgAccountObj=orgAccountObj,client=client, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out))
     onn = log_ONN()
     assert len(onn) == 22
     assert onn[0].desired_num_nodes == 4
@@ -920,7 +924,8 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_enqueue_stubbed_
                                     ttl_minutes=15,
                                     expected_change_ps_cmd=1,
                                     delay_state_processing=False,
-                                    mock_enqueue_stubbed_out=mock_enqueue_stubbed_out)
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
     assert(sum_of_all_users_dnn==orgAccountObj.max_node_cap) # clamped

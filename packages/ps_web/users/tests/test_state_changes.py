@@ -218,7 +218,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
+def test_api_urls(caplog,client,verified_TEST_USER,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
     '''
         This procedure will various cases for the process_state_change function
     '''
@@ -245,7 +245,8 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=access_token,
                                                             delay_state_processing=False,
-                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=1, # because num_iters>0 and we had one QUEUED
                                                             expected_status='REDUNDANT')
         assert(loop_count==6)
@@ -254,6 +255,9 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.name,3],
                                                         access_token=access_token,
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                         expected_change_ps_cmd=0, # because no iters
                                                         expected_status='QUEUED')
 
@@ -262,7 +266,8 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock
                                                             url_args=[orgAccountObj.name,3,16],
                                                             access_token=access_token,
                                                             delay_state_processing=False,
-                                                            mock_enqueue_stubbed_out=mock_enqueue_stubbed_out,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0, # because highest num nodes is still 3
                                                             expected_status='QUEUED')
 
@@ -270,6 +275,9 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,2,17],
                                                             access_token=access_token,
+                                                            delay_state_processing=False,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0,
                                                             expected_status='QUEUED')
 
@@ -277,6 +285,9 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,1,19],
                                                             access_token=access_token,
+                                                            delay_state_processing=False,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0,
                                                             expected_status='QUEUED')
 
@@ -284,6 +295,9 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_enqueue_stubbed_out,mock
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,4,15],
                                                             access_token=access_token,
+                                                            delay_state_processing=False,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
                                                             expected_status='QUEUED')
 
@@ -310,7 +324,6 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         
         assert(OwnerPSCmd.objects.count()==0)
         assert(OrgNumNode.objects.count()==0)
-        assert(orgAccountObj.loop_count==0)
         assert(orgAccountObj.num_owner_ps_cmd==0)
         assert(orgAccountObj.num_ps_cmd==0)
         assert(orgAccountObj.num_ps_cmd_successful==0)
@@ -359,7 +372,6 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         assert(orgAccountObj.num_owner_ps_cmd==0)
         assert(orgAccountObj.num_onn==1)
 
-        assert(orgAccountObj.loop_count==1)
 
         # verify setup occurred
         assert(clusterObj.provision_env_ready)
@@ -373,7 +385,6 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         task_idle, loop_count = process_state_change(orgAccountObj.name)
         assert(loop_count==2)
         
-        assert(orgAccountObj.loop_count==1)
         assert(orgAccountObj.num_onn==1)
         # nothing else changes
         assert(OwnerPSCmd.objects.count()==0)

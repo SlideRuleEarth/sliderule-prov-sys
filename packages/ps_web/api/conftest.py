@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER
 from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user,check_redis_for_testing
-from users.tests.conftest import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME,setup_logging
+from users.tests.conftest import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME
 from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import Group
 from django.conf import settings

@@ -379,6 +379,8 @@ def clearActiveNumNodeReq(request, pk):
                 for active_onn in active_onns:
                     active_onn.delete()
                 messages.info(request,"Successfully deleted active Org Num Node requests")
+                clusterObj.cnnro_ids = []
+                clusterObj.save(update_fields=['cnnro_ids'])
                 enqueue_process_state_change(orgAccountObj.name)
             else:
                 messages.info(request,"No active Org Num Node request to delete")

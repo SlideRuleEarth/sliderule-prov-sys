@@ -78,39 +78,3 @@ def setup_site():
     # Cleanup (optional): Reset the SITE_ID setting
     settings.SITE_ID = original_site_id
 
-
-# def log_enqueue_process_state_change(*args, **kwargs):
-#     logger = logging.getLogger('unit-testing')
-#     logger.info(f"enqueue_process_state_change args:{args} kwargs:{kwargs}")    
-
-# @pytest.fixture
-# def mock_job(mock_rq_scheduler):
-#     with patch("users.tasks.Job") as mock:
-#         mock.get_redis_version.return_value = "4.6.2"
-#         yield mock
-
-# @pytest.fixture
-# def mock_django_rq(mock_job):
-#     with patch("users.tasks.django_rq") as mock:
-#         yield mock
-
-# @pytest.fixture
-# def mock_enqueue_stubbed_out(mock_django_rq):
-#     '''
-#     This fixture is used to mock the enqueue_process_state_change function.
-#     It is used in the test cases to verify that the function is called.
-#     '''
-#     with patch("users.views.enqueue_process_state_change") as mock:
-#         mock.side_effect = log_enqueue_process_state_change
-#         yield mock
-
-# @pytest.fixture
-# def mock_enqueue_synchronous():
-#     '''
-#     This fixture is used to mock the enqueue_process_state_change function.
-#     It is used in the test cases to verify that the function is called.
-#     and calls the function synchronously instead of queuing it.
-#     '''
-#     with patch("users.views.enqueue_process_state_change") as mock:
-#         mock.side_effect = process_state_change 
-#         yield mock

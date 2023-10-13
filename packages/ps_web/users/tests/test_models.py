@@ -37,7 +37,7 @@ class OrgNumNodesTest(GlobalTestCase):
         test_user = random_test_user()
         test_now = datetime.now(tz=timezone.utc)
         test_expire_date = test_now+timedelta(minutes=16)
-        orgNumNode,redundant,msg = get_or_create_OrgNumNodes(org=orgAccountObj,user=test_user,desired_num_nodes=3,expire_date=test_expire_date)
+        orgNumNode,redundant,msg = get_or_create_OrgNumNodes(orgAccountObj=orgAccountObj,user=test_user,desired_num_nodes=3,expire_date=test_expire_date)
         self.assertEqual(redundant,False)
         self.assertIsNotNone(orgNumNode)
         #LOG.info(f"------- Done test_get_or_create_OrgNumNodes_001 -------")

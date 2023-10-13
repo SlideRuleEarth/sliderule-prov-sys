@@ -49,6 +49,7 @@ ps-web-stage : ps-web-clean-stage
 	cp docker/ps-web/docker-entrypoint.sh docker/ps-web/stage/
 	cp manage.py docker/ps-web/stage/
 	cp pytest.ini docker/ps-web/stage/
+	cp conftest.py docker/ps-web/stage/
 	cp -R static docker/ps-web/stage/
 	cp -R ps_web docker/ps-web/stage/
 	cp -R api docker/ps-web/stage/

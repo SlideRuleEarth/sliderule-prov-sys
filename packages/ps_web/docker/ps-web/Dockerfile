@@ -25,6 +25,7 @@ COPY --chown=reg_user:reg_user ./stage/docker-entrypoint.sh /home/reg_user/ps/
 COPY --chown=reg_user:reg_user ./stage/protos/              /home/reg_user/ps_server/protos/
 COPY --chown=reg_user:reg_user ./stage/manage.py            /home/reg_user/ps/
 COPY --chown=reg_user:reg_user ./stage/pytest.ini           /home/reg_user/ps/
+COPY --chown=reg_user:reg_user ./stage/conftest.py          /home/reg_user/ps/
 COPY --chown=reg_user:reg_user ./stage/static               /home/reg_user/ps/static/
 COPY --chown=reg_user:reg_user ./stage/ps_web               /home/reg_user/ps/ps_web/
 COPY --chown=reg_user:reg_user ./stage/api                  /home/reg_user/ps/api/

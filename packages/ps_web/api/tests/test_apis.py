@@ -10,11 +10,11 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse,resolve
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,initialize_test_org
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,initialize_test_org,call_process_state_change
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER,OWNER_USER,OWNER_PASSWORD,OWNER_EMAIL,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER
 import subprocess
 
-from users.models import Membership,Cluster,OrgAccount
+from users.models import Membership,Cluster,OrgAccount,OrgNumNode,OwnerPSCmd,PsCmdResult
 from users.tasks import init_new_org_memberships
 
 module_name = 'views'
@@ -392,3 +392,121 @@ def test_disable_provisioning_failure_WRONG_password(caplog,client,mock_email_ba
     else:
         logger.info(f"response:{response}")
     assert response.status_code == 400 # wrong mfa code 
+
+#@pytest.mark.dev
+@pytest.mark.django_db 
+@pytest.mark.ps_server_stubbed
+def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
+    '''
+        This procedure will test owner grabs token and can queue a ONN
+    '''
+    caplog.set_level(logging.DEBUG)
+    
+    orgAccountObj = get_test_org()
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    
+    url = reverse('org-token-obtain-pair')
+
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 200)   
+    assert (OwnerPSCmd.objects.count()==0)
+    assert (OrgNumNode.objects.count()==0)
+    json_data = json.loads(response.content)
+    logger.info(f"rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0')   
+
+    orgAccountObj.num_owner_ps_cmd=0
+    orgAccountObj.num_ps_cmd=0
+    orgAccountObj.num_ps_cmd_successful=0
+    orgAccountObj.num_onn=0
+    orgAccountObj.save()
+    start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+
+    
+    url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])    
+    response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
+    assert (response.status_code == 200) 
+    json_data = json.loads(response.content)
+    assert(json_data['status']=='QUEUED')   
+    assert(json_data['msg']!='')   
+    assert(json_data['error_msg']=='') 
+    logger.info(f"msg:{json_data['msg']}")  
+     
+    clusterObj.refresh_from_db()
+    orgAccountObj.refresh_from_db()
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count    
+    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    clusterObj.refresh_from_db()
+    orgAccountObj.refresh_from_db()
+
+    assert(clusterObj.provision_env_ready)
+    assert(orgAccountObj.provisioning_suspended==False)
+    assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
+    assert(orgAccountObj.num_ps_cmd_successful==1) 
+    assert(orgAccountObj.num_onn==1)
+
+    assert PsCmdResult.objects.count() == 1 # Update 
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+
+    assert(orgAccountObj.provisioning_suspended==False)
+    assert(orgAccountObj.num_ps_cmd==1)
+    assert(orgAccountObj.num_ps_cmd_successful==1) 
+    assert(orgAccountObj.num_onn==1)
+    
+
+#@pytest.mark.dev
+@pytest.mark.django_db 
+@pytest.mark.ps_server_stubbed
+def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
+    '''
+        This procedure will test owner grabs token and can queue a ONN
+    '''
+    caplog.set_level(logging.DEBUG)
+    
+    orgAccountObj = get_test_org()
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    url = reverse('org-token-obtain-pair')
+
+    response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 200)   
+    assert (OwnerPSCmd.objects.count()==0)
+    assert (OrgNumNode.objects.count()==0)
+    json_data = json.loads(response.content)
+    logger.info(f"rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0')   
+
+    orgAccountObj.num_owner_ps_cmd=0
+    orgAccountObj.num_ps_cmd=0
+    orgAccountObj.num_ps_cmd_successful=0
+    orgAccountObj.num_onn=0
+    orgAccountObj.save()
+
+    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    
+    response = client.put(url,headers={'Authorization': f"Bearer {json_data['access']}"})
+    assert (response.status_code == 200) 
+    json_data = json.loads(response.content)
+    assert(json_data['status']=='QUEUED')   
+    assert(json_data['msg']!='')   
+    assert(json_data['error_msg']=='') 
+    logger.info(f"msg:{json_data['msg']}")  
+    clusterObj.refresh_from_db()
+    orgAccountObj.refresh_from_db()
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)    
+    clusterObj.refresh_from_db()
+    orgAccountObj.refresh_from_db()
+    assert(clusterObj.provision_env_ready)
+    assert(orgAccountObj.provisioning_suspended==False)
+    assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
+    assert(orgAccountObj.num_ps_cmd_successful==1) 
+    assert(orgAccountObj.num_onn==1)
+    
+

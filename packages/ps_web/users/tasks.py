@@ -209,7 +209,7 @@ def clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning):
         for onn in onns:
             onn.delete()
         cnt = OrgNumNode.objects.filter(org=orgAccountObj).count()
-        clusterObj.cnnro_ids = None
+        clusterObj.cnnro_ids = []
         clusterObj.save(update_fields=['cnnro_ids'])
     if suspend_provisioning:
         orgAccountObj.provisioning_suspended = True
@@ -447,7 +447,29 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
             handler.flush()
         sleep(COOLOFF_SECS)
 
-def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
+def schedule_process_state_change(tm,orgAccountObj): 
+    '''
+    This routine is called whenever an org num node request is made with and expiration.
+    It will schedule a job to process the state change for the orgAccountObj
+    '''
+    try:
+        LOG.info(f"schedule_process_state_change({tm},{orgAccountObj.name})")
+        if orgAccountObj is not None:
+            if orgAccountObj.name is not None:
+                if orgAccountObj.name != '':
+                    LOG.debug(f"schedule_process_state_change({tm},{orgAccountObj.name})")
+                    get_scheduler().enqueue_at(tm,enqueue_process_state_change,orgAccountObj.name)
+                else: 
+                    LOG.error(f"schedule_process_state_change({tm},orgAccountObj.name is blank)")
+            else:
+                LOG.error(f"schedule_process_state_change({tm},orgAccountObj.name is None)")
+        else:
+            LOG.error(f"schedule_process_state_change({tm},orgAccountObj is None)")
+    except Exception as e:
+        LOG.exception(f"{orgAccountObj.name} caught exception:")
+        LOG.error(f"{orgAccountObj.name} got {str(e)}")
+
+def get_or_create_OrgNumNodes(orgAccountObj,user,desired_num_nodes,expire_date):
     # if it doesn't exist create it then process all orgNumNodes for org                                          
     # if expire date comes from jwt then it will match
     # First try exact match
@@ -456,15 +478,16 @@ def get_or_create_OrgNumNodes(org,user,desired_num_nodes,expire_date):
     redundant = False
     msg = ''
     try:
-        orgNumNode,created = OrgNumNode.objects.get_or_create(user=user,org=org, desired_num_nodes=desired_num_nodes,expiration=expire_date)
+        orgNumNode,created = OrgNumNode.objects.get_or_create(user=user,org=orgAccountObj, desired_num_nodes=desired_num_nodes,expiration=expire_date)
         if created:
             if expire_date is not None:
-                msg = f"Created new entry for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
-                get_scheduler().enqueue_at(expire_date,enqueue_process_state_change,org.name)
+                msg = f"Created new entry for {orgAccountObj.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
+                #get_scheduler().enqueue_at(expire_date,enqueue_process_state_change,orgAccountObj.name)
+                schedule_process_state_change(expire_date,orgAccountObj)
             else:
-                msg = f"Created new entry for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} with NO expiration"
+                msg = f"Created new entry for {orgAccountObj.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} with NO expiration"
         else:         
-            msg = f"An entry already exists for {org.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
+            msg = f"An entry already exists for {orgAccountObj.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
             redundant = True
         LOG.info(f"{msg} cnt:{OrgNumNode.objects.count()}")
 
@@ -494,9 +517,9 @@ def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cm
             msg = f"Updating {orgAccountObj.name} cluster"
 
         orgNumNode,redundant,onn_msg = get_or_create_OrgNumNodes(user=user,
-                                                            org=orgAccountObj,
-                                                            desired_num_nodes=desired_num_nodes,
-                                                            expire_date=expire_time)
+                                                                orgAccountObj=orgAccountObj,
+                                                                desired_num_nodes=desired_num_nodes,
+                                                                expire_date=expire_time)
         msg += f" {onn_msg}"
         if orgNumNode:
             if redundant:
@@ -1176,17 +1199,17 @@ def getConsoleHtml(orgAccountObj, rrsp):
 def remove_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
     try:
         only_owned_by_user = only_owned_by_user or False
-        LOG.info(f"{user.username} cleaning up OrgNumNode for {orgAccountObj.name} {f'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
+        LOG.info(f"{user.username} cleaning up OrgNumNode for {orgAccountObj.name} {f'owned by:{user.username}' if only_owned_by_user else ''} only_owned_by_user:{only_owned_by_user} onn_cnt:{OrgNumNode.objects.count()}")
         if only_owned_by_user:
             onns = OrgNumNode.objects.filter(org=orgAccountObj,user=user)
         else:
             onns = OrgNumNode.objects.filter(org=orgAccountObj)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         for onn in onns:
-            LOG.info(f"{onn.user.username} deleting OrgNumNode {onn.org.name}")
+            LOG.info(f"deleting OrgNumNode with org:{onn.org.name} with user:{onn.user.username}")
             if clusterObj.cnnro_ids is not None:
                 if str(onn.id) in clusterObj.cnnro_ids:
-                    LOG.info(f"Skipping active OrgNumNode.id:{onn.id}")
+                    LOG.info(f"Skipping active OrgNumNode.id:{onn.id} with org:{onn.org.name} user:{onn.user.username}")
                 else:
                     onn.delete()
             else:
