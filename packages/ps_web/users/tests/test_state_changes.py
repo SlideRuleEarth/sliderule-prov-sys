@@ -218,7 +218,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_api_urls(caplog,client,verified_TEST_USER,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
+def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
     '''
         This procedure will various cases for the process_state_change function
     '''
@@ -237,7 +237,9 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_tasks_enqueue_stubbed_ou
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=access_token,
-                                                            expected_change_ps_cmd=0,
+                                                            delay_state_processing=False,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,                                                            expected_change_ps_cmd=1,
                                                             expected_status='QUEUED')
 
         loop_count,response = process_post_org_num_nodes_ttl(client=client,
@@ -247,9 +249,8 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_tasks_enqueue_stubbed_ou
                                                             delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                                                            expected_change_ps_cmd=1, # because num_iters>0 and we had one QUEUED
+                                                            expected_change_ps_cmd=0, 
                                                             expected_status='REDUNDANT')
-        assert(loop_count==6)
         current_fake_tm = datetime.now(timezone.utc)+timedelta(seconds=3) # 6 iters above is 3 seconds
         loop_count,response = process_put_org_num_nodes(client=client,
                                                         orgAccountObj=orgAccountObj,
@@ -301,10 +302,10 @@ def test_api_urls(caplog,client,verified_TEST_USER,mock_tasks_enqueue_stubbed_ou
                                                             expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
                                                             expected_status='QUEUED')
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock_email_backend,initialize_test_environ):
+def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, verified_TEST_USER,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test the state change function when 
         multiple calls to enqueue_process_state_change are made 
@@ -327,7 +328,7 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         assert(orgAccountObj.num_owner_ps_cmd==0)
         assert(orgAccountObj.num_ps_cmd==0)
         assert(orgAccountObj.num_ps_cmd_successful==0)
-        assert(orgAccountObj.num_onn==0)
+        
         current_fake_tm = datetime.now(timezone.utc)  
 
         loop_count,response = process_post_org_num_nodes_ttl(client=client,
@@ -336,7 +337,12 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=owner_access_token,
                                                             expected_change_ps_cmd=0,
-                                                            expected_status='QUEUED')
+                                                            expected_status='QUEUED',
+                                                            expected_change_OrgNumNode=1,
+                                                            delay_state_processing=True,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
+        
         
         #
         # This tests when multiple calls to api are processed between a process_state_change
@@ -346,6 +352,10 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
                                                             new_time=current_fake_tm,
                                                             url_args=[orgAccountObj.name,4,16],
                                                             access_token=owner_access_token,
+                                                            delay_state_processing=True,
+                                                            expected_change_OrgNumNode=1,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0,
                                                             expected_status='QUEUED')
 
@@ -354,6 +364,10 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
                                                             new_time=current_fake_tm,
                                                             url_args=[orgAccountObj.name,2,17],
                                                             access_token=owner_access_token,
+                                                            expected_change_OrgNumNode=1,
+                                                            delay_state_processing=True,
+                                                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0,
                                                             expected_status='QUEUED')
 
@@ -366,11 +380,11 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(loop_count==1)
-        assert(orgAccountObj.num_onn==1)
+        
         assert(OwnerPSCmd.objects.count()==0)
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==0)
-        assert(orgAccountObj.num_onn==1)
+        
 
 
         # verify setup occurred
@@ -385,23 +399,24 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         task_idle, loop_count = process_state_change(orgAccountObj.name)
         assert(loop_count==2)
         
-        assert(orgAccountObj.num_onn==1)
+        
         # nothing else changes
         assert(OwnerPSCmd.objects.count()==0)
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==0)
-        assert(orgAccountObj.num_onn==1)
+        
         assert(orgAccountObj.num_ps_cmd==1)
         assert(orgAccountObj.num_ps_cmd_successful==1)
         assert(orgAccountObj.desired_num_nodes==4)
         # web login
         assert(client.login(username=OWNER_USER,password=OWNER_PASSWORD))
 
-        loop_count = process_owner_ps_Refresh_cmd(  client=client,
-                                                    orgAccountObj=orgAccountObj,
-                                                    new_time=datetime.now(timezone.utc),
-                                                    loop_count=loop_count,
-                                                    delay_state_processing=True)
+        process_owner_ps_Refresh_cmd(client=client,
+                                    orgAccountObj=orgAccountObj,
+                                    new_time=datetime.now(timezone.utc),
+                                    delay_state_processing=True,
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
         # verify setup occurred
         assert(clusterObj.provision_env_ready)
@@ -410,7 +425,7 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         assert(OwnerPSCmd.objects.count()==1) 
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==0) #not until process_state_change
-        assert(orgAccountObj.num_onn==1)
+        
         assert(orgAccountObj.num_ps_cmd==1)
         assert(orgAccountObj.num_ps_cmd_successful==1)
         assert(orgAccountObj.desired_num_nodes==4)
@@ -423,24 +438,27 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         assert(OwnerPSCmd.objects.count()==0) # processed and cleared
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==1)
-        assert(orgAccountObj.num_onn==1)
+        
         assert(orgAccountObj.num_ps_cmd==2) # processed
         assert(orgAccountObj.num_ps_cmd_successful==2)
         assert(orgAccountObj.desired_num_nodes==4)
        
-        assert(orgAccountObj.num_onn==1)
+        
 
         # expire first one (3,15)
         # table is:
         #  3,15 <-- expire this one
         #  4,16
         #  2,17 
-        process_onn_expires(orgAccountObj,
-                            fake_time_now+timedelta(minutes=15,seconds=1),
-                            expected_change_ps_cmd=0, # 4 is highest and was already processed
-                            expected_change_OrgNumNode=-1,
-                            expected_change_num_onn=0,
-                            expected_desired_num_nodes=4)
+        process_onn_expires(orgAccountObj = orgAccountObj,
+                            new_time=(fake_time_now+timedelta(minutes=15,seconds=1)), # force expire
+                            expected_change_ps_cmd=0, # 4 is highest and was already added to table and was highest and processed
+                            expected_change_OrgNumNode=-1, # removes the expired one
+                            expected_desired_num_nodes=4,
+                            delay_state_processing=False, # process the state change 
+                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
+                            mock_schedule_process_state_change=mock_schedule_process_state_change)
 
         # simulate the deploy
         clusterObj.is_deployed = True
@@ -451,12 +469,15 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         #  3,15 **expired already
         #  4,16 <-- expire this one
         #  2,17 
-        process_onn_expires(orgAccountObj,
-                            fake_time_now+timedelta(minutes=16,seconds=1),
-                            expected_change_ps_cmd=1,
+        process_onn_expires(orgAccountObj=orgAccountObj,
+                            new_time=(fake_time_now+timedelta(minutes=16,seconds=1)),
+                            expected_change_ps_cmd=1, # should do an update to get 2  
                             expected_change_OrgNumNode=-1,
-                            expected_change_num_onn=1,
-                            expected_desired_num_nodes=2)
+                            expected_desired_num_nodes=2,
+                            delay_state_processing=False,
+                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
+                            mock_schedule_process_state_change=mock_schedule_process_state_change)
 
         # these two set like this mean we call destroy when table is empty
         assert(orgAccountObj.destroy_when_no_nodes)
@@ -468,14 +489,16 @@ def test_state_change(caplog,client,mock_enqueue_stubbed,verified_TEST_USER,mock
         #  3,15 **expired already
         #  4,16 **expired already
         #  2,17 <-- expire this one
-        process_onn_expires(orgAccountObj,
-                            fake_time_now+timedelta(minutes=17,seconds=1),
+        process_onn_expires(orgAccountObj=orgAccountObj,
+                            new_time=(fake_time_now+timedelta(minutes=17,seconds=1)),
                             expected_change_ps_cmd=1, # destroy 
                             expected_change_OrgNumNode=-1,
-                            expected_change_num_onn=1, # destroy
-                            expected_desired_num_nodes=0)
+                            expected_desired_num_nodes=0,
+                            delay_state_processing=False,
+                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
+                            mock_schedule_process_state_change=mock_schedule_process_state_change)
 
-        assert mock_enqueue_stubbed.call_count == 0 # TBD fix this
 
 #@pytest.mark.dev
 @pytest.mark.django_db 

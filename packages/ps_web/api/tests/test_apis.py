@@ -420,7 +420,6 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     orgAccountObj.num_owner_ps_cmd=0
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
-    orgAccountObj.num_onn=0
     orgAccountObj.save()
     start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
 
@@ -445,7 +444,6 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
     assert(orgAccountObj.num_ps_cmd_successful==1) 
-    assert(orgAccountObj.num_onn==1)
 
     assert PsCmdResult.objects.count() == 1 # Update 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -455,7 +453,6 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1)
     assert(orgAccountObj.num_ps_cmd_successful==1) 
-    assert(orgAccountObj.num_onn==1)
     
 
 #@pytest.mark.dev
@@ -485,7 +482,6 @@ def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqu
     orgAccountObj.num_owner_ps_cmd=0
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
-    orgAccountObj.num_onn=0
     orgAccountObj.save()
 
     url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
@@ -507,6 +503,5 @@ def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqu
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
     assert(orgAccountObj.num_ps_cmd_successful==1) 
-    assert(orgAccountObj.num_onn==1)
     
 

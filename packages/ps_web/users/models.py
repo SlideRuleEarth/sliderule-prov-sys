@@ -147,7 +147,7 @@ class OrgAccount(models.Model):
     num_owner_ps_cmd = models.BigIntegerField(editable=True,default=0)
     num_ps_cmd = models.BigIntegerField(editable=True,default=0)
     num_ps_cmd_successful = models.BigIntegerField(editable=True,default=0)
-    num_onn = models.BigIntegerField(editable=True,default=0)
+    num_onn = models.BigIntegerField(editable=True,default=0) # deprecated
     provisioning_suspended = models.BooleanField(editable=True,default=False)
     num_setup_cmd = models.BigIntegerField(editable=True,default=0)
     num_setup_cmd_successful = models.BigIntegerField(editable=True,default=0)

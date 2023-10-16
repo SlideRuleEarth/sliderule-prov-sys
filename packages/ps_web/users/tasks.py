@@ -344,7 +344,6 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
     the current desired num nodes is not the min node cap
     then it will set desired num nodes to min node cap 
     '''
-    # NOTE: Be careful where you put log statements in this routine
     try:
         if not orgAccountObj.provisioning_suspended: 
             env_ready,setup_occurred = check_provision_env_ready(orgAccountObj)
@@ -378,8 +377,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                                 clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=False)
                                 LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
-                            orgAccountObj.num_onn += 1
-                            orgAccountObj.save(update_fields=['num_onn'])
+                            
                             LOG.info(f"Update {orgAccountObj.name} processed")
                 else:
                     # No entries in table
@@ -400,8 +398,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                                 LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
 
-                            orgAccountObj.num_onn += 1
-                            orgAccountObj.save(update_fields=['num_onn'])
+                            
                             LOG.info(f"{orgAccountObj.name} Destroy processed")
                     else:
                         if orgAccountObj.min_node_cap != orgAccountObj.desired_num_nodes: 
@@ -419,8 +416,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                                 LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
 
-                            orgAccountObj.num_onn += 1
-                            orgAccountObj.save(update_fields=['num_onn'])
+                            
                             LOG.info(f"{orgAccountObj.name} Update processed")
                 # if we setup the env but did not process any commands, then we need to Refresh to set state
                 need_refresh = False
@@ -1587,7 +1583,7 @@ def  process_prov_sys_tbls(orgAccountObj):
     '''
     try:
         start_cmd_cnt = orgAccountObj.num_ps_cmd
-        #LOG.info(f"org:{orgAccountObj.name} num_ps_cmd:{num_ps_cmd} num_onn:{num_onn}")
+        #LOG.info(f"org:{orgAccountObj.name} num_ps_cmd:{num_ps_cmd} ")
         start_time = time.time() 
         # during deployments multiple versions of ps-web are running
         with advisory_lock(orgAccountObj.name) as acquired:
@@ -1630,7 +1626,7 @@ def process_state_change(org_name):
         return False, 0
     key = f"idle_cnt_{orgAccountObj.name}"
     
-    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    LOG.info(f"BEFORE {'{:>10}'.format(orgAccountObj.loop_count)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} ")
     
     is_idle = process_prov_sys_tbls(orgAccountObj)
     
@@ -1640,7 +1636,7 @@ def process_state_change(org_name):
         cache.set(f"idle_cnt_{orgAccountObj.name}", idle_cnt+1)
     
     OrgAccount.objects.filter(name=org_name).update(loop_count=F('loop_count') + 1) # F make this inline and an atomic update
-    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count+1)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn}")
+    LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count+1)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} ")
     return is_idle, orgAccountObj.loop_count+1 # +1 because we updated the loop_count above inline
 
 

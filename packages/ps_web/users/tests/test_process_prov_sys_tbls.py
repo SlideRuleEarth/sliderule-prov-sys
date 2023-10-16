@@ -306,7 +306,7 @@ def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_vie
     orgAccountObj.refresh_from_db()
     assert(loop_count==1)
     assert(orgAccountObj.num_ps_cmd==1)
-    assert(orgAccountObj.num_onn==1) # only process one of the entries
+     # only process one of the entries
      # only process one here, wait for expire
     
 #@pytest.mark.dev
@@ -469,15 +469,13 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
     orgAccountObj.save()
-    num_owner_ps_cmd=0
-    num_onn=0
     task_idle, loop_count = process_state_change(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(loop_count==1)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered a deploy
     assert(orgAccountObj.num_ps_cmd_successful==1) # onn triggered a deploy
-    assert(orgAccountObj.num_onn==1) # only process one of the entries
+     # only process one of the entries
      # only process one here, wait for expire
 
     url = reverse('get-num-nodes',args=[orgAccountObj.name])
@@ -494,7 +492,7 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_environ):
+def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_environ,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
     '''
         This procedure will test logic the routine sort_ONN_by_nn_exp
     '''
@@ -508,53 +506,74 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
     json_data = json.loads(response.content)
     access_token = json_data['access']   
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,3,17],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,3,17],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=1, 
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,4,16],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,4,16],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=1,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,5,15],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,5,15],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=1,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
     
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,5,25],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,5,25],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=0,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,5,20],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,5,20],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=0,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,5,21],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,5,21],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=0,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     loop_count,response = process_post_org_num_nodes_ttl(client=client,
-                                orgAccountObj=orgAccountObj,
-                                url_args=[orgAccountObj.name,5,18],
-                                access_token=access_token,
-                                expected_change_ps_cmd=0,
-                                expected_status='QUEUED')
+                                                        orgAccountObj=orgAccountObj,
+                                                        url_args=[orgAccountObj.name,5,18],
+                                                        access_token=access_token,
+                                                        expected_change_ps_cmd=0,
+                                                        expected_status='QUEUED',
+                                                        delay_state_processing=False,
+                                                        mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                        mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     prev = None
     qs = sort_ONN_by_nn_exp(orgAccountObj)
@@ -863,12 +882,12 @@ def verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj,cli
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_email_backend, initialize_test_environ, developer_TEST_USER):
+def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend, initialize_test_environ, developer_TEST_USER):
     '''
         This procedure will test logic for sum_of_highest_nodes_for_each_user for two different orgs
     '''
 
-    assert verify_sum_of_highest_nodes_for_each_user_default_test_org(get_test_org(),client)
+    assert verify_sum_of_highest_nodes_for_each_user_default_test_org(orgAccountObj=get_test_org(),client=client,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
     # create a new org and initialize like init_test_environ and then mix it up 
     form = OrgAccountForm(data={

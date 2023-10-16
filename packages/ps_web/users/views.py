@@ -174,7 +174,7 @@ def orgManageCluster(request, pk):
     #LOG.info("%s %s",request.method,pk)
     orgAccountObj = get_orgAccountObj(pk)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    LOG.info(f"{request.method} {orgAccountObj.name} loop_count:{orgAccountObj.loop_count} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} onn:{orgAccountObj.num_onn} autocommit:{get_autocommit()}")
+    LOG.info(f"{request.method} {orgAccountObj.name} loop_count:{orgAccountObj.loop_count} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd}  autocommit:{get_autocommit()}")
     orgNumNodeObjs = sort_ONN_by_nn_exp(orgAccountObj)
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         try:

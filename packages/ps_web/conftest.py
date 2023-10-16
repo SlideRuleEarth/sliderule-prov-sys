@@ -43,7 +43,6 @@ def mock_schedule_process_state_change():
     It is used in the test cases to verify that the function is called.
     '''
     with patch("users.tasks.schedule_process_state_change") as mock:
-        #mock.side_effect = log_schedule_process_state_change
         yield mock
 
 

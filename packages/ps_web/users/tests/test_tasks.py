@@ -120,13 +120,13 @@ def test_process_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_test_e
     clusterObj.save()
     orgAccountObj.destroy_when_no_nodes = True
     orgAccountObj.min_node_cap = 0
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    assert orgAccountObj.num_onn == 1
+    
     assert orgAccountObj.num_setup_cmd == 0
     assert orgAccountObj.num_ps_cmd == 1 # Update
     assert orgAccountObj.num_setup_cmd_successful == 0
@@ -158,13 +158,13 @@ def test_process_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_test_en
     orgAccountObj.save()
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 0
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    assert orgAccountObj.num_onn == 1
+    
     assert orgAccountObj.num_ps_cmd == 1 #  Update
     assert orgAccountObj.num_setup_cmd_successful == 0
     assert orgAccountObj.num_ps_cmd_successful == 1
@@ -194,13 +194,13 @@ def test_process_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initialize_t
     orgAccountObj.save()
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 0
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    assert orgAccountObj.num_onn == 0
+    
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     assert orgAccountObj.desired_num_nodes == 0
@@ -227,13 +227,13 @@ def test_process_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize_tes
     orgAccountObj.save()
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 0
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    assert orgAccountObj.num_onn == 1
+    
     assert orgAccountObj.num_ps_cmd == 1 #  Update
     assert orgAccountObj.num_setup_cmd_successful == 0
     assert orgAccountObj.num_ps_cmd_successful == 1
@@ -269,18 +269,18 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,create
 
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 2
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 1
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    logger.info(f"orgAccountObj: num_onn={orgAccountObj.num_onn} num_ps_cmd={orgAccountObj.num_ps_cmd} desired_num_nodes={orgAccountObj.desired_num_nodes} cnt:{PsCmdResult.objects.count()}")
+    logger.info(f"orgAccountObj: num_ps_cmd={orgAccountObj.num_ps_cmd} desired_num_nodes={orgAccountObj.desired_num_nodes} cnt:{PsCmdResult.objects.count()}")
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     assert PsCmdResult.objects.count() == 1
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert orgAccountObj.num_onn == 1 
+     
     assert OwnerPSCmd.objects.count() == 0
     assert orgAccountObj.num_setup_cmd == 0 # handled in fixture
     assert orgAccountObj.num_ps_cmd == 1
@@ -324,7 +324,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,crea
 
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 2
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 1
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
@@ -332,7 +332,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,crea
     process_num_node_table(orgAccountObj,False)
 
     orgAccountObj.refresh_from_db()
-    assert orgAccountObj.num_onn == 0
+    
     assert OwnerPSCmd.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 1
     assert orgAccountObj.desired_num_nodes == 0 # destroyed
@@ -367,7 +367,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TEST_US
 
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 2
-    assert orgAccountObj.num_onn == 0
+    
     assert OrgNumNode.objects.count() == 1
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
@@ -375,7 +375,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TEST_US
     process_num_node_table(orgAccountObj,False)
 
     orgAccountObj.refresh_from_db()
-    assert orgAccountObj.num_onn == 1
+    
     assert OwnerPSCmd.objects.count() == 0 
     assert orgAccountObj.num_ps_cmd == 1 # 
     assert orgAccountObj.desired_num_nodes == new_desire_num_nodes
@@ -549,7 +549,7 @@ def setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPT
                                     desired_num_nodes= MIN_NODE_CAP + 2, # to force the Update
                                     expiration=datetime.now(timezone.utc)-timedelta(minutes=1))# Expired and will be deleted
         assert OrgNumNode.objects.count() == 1
-    assert orgAccountObj.num_onn == 0
+    
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
 
@@ -585,11 +585,8 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
             logger.info(f"psCmdResultObj.ps_cmd_output:{psCmdResultObj.ps_cmd_output}")
             logger.info(f"psCmdResultObj.ps_cmd_summary_label:{psCmdResultObj.ps_cmd_summary_label}")
             logger.info(f"psCmdResultObj.expiration:{psCmdResultObj.expiration}")
-    logger.info(f"orgAccountObj.num_onn:{orgAccountObj.num_onn} PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-    if PsCmdResult.objects.count() == 1:
-        assert orgAccountObj.num_onn == 1 
-    else:
-        assert orgAccountObj.num_onn == 0
+    logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+     
     if called_process_Update_cmd:
         assert orgAccountObj.num_ps_cmd == 1  
     else:

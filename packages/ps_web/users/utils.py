@@ -251,13 +251,12 @@ def init_redis_queues():
                 orgAccountObj.num_ps_cmd = 0
                 orgAccountObj.num_ps_cmd_successful = 0
                 orgAccountObj.num_owner_ps_cmd = 0
-                orgAccountObj.num_onn = 0
-                orgAccountObj.save(update_fields=['loop_count','num_ps_cmd','num_ps_cmd_successful','num_owner_ps_cmd','num_onn'])
+                orgAccountObj.save(update_fields=['loop_count','num_ps_cmd','num_ps_cmd_successful','num_owner_ps_cmd'])
                 loop_count = orgAccountObj.loop_count
                 clusterObj = Cluster.objects.get(org=orgAccountObj)
                 clusterObj.provision_env_ready = False # this forces a SetUp 
                 clusterObj.save(update_fields=['provision_env_ready'])
-                LOG.info(f"Setting provision_env_ready to False to force initialization for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd} num_onn:{orgAccountObj.num_onn}")
+                LOG.info(f"Setting provision_env_ready to False to force initialization for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd}")
                 enqueue_process_state_change(orgAccountObj.name)
         except Exception as ex:
             LOG.exception(f"Caught an exception creating queues for {orgAccountObj.name}: {str(ex)}")
