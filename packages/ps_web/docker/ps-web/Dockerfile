@@ -9,10 +9,11 @@ ENV PYTHONDONTWRITEBYTECODE 1
 
 # upgrade PIP as root user
 RUN pip install --upgrade pip
-# Install postgres client
-RUN apt-get update && apt-get install -y  postgresql-client sudo
-RUN pip install py-spy
-RUN echo "reg_user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/reg_user
+RUN apt-get update && apt-get install -y  postgresql-client
+# Install these temporarily for testing only
+# RUN sudo
+# RUN pip install py-spy
+# RUN echo "reg_user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/reg_user
 RUN adduser reg_user
 USER reg_user
 ENV PATH="/home/reg_user/.local/bin:${PATH}"
