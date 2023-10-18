@@ -13,7 +13,7 @@ from unittest.mock import patch
 from google.protobuf.text_format import MessageToString
 from google.protobuf import json_format
 from ps_server import ps_server_pb2,upload_current_tf_files_to_s3,get_terraform_dir,download_s3_folder,delete_folder_from_s3,get_versions_for_org,sort_versions,SETUP_JSON_FILE,get_cluster_root_dir
-from test_utils import run_subprocess_command, bucket_exists, s3_folder_exist,process_rsp_generator,terraform_teardown 
+from test_utils import run_subprocess_command, bucket_exists, s3_folder_exist,verify_rsp_generator,terraform_teardown 
 
 # discover the src directory to import the file being tested
 parent_dir = pathlib.Path(__file__).parent.resolve()
@@ -100,7 +100,7 @@ def test_process_Update_cmd(s3, test_name, setup_logging, root_dir, get_S3_BUCKE
     s3_bucket = get_S3_BUCKET
     assert bucket_exists(s3_client, s3_bucket)
     
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.process_Update_cmd(UpdateReq,s3_client),test_name,'Update',logger)
+    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.process_Update_cmd(UpdateReq,s3_client),test_name,'Update',logger)
     logger.info(f'done with process_Update_cmd cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
     # normal exit shows this message
     assert 'unit-test-org Update Completed' in stdout
@@ -182,7 +182,7 @@ def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_nam
     assert bucket_exists(s3_client, s3_bucket)  
     assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{test_name}') 
     
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.setup_terraform_env(s3_client, test_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z") ),test_name,'SetUp',logger)
+    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.setup_terraform_env(s3_client, test_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z") ),test_name,'SetUp',logger)
     logger.info(f'done with setup_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
     # normal exit shows this message
     assert 'unit-test-org SetUp Completed' in stdout
@@ -206,7 +206,7 @@ def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_nam
     assert in_output
     assert os.path.isdir(get_cluster_root_dir(test_name))
 
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(control_instance.teardown_terraform_env(s3_client, test_name),test_name,'TearDown',logger)
+    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.teardown_terraform_env(s3_client, test_name),test_name,'TearDown',logger)
     logger.info(f'done with teardown_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
     assert not os.path.isdir(get_cluster_root_dir(test_name))
 

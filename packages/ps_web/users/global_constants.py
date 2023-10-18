@@ -16,7 +16,7 @@ DISPLAY_EXP_TM_MARGIN=14
 NULL_CCR = '{"":""}'
 
 MIN_HRS_TO_LIVE_TO_START = 24
-MIN_TTL = 15
-MAX_TTL = 720
+ONN_MIN_TTL = int(os.environ.get("ONN_ONN_MIN_TTL",15)) # 15 minuts
+ONN_MAX_TTL = int(os.environ.get("ONN_ONN_MAX_TTL",720)) # 12 hours
 COOLOFF_SECS=int(os.environ.get("COOLOFF_SECS",default=1))
 PROVISIONING_DISABLED = False

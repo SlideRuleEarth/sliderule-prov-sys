@@ -248,15 +248,15 @@ class DesiredNumNodesTTLView(generics.CreateAPIView):
             jrsp, http_status, active, user, token_expire_date = get_token_org_active_membership(request, org_name)
             if http_status == status.HTTP_200_OK:
                 if active:
-                    if ttl is not None and (int(ttl) < MIN_TTL or int(ttl) > MAX_TTL):
+                    if ttl is not None and (int(ttl) < ONN_MIN_TTL or int(ttl) > ONN_MAX_TTL):
                         http_status = status.HTTP_400_BAD_REQUEST
-                        max_ttl_hrs = MAX_TTL/60
-                        jrsp = {'status': "FAILED","error_msg":f"TTL mins must be greater than or equal to 15 and less than or equal to {MAX_TTL} (i.e. ({max_ttl_hrs} hrs)"}
+                        max_ttl_hrs = ONN_MAX_TTL/60
+                        jrsp = {'status': "FAILED","error_msg":f"TTL mins must be greater than or equal to 15 and less than or equal to {ONN_MAX_TTL} (i.e. ({max_ttl_hrs} hrs)"}
                     else:
                         orgAccountObj = OrgAccount.objects.get(name=org_name)
                         clusterObj = Cluster.objects.get(org=orgAccountObj)
                         if ttl is None:
-                            ttl_exp_tm = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=MIN_TTL)
+                            ttl_exp_tm = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ONN_MIN_TTL)
                         else:
                             ttl_exp_tm = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=int(ttl))
                         LOG.info(f"type(ttl_exp_tm):{type(ttl_exp_tm)} ttl_exp_tm:{ttl_exp_tm} ttl:{ttl}")

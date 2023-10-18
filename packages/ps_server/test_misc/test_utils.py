@@ -241,7 +241,7 @@ def delete_folder_from_s3(logger, s3_client, bucket, s3_folder):
         logger.exception(f"FAILED to delete {s3_folder} from to bucket {bucket}")
     return deleted
 
-def process_rsp_generator(rrsp_gen, name, ps_cmd,  logger):
+def verify_rsp_generator(rrsp_gen, name, ps_cmd,  logger):
     '''
     process the response generator
     '''
@@ -288,7 +288,7 @@ def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, n
     assert bucket_exists(s3_client, s3_bucket)
     rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,name=name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"))
 
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = process_rsp_generator(rrsp_gen,name,'SetUp',logger)
+    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(rrsp_gen,name,'SetUp',logger)
 
     logger.info('done with terraform_env test')
     logger.info(f'cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')

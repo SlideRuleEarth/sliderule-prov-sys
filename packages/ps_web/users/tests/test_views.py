@@ -125,7 +125,7 @@ def test_num_node_form_invalid_ttl_too_low(caplog,client,mock_email_backend,init
     
     # setup necessary form data
     form_data = {
-        'ttl_minutes': MIN_TTL-1,
+        'ttl_minutes': ONN_MIN_TTL-1,
         'desired_num_nodes': 1,
         'form_submit': 'add_onn',
     }
@@ -147,7 +147,7 @@ def test_num_node_form_invalid_ttl_too_high(caplog,client,mock_email_backend,ini
     
     # setup necessary form data
     form_data = {
-        'ttl_minutes': MAX_TTL+1,
+        'ttl_minutes': ONN_MAX_TTL+1,
         'desired_num_nodes': 1,
         'form_submit': 'add_onn',
     }
@@ -174,7 +174,7 @@ def test_reg_user_access_negative_test(caplog,client,mock_email_backend,initiali
     response = client.get(url)
     assert response.status_code == 401
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_org_account_cfg_success(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_email_backend,initialize_test_environ):
@@ -357,7 +357,7 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'provisioning_suspended': False,
     }
 
-    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
+    assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
 
     # assert the form was successful
     # refresh the OrgAccount object
@@ -386,7 +386,7 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'add_onn-desired_num_nodes': 3,
         'add_onn-ttl_minutes': 15,
     }
-    response = process_org_manage_cluster_onn(client=client,
+    response = verify_org_manage_cluster_onn(client=client,
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.id],
                                                         access_token=None,
@@ -416,7 +416,7 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
     }
-    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
+    assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
 
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert(orgAccountObj.is_public == initial_is_public) 
@@ -450,7 +450,7 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'add_onn-desired_num_nodes': 3, # NOTE: we did NOT change this here
         'add_onn-ttl_minutes': 15,
     }
-    response = process_org_manage_cluster_onn(client=client,
+    response = verify_org_manage_cluster_onn(client=client,
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.id],
                                                         access_token=None,
@@ -481,7 +481,7 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'add_onn-desired_num_nodes': 4, # This triggers a change!
         'add_onn-ttl_minutes': 15,
     }
-    response = process_org_manage_cluster_onn(client=client,
+    response = verify_org_manage_cluster_onn(client=client,
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.id],
                                                         access_token=None,
@@ -551,7 +551,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'provisioning_suspended': False,
         }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
+        assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
 
         # assert the form was successful
         # refresh the OrgAccount object
@@ -582,7 +582,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'add_onn-desired_num_nodes': 3,
             'add_onn-ttl_minutes': 15,
         }
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                 orgAccountObj=orgAccountObj,
                                                 url_args=[orgAccountObj.id],
                                                 access_token=None,
@@ -613,8 +613,8 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
         }
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
-        logger.info(f"finished process_org_configure")
+        assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
+        logger.info(f"finished verify_org_configure")
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
         assert(orgAccountObj.is_public == new_is_public) 
         assert(orgAccountObj.version == new_version) 
@@ -646,7 +646,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'add_onn-desired_num_nodes': 3, # NOTE: we did NOT change this here
             'add_onn-ttl_minutes': 15,
         }
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.id],
                                                             access_token=None,
@@ -678,7 +678,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'add_onn-desired_num_nodes': 4, # This triggers a change!
             'add_onn-ttl_minutes': 15,
         }
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.id],
                                                             access_token=None,
@@ -749,7 +749,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
     }
-    assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
+    assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
     # assert the form was successful
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -775,7 +775,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
         'add_onn-desired_num_nodes': -1, # Error
         'add_onn-ttl_minutes': 15,
     }
-    response = process_org_manage_cluster_onn(client=client,
+    response = verify_org_manage_cluster_onn(client=client,
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.id],
                                                         access_token=None,
@@ -797,7 +797,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
         'add_onn-ttl_minutes': 15,
     }
 
-    response = process_org_manage_cluster_onn(client=client,
+    response = verify_org_manage_cluster_onn(client=client,
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.id],
                                                         access_token=None,
@@ -814,7 +814,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
         'add_onn-ttl_minutes': 15,
     }
 
-    response = process_org_manage_cluster_onn(client=client,
+    response = verify_org_manage_cluster_onn(client=client,
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.id],
                                                         access_token=None,
@@ -864,7 +864,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'provisioning_suspended': False,
         }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
+        assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2,delay_state_processing=False,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
         # assert the form was successful
         # refresh the OrgAccount object
         orgAccountObj.refresh_from_db()
@@ -894,7 +894,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'add_onn-ttl_minutes': 15,
         }
 
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.id],
                                                             access_token=None,
@@ -914,7 +914,7 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'add_onn-ttl_minutes': 15,
         }
 
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.id],
                                                             access_token=None,
@@ -992,7 +992,7 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
             'provisioning_suspended': False,
         }
 
-        assert process_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
+        assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
         # assert the form was successful
         # refresh the OrgAccount object
         orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -1024,7 +1024,7 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
             'add_onn-ttl_minutes': 15,
         }
 
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.id],
                                                             access_token=None,
@@ -1049,7 +1049,7 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
             'add_onn-ttl_minutes': 15,
         }
 
-        response = process_org_manage_cluster_onn(client=client,
+        response = verify_org_manage_cluster_onn(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.id],
                                                             access_token=None,

@@ -10,9 +10,12 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse,resolve
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,initialize_test_org,call_process_state_change
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,initialize_test_org,call_process_state_change,verify_org_configure,verify_schedule_process_state_change
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER,OWNER_USER,OWNER_PASSWORD,OWNER_EMAIL,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER
 import subprocess
+from users.global_constants import ONN_MIN_TTL, ONN_MAX_TTL
+
+import time_machine
 
 from users.models import Membership,Cluster,OrgAccount,OrgNumNode,OwnerPSCmd,PsCmdResult
 from users.tasks import init_new_org_memberships
@@ -393,7 +396,7 @@ def test_disable_provisioning_failure_WRONG_password(caplog,client,mock_email_ba
         logger.info(f"response:{response}")
     assert response.status_code == 400 # wrong mfa code 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
@@ -420,26 +423,45 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     orgAccountObj.num_owner_ps_cmd=0
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
+    orgAccountObj.desired_num_nodes=0
+    orgAccountObj.min_node_cap=0
+    orgAccountObj.max_node_cap=10
     orgAccountObj.save()
+    assert orgAccountObj.min_node_cap == 0
+    assert orgAccountObj.max_node_cap == 10
+    assert orgAccountObj.desired_num_nodes == 0
+    assert orgAccountObj.allow_deploy_by_token == True
+    assert orgAccountObj.destroy_when_no_nodes == True
+    assert orgAccountObj.provisioning_suspended == False
+
     start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
 
-    
-    url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,15])    
+    ttl = 15
+    min_tm = (datetime.now(timezone.utc) + timedelta(minutes=ttl)).replace(microsecond=0)
+    url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,ttl]) # 3 nodes for 15 minutes
+    max_tm = (datetime.now(timezone.utc) + timedelta(minutes=ttl)).replace(microsecond=0)
     response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)
     assert(json_data['status']=='QUEUED')   
     assert(json_data['msg']!='')   
     assert(json_data['error_msg']=='') 
-    logger.info(f"msg:{json_data['msg']}")  
+    logger.info(f"msg:{json_data['msg']}") 
      
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
+
+    assert orgAccountObj.desired_num_nodes == 3
+    # stubbed out ps_server simulates successful update to 3....
+    assert clusterObj.cur_nodes == 3
+
     current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count    
     call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
 
+    assert(current_cnt-start_cnt > 0)
+    assert (mock_schedule_process_state_change.call_count == current_cnt-start_cnt)
     assert(clusterObj.provision_env_ready)
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
@@ -453,12 +475,22 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1)
     assert(orgAccountObj.num_ps_cmd_successful==1) 
-    
 
-#@pytest.mark.dev
+    verify_schedule_process_state_change(mock_schedule_process_state_change=mock_schedule_process_state_change,
+                                         min_tm=min_tm,
+                                         max_tm=max_tm, 
+                                         orgAccountObj=orgAccountObj,
+                                         clusterObj=clusterObj,
+                                         expected_change_ps_cmd=1,
+                                         expected_desired_num_nodes=0,
+                                         expected_change_ps_cmd_when_expired=1,
+                                         expected_desired_num_nodes_when_expired=0) # destroy with min=0
+
+
+##@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
+def test_org_ONN_expires(caplog, client,initialize_test_environ):
     '''
         This procedure will test owner grabs token and can queue a ONN
     '''
@@ -466,7 +498,30 @@ def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqu
     
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+
+    assert orgAccountObj.num_setup_cmd == 0
+    assert orgAccountObj.num_setup_cmd_successful == 0
+    assert orgAccountObj.num_ps_cmd_successful == 0
+    assert orgAccountObj.num_ps_cmd == 0
+    
+    logger.info(f"orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+    assert orgAccountObj.desired_num_nodes == 0
+    # setup necessary form data
+    form_data = {
+        'is_public': orgAccountObj.version, # don't change
+        'version': orgAccountObj.is_public, # don't change
+        'min_node_cap': 0,
+        'max_node_cap': 3,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+    }
+    time_now = datetime.now(timezone.utc)
+    dt = time_now - timedelta(seconds=1)
+    assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False,new_time=dt) # SetUp - Update (min nodes is 1)
+
     url = reverse('org-token-obtain-pair')
 
     response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
@@ -483,8 +538,7 @@ def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqu
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
     orgAccountObj.save()
-
-    url = reverse('put-org-num-nodes',args=[orgAccountObj.name,3])
+    url = reverse('put-org-num-nodes-ttl',args=[orgAccountObj.name,3,ONN_MIN_TTL])
     
     response = client.put(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 
@@ -495,13 +549,28 @@ def test_org_ONN(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqu
     logger.info(f"msg:{json_data['msg']}")  
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)    
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     assert(clusterObj.provision_env_ready)
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
     assert(orgAccountObj.num_ps_cmd_successful==1) 
-    
-
+    assert PsCmdResult.objects.count() == 1 # Update 
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+    time_now = datetime.now(timezone.utc)
+    # now change past the ttl triggers a call to process_state_change
+    # so that the table is processed again and the exipred ONN is removed
+    # and a destroy cmd is sent because it is configured to do so
+    dt = time_now - timedelta(minutes=ONN_MIN_TTL+1) 
+    with time_machine.travel(dt,tick=True):
+        fake_now = datetime.now(timezone.utc)
+        logger.info(f"fake_now:{fake_now} dt:{dt}")
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+        assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
+        assert orgAccountObj.num_ps_cmd == 2
+        assert psCmdResultObjs.count() == 2

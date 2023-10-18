@@ -7,7 +7,7 @@ from datetime import datetime,timedelta
 from datetime import timezone
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from .global_constants import MIN_TTL, MAX_TTL
+from .global_constants import ONN_MIN_TTL, ONN_MAX_TTL
 
 from allauth.account.forms import LoginForm
 from allauth.account.forms import SignupForm
@@ -93,10 +93,10 @@ class OrgNumNodeForm(forms.ModelForm):
 
     def clean_ttl_minutes(self):
         ttl_minutes = self.cleaned_data['ttl_minutes']
-        if ttl_minutes < MIN_TTL:
-            ttl_minutes = MIN_TTL
-        if ttl_minutes > MAX_TTL:
-            ttl_minutes = MAX_TTL
+        if ttl_minutes < ONN_MIN_TTL:
+            ttl_minutes = ONN_MIN_TTL
+        if ttl_minutes > ONN_MAX_TTL:
+            ttl_minutes = ONN_MAX_TTL
         return ttl_minutes
 
 
