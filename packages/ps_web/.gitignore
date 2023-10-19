@@ -143,4 +143,5 @@ staged
 *.key
 oidc.*
 temp_redis_data/
+volume/
 

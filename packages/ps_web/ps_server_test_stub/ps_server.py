@@ -70,6 +70,14 @@ from google.protobuf.json_format import Parse
 from google.protobuf.json_format import MessageToJson
 from google.protobuf.text_format import MessageToString
 
+# # we run this TEST STUB in a docker container and create a parallel directory structure 
+# # for the real ps_server code to reside in for 
+# # importing of certain functions. See makefile target:ps-server-test-stub-stage
+# current_directory = os.path.dirname(os.path.abspath(__file__))
+# target_directory = os.path.join(current_directory, '..', '..', 'real_ps_server')
+# sys.path.append(os.path.abspath(target_directory))
+# from real_ps_server.ps_server import run_server,main,read_SetUpCfg, write_SetUpCfg, update_SetUpCfg
+
 domain_env = ""
 cluster_repo = ""
 

@@ -302,7 +302,7 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
                                                             expected_status='QUEUED')
 
-##@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, verified_TEST_USER,mock_email_backend,initialize_test_environ):
@@ -451,7 +451,7 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
         #  4,16
         #  2,17 
         verify_onn_expires(orgAccountObj = orgAccountObj,
-                            new_time=(fake_time_now+timedelta(minutes=15,seconds=1)), # force expire
+                            new_time=(fake_time_now.replace(microsecond=0) +timedelta(minutes=15,seconds=1)), # force expire
                             expected_change_ps_cmd=0, # 4 is highest and was already added to table and was highest and processed
                             expected_change_OrgNumNode=-1, # removes the expired one
                             expected_desired_num_nodes=4,

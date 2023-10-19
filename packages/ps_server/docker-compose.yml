@@ -10,9 +10,11 @@ services:
       - DEBUG=${DEBUG-}
       - DOCKER_HOST=unix:///var/run/docker.sock
       - S3_TEST_FILES=/tmp/prov-sys/test_misc/cluster_tf_versions
+      - PS_TEST_DIR=${PS_TEST_DIR:?PS_TEST_DIR is not defined?!}
+
     volumes:
       - "./test_misc/cluster_tf_versions:/tmp/prov-sys/test_misc/cluster_tf_versions"
-      - "./init_aws_localstack.py:/etc/localstack/init/ready.d/init-aws.sh"  # ready hook
+      - "${PS_TEST_DIR}/init_aws_localstack.py:/etc/localstack/init/ready.d/init-aws.sh"  # ready hook
       - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
   ps-server:

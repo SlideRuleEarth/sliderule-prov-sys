@@ -4,10 +4,15 @@ PS_WEB_DOCKER_TAG ?= dev
 PS_NGINX_DOCKER_TAG ?= dev
 NGINX_CONF ?= dev
 DOCKER_EXEC_OPTS ?=
-PS_WEB_DIR = $(ROOT)
+PS_WEB_SOURCE_DIR = $(ROOT)
+PS_SERVER_SOURCE_DIR = $(ROOT)/../ps_server
+PS_TEST_SOURCE_DIR = $(ROOT)/../test/prov-sys
 ENVVER = $(shell git --git-dir ../../.git --work-tree . describe --abbrev --dirty --always --tags --long)
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 SITE_ID = 1
+PS_SERVER_DIR:=$(abspath $(PS_SERVER_SOURCE_DIR))
+PS_WEB_DIR:=$(abspath $(PS_WEB_SOURCE_DIR))
+PS_TEST_DIR:=$(abspath $(PS_TEST_SOURCE_DIR))
 
 all: docker ps-nginx-build-docker
 
@@ -65,8 +70,12 @@ ps-server-test-stub-stage : ps-server-test-stub-clean-stage # stage the files fo
 	mkdir -p docker/ps-server-test-stub/stage
 	echo PS_SERVER_DOCKER_TAG=django-unit-tests >> docker/ps-server-test-stub/stage/.ps_server_versions
 	echo PS_SERVER_GIT_VERSION=$(ENVVER) >> docker/ps-server-test-stub/stage/.ps_server_versions
+#	mkdir -p docker/ps-server-test-stub/stage/real_ps_server
+#	touch docker/ps-server-test-stub/stage/real_ps_server/__init__.py
+#	cp ../../packages/ps_server/ps_server.py docker/ps-server-test-stub/stage/real_ps_server/ps_server.py
 	cp ../../packages/ps_server/docker/ps-server/Dockerfile docker/ps-server-test-stub/stage/Dockerfile
 	awk '/COPY .\/stage\/ps_server.py \/ps_server\// { print; print "COPY ./stage/users/ /ps_server/users/"; next }1' docker/ps-server-test-stub/stage/Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp docker/ps-server-test-stub/Dockerfile
+#	awk '/COPY .\/stage\/ps_server.py \/ps_server\// { print; print "COPY ./stage/users/ /ps_server/users/"; print "COPY ./stage/real_ps_server/ /ps_server/real_ps_server/"; next }1' docker/ps-server-test-stub/stage/Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp docker/ps-server-test-stub/Dockerfile
 	cp -R ../../packages/ps_server/test_misc/ docker/ps-server-test-stub/stage/test_misc/
 	cp docker/ps-server-test-stub/docker-entrypoint.sh docker/ps-server-test-stub/stage/
 	cp docker/ps-server-test-stub/requirements.txt docker/ps-server-test-stub/stage/
@@ -148,6 +157,8 @@ bld-and-run-unit-tests: down # build and run the unit tests against a running de
 
 bld-and-run-unit-test-dev: down # build and run the unit tests against a running dev system then exit NOTE: for github actions the DOCKER_EXEC_OPTS is a null string
 	make ps-unit-test-build-docker && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker logs ps-web && \
@@ -168,4 +179,4 @@ help: ## That's me!
 	@printf "\033[37m%-30s\033[0m %s\n" "#-----------------------------------------------------------------------------------------"
 	@printf "\033[37m%-30s\033[0m %s\n" "#----target--------------------description------------------------------------------------"
 	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
-	@echo ENVVER:$(ENVVER)
+	@echo ENVVER:$(ENVVER)	

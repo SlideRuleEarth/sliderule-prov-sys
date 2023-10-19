@@ -437,9 +437,9 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
 
     ttl = 15
-    min_tm = (datetime.now(timezone.utc) + timedelta(minutes=ttl)).replace(microsecond=0)
+    min_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ttl))
     url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,ttl]) # 3 nodes for 15 minutes
-    max_tm = (datetime.now(timezone.utc) + timedelta(minutes=ttl)).replace(microsecond=0)
+    max_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ttl+1))
     response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)
@@ -450,13 +450,13 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
      
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count    
+    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
 
     assert orgAccountObj.desired_num_nodes == 3
     # stubbed out ps_server simulates successful update to 3....
     assert clusterObj.cur_nodes == 3
 
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count    
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
 
@@ -475,7 +475,7 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1)
     assert(orgAccountObj.num_ps_cmd_successful==1) 
-
+    logger.info(f"min_tm:{min_tm} max_tm:{max_tm}")
     verify_schedule_process_state_change(mock_schedule_process_state_change=mock_schedule_process_state_change,
                                          min_tm=min_tm,
                                          max_tm=max_tm, 

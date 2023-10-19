@@ -4,6 +4,9 @@ PS_SERVER_DOCKER_TAG ?= dev
 PS_VERSION ?= dev
 ENVVER = $(shell git --git-dir ../../.git --work-tree . describe --abbrev --dirty --always --tags --long)
 DOCKER_EXEC_OPTS ?=
+PS_TEST_SOURCE_DIR = $(ROOT)/../test/prov-sys
+PS_TEST_DIR:=$(abspath $(PS_TEST_SOURCE_DIR))
+
 all: docker
 
 ps-server-clean-stage : # clean docker stage directory
@@ -98,3 +101,4 @@ help: ## That's me!
 	@printf "\033[37m%-30s\033[0m %s\n" "#----target--------------------description------------------------------------------------"
 	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo ENVVER:$(ENVVER)
+	@echo PS_TEST_DIR:$(PS_TEST_DIR)

@@ -4,8 +4,8 @@ asgiref==3.7.2
 attrs==23.1.0
 Babel==2.13.0
 billiard==4.1.0
-boto3==1.28.64
-botocore==1.31.64
+boto3==1.28.66
+botocore==1.31.66
 celery==5.3.4
 certifi==2023.7.22
 cffi==1.16.0
@@ -89,7 +89,7 @@ time-machine==2.13.0
 types-PyYAML==6.0.12.12
 tzdata==2023.3
 uritemplate==4.1.1
-urllib3==2.0.6
+urllib3==2.0.7
 vine==5.0.0
 wcwidth==0.2.8
 Werkzeug==3.0.0

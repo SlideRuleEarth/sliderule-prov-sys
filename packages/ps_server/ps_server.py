@@ -1745,8 +1745,11 @@ def run_server(host, port, use_tls):
         port = server.add_insecure_port(hoststring)
 
     server.start()
-    yield server, host, port, use_tls
-
+    try:
+        yield server, host, port, use_tls
+    finally:
+        server.stop(0)
+        
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
@@ -1800,7 +1803,7 @@ def main():
                 emsg = f"FAILED! error in download of s3 bucket:{S3_BUCKET} folder:{s3_folder} into local_dir:{local_dir}"
                 LOG.error(emsg)
 
-            idempotent_migration()
+            idempotent_migration() # this can be removed in later releases
         except Exception as e:
             LOG.exception(f"download_dir caught exception:{repr(e)}")
         #LOG.info("calling run_server")

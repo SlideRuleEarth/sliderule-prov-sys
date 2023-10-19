@@ -903,9 +903,7 @@ def verify_schedule_process_state_change(mock_schedule_process_state_change,
                                          orgAccountObj,
                                          clusterObj,
                                          expected_change_ps_cmd,
-                                         expected_desired_num_nodes,
-                                         expected_change_ps_cmd_when_expired,
-                                         expected_desired_num_nodes_when_expired):
+                                         expected_desired_num_nodes):
     # Set up the scheduler
     scheduler = get_scheduler()
 
@@ -918,7 +916,7 @@ def verify_schedule_process_state_change(mock_schedule_process_state_change,
     for call_args, call_kwargs in call_args_list:
         logger.info(f"Positional Arguments:{call_args} len:{len(call_args)}")
         logger.info(f"Keyword Arguments:{call_kwargs} len:{len(call_kwargs)}")
-        logger.info(f"call_args[0]:{call_args[0]} >= min_tm:{min_tm} and call_args[0]:{call_args[0]} <= min_tm:{max_tm}")
+        logger.info(f"call_args[0]:{call_args[0]} >= min_tm:{min_tm} and call_args[0]:{call_args[0]} <= max_tm:{max_tm}")
         assert call_args[0] >= min_tm
         assert call_args[0] <= max_tm
         call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=0,current_cnt=1) # force a single call
@@ -980,7 +978,13 @@ def verify_onn_expires(orgAccountObj,
                 call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,current_cnt=current_cnt)
             # Retrieve the list of calls and their arguments
         if mock_schedule_process_state_change:
-            assert verify_schedule_process_state_change()
+            assert verify_schedule_process_state_change(mock_schedule_process_state_change=mock_schedule_process_state_change,
+                                                        min_tm=new_time-timedelta(seconds=1),
+                                                        max_tm=new_time,
+                                                        orgAccountObj=orgAccountObj,
+                                                        clusterObj=clusterObj,
+                                                        expected_change_ps_cmd=expected_change_ps_cmd,
+                                                        expected_desired_num_nodes=expected_desired_num_nodes)
         assert(orgAccountObj.num_owner_ps_cmd==s_orgAccountObj_num_owner_ps_cmd)
         assert(OwnerPSCmd.objects.count()==s_OwnerPSCmd_cnt)
 
