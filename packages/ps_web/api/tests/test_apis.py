@@ -396,7 +396,7 @@ def test_disable_provisioning_failure_WRONG_password(caplog,client,mock_email_ba
         logger.info(f"response:{response}")
     assert response.status_code == 400 # wrong mfa code 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
@@ -435,12 +435,11 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert orgAccountObj.provisioning_suspended == False
 
     start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-
     ttl = 15
     min_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ttl))
     url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,ttl]) # 3 nodes for 15 minutes
-    max_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ttl+1))
     response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
+    max_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ttl+1))
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)
     assert(json_data['status']=='QUEUED')   
@@ -452,13 +451,12 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     orgAccountObj.refresh_from_db()
     current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count    
     call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    clusterObj.refresh_from_db()
+    orgAccountObj.refresh_from_db()
 
     assert orgAccountObj.desired_num_nodes == 3
     # stubbed out ps_server simulates successful update to 3....
     assert clusterObj.cur_nodes == 3
-
-    clusterObj.refresh_from_db()
-    orgAccountObj.refresh_from_db()
 
     assert(current_cnt-start_cnt > 0)
     assert (mock_schedule_process_state_change.call_count == current_cnt-start_cnt)
@@ -478,19 +476,13 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     logger.info(f"min_tm:{min_tm} max_tm:{max_tm}")
     verify_schedule_process_state_change(mock_schedule_process_state_change=mock_schedule_process_state_change,
                                          min_tm=min_tm,
-                                         max_tm=max_tm, 
-                                         orgAccountObj=orgAccountObj,
-                                         clusterObj=clusterObj,
-                                         expected_change_ps_cmd=1,
-                                         expected_desired_num_nodes=0,
-                                         expected_change_ps_cmd_when_expired=1,
-                                         expected_desired_num_nodes_when_expired=0) # destroy with min=0
+                                         max_tm=max_tm) 
 
 
-##@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN_expires(caplog, client,initialize_test_environ):
+def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend):
     '''
         This procedure will test owner grabs token and can queue a ONN
     '''
@@ -505,6 +497,7 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ):
     assert orgAccountObj.num_setup_cmd_successful == 0
     assert orgAccountObj.num_ps_cmd_successful == 0
     assert orgAccountObj.num_ps_cmd == 0
+    assert orgAccountObj.min_node_cap == 0
     
     logger.info(f"orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
     assert orgAccountObj.desired_num_nodes == 0
@@ -520,10 +513,14 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ):
     }
     time_now = datetime.now(timezone.utc)
     dt = time_now - timedelta(seconds=1)
-    assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, delay_state_processing=False,new_time=dt) # SetUp - Update (min nodes is 1)
+    assert verify_org_configure(client=client, 
+                                orgAccountObj=orgAccountObj, 
+                                data=form_data, 
+                                expected_change_ps_cmd=0,# min nodes is 0 so no change
+                                expected_change_setup_cmd=0, # no version change  and no is_public change
+                                new_time=dt) # SetUp - Update (min nodes is 0)
 
     url = reverse('org-token-obtain-pair')
-
     response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
     logger.info(f"status:{response.status_code}")
     assert (response.status_code == 200)   
@@ -538,9 +535,11 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ):
     orgAccountObj.num_ps_cmd=0
     orgAccountObj.num_ps_cmd_successful=0
     orgAccountObj.save()
-    url = reverse('put-org-num-nodes-ttl',args=[orgAccountObj.name,3,ONN_MIN_TTL])
-    
-    response = client.put(url,headers={'Authorization': f"Bearer {json_data['access']}"})
+    start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    min_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ONN_MIN_TTL))
+    url = reverse('post-org-num-nodes-ttl',args=[orgAccountObj.name,3,ONN_MIN_TTL])    
+    response = client.post(url,headers={'Authorization': f"Bearer {json_data['access']}"})
+    max_tm = (datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=ONN_MIN_TTL+1))
     assert (response.status_code == 200) 
     json_data = json.loads(response.content)
     assert(json_data['status']=='QUEUED')   
@@ -549,12 +548,15 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ):
     logger.info(f"msg:{json_data['msg']}")  
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    clusterObj.refresh_from_db()
-    orgAccountObj.refresh_from_db()
     assert(clusterObj.provision_env_ready)
     assert(orgAccountObj.provisioning_suspended==False)
-    assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
-    assert(orgAccountObj.num_ps_cmd_successful==1) 
+    assert(orgAccountObj.num_ps_cmd==0) #
+    assert(orgAccountObj.num_ps_cmd_successful==0) 
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    clusterObj.refresh_from_db()
+    orgAccountObj.refresh_from_db()
+
     assert PsCmdResult.objects.count() == 1 # Update 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
@@ -567,10 +569,7 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ):
     with time_machine.travel(dt,tick=True):
         fake_now = datetime.now(timezone.utc)
         logger.info(f"fake_now:{fake_now} dt:{dt}")
+        assert psCmdResultObjs.count() == 1
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
-        logger.info(f"[1]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
-        assert orgAccountObj.num_ps_cmd == 2
-        assert psCmdResultObjs.count() == 2

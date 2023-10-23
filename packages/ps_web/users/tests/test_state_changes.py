@@ -13,7 +13,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
-from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_onn_expires,verify_owner_ps_Destroy_cmd,verify_owner_ps_Refresh_cmd,verify_owner_ps_Update_cmd,verify_post_org_num_nodes_ttl,verify_put_org_num_nodes
+from users.tests.utilities_for_unit_tests import get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_owner_ps_Destroy_cmd,verify_owner_ps_Refresh_cmd,verify_post_org_num_nodes_ttl,verify_put_org_num_nodes
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
 from users.forms import OrgAccountForm
 from users.tasks import process_state_change,init_new_org_memberships,init_new_org_memberships,process_prov_sys_tbls,get_org_queue_name,get_or_create_OrgNumNodes,enqueue_process_state_change
@@ -237,7 +237,6 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=access_token,
-                                                            delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,                                                            expected_change_ps_cmd=1,
                                                             expected_status='QUEUED')
@@ -246,7 +245,6 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=access_token,
-                                                            delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0, 
@@ -256,7 +254,6 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.name,3],
                                                         access_token=access_token,
-                                                        delay_state_processing=False,
                                                         mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                         mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                         expected_change_ps_cmd=0, # because no iters
@@ -266,7 +263,6 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,3,16],
                                                             access_token=access_token,
-                                                            delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0, # because highest num nodes is still 3
@@ -276,7 +272,6 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,2,17],
                                                             access_token=access_token,
-                                                            delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0,
@@ -286,7 +281,6 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,1,19],
                                                             access_token=access_token,
-                                                            delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=0,
@@ -296,20 +290,139 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             orgAccountObj=orgAccountObj,
                                                             url_args=[orgAccountObj.name,4,15],
                                                             access_token=access_token,
-                                                            delay_state_processing=False,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                                                             expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
                                                             expected_status='QUEUED')
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, verified_TEST_USER,mock_email_backend,initialize_test_environ):
+def test_mutiple_tll_before_process_state(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, verified_TEST_USER,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test the state change function when 
         multiple calls to enqueue_process_state_change are made 
         before a process_state_change call happens
+    '''
+    caplog.set_level(logging.DEBUG)
+    grpc_timeout = int(os.environ.get("GRPC_TIMEOUT_SECS",1800))
+    timeshift = grpc_timeout/2.0
+    logger.info(f"Shifting time back by {timeshift} seconds (with a grpc_timeout:{grpc_timeout})")
+    fake_time_now = datetime.now(timezone.utc) - timedelta(seconds=timeshift)
+    with time_machine.travel(fake_time_now,tick=False):
+    
+        orgAccountObj = get_test_org()
+        owner_access_token = login_owner_user(orgAccountObj=orgAccountObj,client=client)
+
+        clusterObj = Cluster.objects.get(org=orgAccountObj)
+        
+        assert(OwnerPSCmd.objects.count()==0)
+        assert(OrgNumNode.objects.count()==0)
+        assert(orgAccountObj.num_owner_ps_cmd==0)
+        assert(orgAccountObj.num_ps_cmd==0)
+        assert(orgAccountObj.num_ps_cmd_successful==0)
+        
+        current_fake_tm = datetime.now(timezone.utc)  
+
+        url_args=[orgAccountObj.name,3,15]
+        new_time=current_fake_tm
+        access_token=owner_access_token
+        logger.info(f" url_args:{url_args} access_token:{access_token} ")
+        logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
+        # backwards compatibility
+        logger.info(f"url_args:{url_args}")
+        url = reverse('post-org-num-nodes-ttl',args=url_args)
+        logger.info(f"using url:{url}")
+        headers = {
+            'Authorization': f"Bearer {access_token}",
+            'Accept': 'application/json'  # Specify JSON response
+        }
+        t1 = datetime.now(timezone.utc) + timedelta(minutes=15)
+        response = client.post(url,headers=headers)
+        assert(response.status_code == 200) 
+        json_data = json.loads(response.content)
+        assert(json_data['msg']!='')   
+        assert(json_data['error_msg']=='')
+        assert json_data['status'] == 'QUEUED'
+
+        url_args=[orgAccountObj.name,4,16]
+        new_time=current_fake_tm
+        access_token=owner_access_token
+        logger.info(f" url_args:{url_args} access_token:{access_token} ")
+        logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
+        # backwards compatibility
+        logger.info(f"url_args:{url_args}")
+        url = reverse('post-org-num-nodes-ttl',args=url_args)
+        logger.info(f"using url:{url}")
+        headers = {
+            'Authorization': f"Bearer {access_token}",
+            'Accept': 'application/json'  # Specify JSON response
+        }
+        t2 = datetime.now(timezone.utc) + timedelta(minutes=16)
+        response = client.post(url,headers=headers)
+        assert(response.status_code == 200) 
+        json_data = json.loads(response.content)
+        assert(json_data['msg']!='')   
+        assert(json_data['error_msg']=='')
+        assert json_data['status'] == 'QUEUED'
+
+        url_args=[orgAccountObj.name,2,17]
+        new_time=current_fake_tm
+        access_token=owner_access_token
+        logger.info(f" url_args:{url_args} access_token:{access_token} ")
+        logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
+        # backwards compatibility
+        logger.info(f"url_args:{url_args}")
+        url = reverse('post-org-num-nodes-ttl',args=url_args)
+        logger.info(f"using url:{url}")
+        headers = {
+            'Authorization': f"Bearer {access_token}",
+            'Accept': 'application/json'  # Specify JSON response
+        }
+        t3 = datetime.now(timezone.utc) + timedelta(minutes=17)
+        response = client.post(url,headers=headers)
+        assert(response.status_code == 200) 
+        json_data = json.loads(response.content)
+        assert(json_data['msg']!='')   
+        assert(json_data['error_msg']=='')
+        assert json_data['status'] == 'QUEUED'
+
+        call_args_list = mock_schedule_process_state_change.call_args_list
+        logger.info(f"len(call_args_list):{len(call_args_list)}")
+        logger.info(f"call_args_list[0][0]:{call_args_list[0][0][0]} ")
+        assert (t1.replace(microsecond=0).replace(microsecond=0) <= call_args_list[0][0][0])
+        assert (t1.replace(microsecond=0)+timedelta(seconds=1) >= call_args_list[0][0][0])
+        logger.info(f"call_args_list[1][0]:{call_args_list[1][0]} ")
+        assert (t2.replace(microsecond=0).replace(microsecond=0) <= call_args_list[1][0][0])
+        assert (t2.replace(microsecond=0)+timedelta(seconds=1) >= call_args_list[1][0][0])
+        logger.info(f"call_args_list[2][0]:{call_args_list[2][0]} ")
+        assert (t3.replace(microsecond=0).replace(microsecond=0) <= call_args_list[2][0][0])
+        assert (t3.replace(microsecond=0)+timedelta(seconds=1) >= call_args_list[2][0][0])
+
+        for call_args, call_kwargs in call_args_list:
+            logger.info(f"Positional Arguments:{call_args} len:{len(call_args)}")
+            logger.info(f"Keyword Arguments:{call_kwargs} len:{len(call_kwargs)}")
+            logger.info(f"call_args[0]:{call_args[0]} ")
+        clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
+
+        task_idle, loop_count = process_state_change(orgAccountObj.name)
+        assert(task_idle==False)
+        clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
+        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
+        
+        assert(OwnerPSCmd.objects.count()==0)
+        assert(OrgNumNode.objects.count()==3)
+        assert(orgAccountObj.num_owner_ps_cmd==0)
+        
+
+
+#@pytest.mark.dev
+@pytest.mark.django_db 
+@pytest.mark.ps_server_stubbed
+def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, verified_TEST_USER,mock_email_backend,initialize_test_environ):
+    '''
+        This procedure will test the state change function 
     '''
     caplog.set_level(logging.DEBUG)
     grpc_timeout = int(os.environ.get("GRPC_TIMEOUT_SECS",1800))
@@ -336,27 +449,21 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
                                                             new_time=current_fake_tm,
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=owner_access_token,
-                                                            expected_change_ps_cmd=0,
+                                                            expected_change_ps_cmd=1,
                                                             expected_status='QUEUED',
                                                             expected_change_OrgNumNode=1,
-                                                            delay_state_processing=True,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
         
-        
-        #
-        # This tests when multiple calls to api are processed between a process_state_change
-        #
         loop_count,response = verify_post_org_num_nodes_ttl(client=client,
                                                             orgAccountObj=orgAccountObj,
                                                             new_time=current_fake_tm,
                                                             url_args=[orgAccountObj.name,4,16],
                                                             access_token=owner_access_token,
-                                                            delay_state_processing=True,
                                                             expected_change_OrgNumNode=1,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                                                            expected_change_ps_cmd=0,
+                                                            expected_change_ps_cmd=1,
                                                             expected_status='QUEUED')
 
         loop_count,response = verify_post_org_num_nodes_ttl(client=client,
@@ -365,48 +472,33 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
                                                             url_args=[orgAccountObj.name,2,17],
                                                             access_token=owner_access_token,
                                                             expected_change_OrgNumNode=1,
-                                                            delay_state_processing=True,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                                                            expected_change_ps_cmd=0,
+                                                            expected_change_ps_cmd=0, # because highest num nodes is still 4
                                                             expected_status='QUEUED')
-
-        #
-        #
-        clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
-        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
-
-        task_idle, loop_count = process_state_change(orgAccountObj.name)
-        clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
-        orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
-        assert(loop_count==1)
         
         assert(OwnerPSCmd.objects.count()==0)
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==0)
         
-
-
         # verify setup occurred
         assert(clusterObj.provision_env_ready)
         assert(orgAccountObj.provisioning_suspended==False)
 
         # this on gets updated every time a ps cmd is processed
         # regardless of where it originated from (i.e. onn or owner_ps_cmd)
-        assert(orgAccountObj.num_ps_cmd==1) # update cmd
+        assert(orgAccountObj.num_ps_cmd==2) 
         assert(orgAccountObj.desired_num_nodes==4)
-        assert(orgAccountObj.num_ps_cmd_successful==1)
+        assert(orgAccountObj.num_ps_cmd_successful==2)
         task_idle, loop_count = process_state_change(orgAccountObj.name)
-        assert(loop_count==2)
-        
         
         # nothing else changes
         assert(OwnerPSCmd.objects.count()==0)
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==0)
         
-        assert(orgAccountObj.num_ps_cmd==1)
-        assert(orgAccountObj.num_ps_cmd_successful==1)
+        assert(orgAccountObj.num_ps_cmd==2)
+        assert(orgAccountObj.num_ps_cmd_successful==2)
         assert(orgAccountObj.desired_num_nodes==4)
         # web login
         assert(client.login(username=OWNER_USER,password=OWNER_PASSWORD))
@@ -414,7 +506,6 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
         verify_owner_ps_Refresh_cmd(client=client,
                                     orgAccountObj=orgAccountObj,
                                     new_time=datetime.now(timezone.utc),
-                                    delay_state_processing=True,
                                     mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                     mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
@@ -422,82 +513,18 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
         assert(clusterObj.provision_env_ready)
         assert(orgAccountObj.provisioning_suspended==False)
 
-        assert(OwnerPSCmd.objects.count()==1) 
-        assert(OrgNumNode.objects.count()==3)
-        assert(orgAccountObj.num_owner_ps_cmd==0) #not until process_state_change
-        
-        assert(orgAccountObj.num_ps_cmd==1)
-        assert(orgAccountObj.num_ps_cmd_successful==1)
-        assert(orgAccountObj.desired_num_nodes==4)
-        assert(loop_count==2)
 
         task_idle, loop_count = process_state_change(orgAccountObj.name)
-        assert(loop_count==3)
         clusterObj.refresh_from_db() # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(OwnerPSCmd.objects.count()==0) # processed and cleared
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==1)
         
-        assert(orgAccountObj.num_ps_cmd==2) # processed
-        assert(orgAccountObj.num_ps_cmd_successful==2)
+        assert(orgAccountObj.num_ps_cmd==3) # processed
+        assert(orgAccountObj.num_ps_cmd_successful==3)
         assert(orgAccountObj.desired_num_nodes==4)
-       
-        
 
-        # expire first one (3,15)
-        # table is:
-        #  3,15 <-- expire this one
-        #  4,16
-        #  2,17 
-        verify_onn_expires(orgAccountObj = orgAccountObj,
-                            new_time=(fake_time_now.replace(microsecond=0) +timedelta(minutes=15,seconds=1)), # force expire
-                            expected_change_ps_cmd=0, # 4 is highest and was already added to table and was highest and processed
-                            expected_change_OrgNumNode=-1, # removes the expired one
-                            expected_desired_num_nodes=4,
-                            delay_state_processing=False, # process the state change 
-                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
-                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                            mock_schedule_process_state_change=mock_schedule_process_state_change)
-
-        # simulate the deploy
-        clusterObj.is_deployed = True
-        clusterObj.save()
-
-        # expire next one (4,16)
-        # table is:
-        #  3,15 **expired already
-        #  4,16 <-- expire this one
-        #  2,17 
-        verify_onn_expires(orgAccountObj=orgAccountObj,
-                            new_time=(fake_time_now+timedelta(minutes=16,seconds=1)),
-                            expected_change_ps_cmd=1, # should do an update to get 2  
-                            expected_change_OrgNumNode=-1,
-                            expected_desired_num_nodes=2,
-                            delay_state_processing=False,
-                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
-                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                            mock_schedule_process_state_change=mock_schedule_process_state_change)
-
-        # these two set like this mean we call destroy when table is empty
-        assert(orgAccountObj.destroy_when_no_nodes)
-        assert(orgAccountObj.min_node_cap==0)
-        assert clusterObj.is_deployed
-        assert OrgNumNode.objects.count()==1
-        # expire next one (4,16)
-        # table is:
-        #  3,15 **expired already
-        #  4,16 **expired already
-        #  2,17 <-- expire this one
-        verify_onn_expires(orgAccountObj=orgAccountObj,
-                            new_time=(fake_time_now+timedelta(minutes=17,seconds=1)),
-                            expected_change_ps_cmd=1, # destroy 
-                            expected_change_OrgNumNode=-1,
-                            expected_desired_num_nodes=0,
-                            delay_state_processing=False,
-                            mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
-                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                            mock_schedule_process_state_change=mock_schedule_process_state_change)
 
 
 #@pytest.mark.dev

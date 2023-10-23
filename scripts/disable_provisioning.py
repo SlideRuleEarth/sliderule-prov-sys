@@ -12,9 +12,11 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def main(domain, mfa_code):
-
+    mfa_code = mfa_code.strip() # Remove leading and trailing spaces
+    mfa_code = mfa_code.lower() # Convert to lowercase
     if mfa_code == 'skip': # Check if mfa_code is blank
         logger.info("skipping disable_provisioning") # Log the message
+        print("50051") # Print the port to stdout
         return 0 # Exit with success code
 
     ps_username = None
