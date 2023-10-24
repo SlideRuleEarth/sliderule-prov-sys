@@ -121,7 +121,7 @@ variable "prov-sys-fargate-cpu" {
 
 variable "prov-sys-fargate-memory" {
   description = "Fargate task memory in MiB"
-  default     = 2048
+  default     = 4096
 }
 
 # containers
