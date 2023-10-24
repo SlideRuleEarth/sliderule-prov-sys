@@ -82,9 +82,9 @@ variable "django_csrf_trusted_origins"{
   default = "https://*.testsliderule.org https://*.slideruleearth.io"
 }
 
-variable "django_celery_url" {
-  description = "Django celery message broker url"
-  default = "redis://localhost:6379/0" 
+variable "redis_host" {
+  description = "redis host"
+  default = "localhost" 
 }
 
 # logs

@@ -127,8 +127,8 @@
                 "value": "${django_secret_key}"
             },
             {
-                "name": "CELERY_BROKER_URL",
-                "value": "${django_celery_url}"
+                "name": "REDIS_HOST",
+                "value": "${redis_host}"
             },
             {
                 "name": "PS_SERVER_HOST",
