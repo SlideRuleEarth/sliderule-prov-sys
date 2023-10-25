@@ -23,12 +23,13 @@
             "DOMAIN": "testsliderule.org",
             "ORG_NAMES": ["test_org_1","test_org_2","test_org_3"],
             "DNN_TTL_SET_TUPLES": [
-                [2, 20],
-                [1, 15]
+                [1, 20],
+                [2, 15]
             ],
             "CNN_DELAY_CHECK_TUPLES": [
-                [2, 0],
-                [1, 25]
+                [2, 0], 
+                [1, 15],
+                [0, 20]
             ],
             "TIMEOUT": 120,
             "POLL_TM": 5

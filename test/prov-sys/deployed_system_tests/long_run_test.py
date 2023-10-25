@@ -19,8 +19,7 @@ def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, timeout)
         'Authorization': f"Bearer {token}",
     }
     poll_tm = 5
-    poll_num = (timeout/poll_tm) + 1
-    logger.info(f"------ {org_name} Waiting for for {delay_tm} minutes before polling/checking for org_num_nodes to be set to {cnn} ------")
+    logger.info(f"------ {org_name} Waiting for {delay_tm} minutes before polling/checking for org_num_nodes to be set to {cnn} ------")
     delay_tm_secs = delay_tm * 60
     while delay_tm_secs > 0:
         time.sleep(poll_tm)
@@ -34,13 +33,12 @@ def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, timeout)
             logger.error(f"{org_name} Received {response.status_code} for GET: {get_url}")
             return False
         json_data = response.json()
-        logger.info(f"{org_name} Polling for current_nodes:{cnn} GET {get_url}---> rsp:{json_data} {delay_tm} seconds left")
+        logger.info(f"{org_name} {current_timeout} seconds left polling for current_nodes:{cnn} GET {get_url}---> rsp:{json_data} ")
         if json_data['current_nodes'] == cnn:
-            logger.info(f"------ {org_name} Successfully set org_num_nodes to {cnn} in {delay_tm} seconds ------")
+            logger.info(f"------ {org_name} Successfully set org_num_nodes to {cnn} after {delay_tm_secs} seconds before timeout of:{timeout}) ------")
             return True
         else:
             time.sleep(poll_tm) 
-            poll_num -= 1 
             current_timeout -= poll_tm
     logger.error(f"{org_name} Failed to set org_num_nodes to {cnn} in {timeout} seconds")     
     return False
