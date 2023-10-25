@@ -8,7 +8,6 @@ import os
 import netrc
 import json
 import argparse
-import django
 import requests
 import time
 import threading
