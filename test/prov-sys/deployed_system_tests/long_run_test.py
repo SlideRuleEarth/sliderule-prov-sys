@@ -9,14 +9,8 @@ import time
 import threading
 import logging
 
-# global constants
-DNN_TTL_SET_TUPLES = [(1,30),(2,20),(3,15)] # list of desired num node and time to live tuples
-CNN_DELAY_CHECK_TUPLES = [(3,0),(2,15),(1,20),(0,30)] # predicted transitions of cnn and times
-TIMEOUT = 120 # two minutes is MAX the time it should take to transition to a new num nodes
-POLL_TM = 5 # poll every 5 seconds for transition
 
-
-def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, TIMEOUT):
+def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, timeout):
     '''
     This routine will delay for delay_tm minutes and then poll for the org_num_nodes to be set to cnn
     '''
@@ -25,16 +19,16 @@ def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, TIMEOUT)
         'Authorization': f"Bearer {token}",
     }
     poll_tm = 5
-    poll_num = (TIMEOUT/poll_tm) + 1
+    poll_num = (timeout/poll_tm) + 1
     logger.info(f"------ {org_name} Waiting for for {delay_tm} minutes before polling/checking for org_num_nodes to be set to {cnn} ------")
     delay_tm_secs = delay_tm * 60
     while delay_tm_secs > 0:
         time.sleep(poll_tm)
         delay_tm_secs -= poll_tm
         logger.info(f"------ {org_name} {delay_tm_secs} seconds left before polling/checking for org_num_nodes to be set to {cnn} ------")
-    timeout = TIMEOUT
     get_url = host+f'api/org_num_nodes/{org_name}/'
-    while timeout > 0:
+    current_timeout = timeout
+    while current_timeout > 0:
         response = session.get(get_url, headers=headers)
         if response.status_code != 200:
             logger.error(f"{org_name} Received {response.status_code} for GET: {get_url}")
@@ -47,8 +41,8 @@ def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, TIMEOUT)
         else:
             time.sleep(poll_tm) 
             poll_num -= 1 
-            delay_tm -= poll_tm
-    logger.error(f"{org_name} Failed to set org_num_nodes to {cnn} in {TIMEOUT} seconds")     
+            current_timeout -= poll_tm
+    logger.error(f"{org_name} Failed to set org_num_nodes to {cnn} in {timeout} seconds")     
     return False
 
 def set_dnns(session, host, token, org_name, dnn, ttl):
@@ -87,12 +81,12 @@ def set_dnns_thread_target(session, host, token, org_name, dnn, ttl):
         logger.error(f"{org_name} -- Failed to make request for org_num_nodes to {dnn} for {ttl} seconds")
         sys.exit(1)
 
-def state_check_thread_target(session, host, token, org_name, cnn, delay_tm, poll_tm, TIMEOUT):
-    if not state_check(session=session, host=host, token=token, org_name=org_name, cnn=cnn, delay_tm=delay_tm, poll_tm=poll_tm, TIMEOUT=TIMEOUT ):
-        logger.error(f"{org_name} -- Failed to set org_num_nodes to {cnn} after {delay_tm} seconds for {TIMEOUT}")
+def state_check_thread_target(session, host, token, org_name, cnn, delay_tm, poll_tm, timeout):
+    if not state_check(session=session, host=host, token=token, org_name=org_name, cnn=cnn, delay_tm=delay_tm, poll_tm=poll_tm, timeout=timeout ):
+        logger.error(f"{org_name} -- Failed to set org_num_nodes to {cnn} after {delay_tm} seconds for {timeout}")
         sys.exit(1)
 
-def run_test_case(threads, session, ps_username, ps_password, host, org_names, dnn_ttl_set_tuples, cnn_delay_check_tuples, poll_tm, TIMEOUT):
+def run_test_case(threads, session, ps_username, ps_password, host, org_names, dnn_ttl_set_tuples, cnn_delay_check_tuples, poll_tm, timeout):
     for org_name in org_names:  # Loop over the org_names set identical dnn and ttl for each org_name
 
         ###################################################
@@ -110,7 +104,7 @@ def run_test_case(threads, session, ps_username, ps_password, host, org_names, d
             t.start()
             threads.append(t)
         for cnn, delay_tm in cnn_delay_check_tuples:
-            t = threading.Thread(target=state_check_thread_target, args=(session, host, token, org_name, cnn, delay_tm, poll_tm, TIMEOUT))
+            t = threading.Thread(target=state_check_thread_target, args=(session, host, token, org_name, cnn, delay_tm, poll_tm, timeout))
             t.start()
             threads.append(t)
 
@@ -158,11 +152,11 @@ def main(domain,org_names):
                             ps_username=ps_username,
                             ps_password=ps_password,
                             host=host,
-                            org_names=org_names, 
+                            org_names=ORG_NAMES, 
                             dnn_ttl_set_tuples=DNN_TTL_SET_TUPLES,
                             cnn_delay_check_tuples=CNN_DELAY_CHECK_TUPLES, 
                             poll_tm=POLL_TM, 
-                            TIMEOUT=TIMEOUT)
+                            timeout=TIMEOUT)
             for t in threads:
                 t.join()
             logger.info("Done!")
@@ -175,6 +169,17 @@ def main(domain,org_names):
         logger.error(f"Exception:{e}")
         logger.exception(e)
         sys.exit(1)
+
+def load_test_case_params(test_case_name):
+    with open("long_run_test_cfgs.json", "r") as f:
+        config = json.load(f)
+
+    for test_case in config["test_cases"]:
+        if test_case["name"] == test_case_name:
+            return test_case
+
+    raise ValueError(f"No test case found with the name {test_case_name}")
+
 
 if __name__ == "__main__":
 
@@ -202,7 +207,15 @@ if __name__ == "__main__":
     logger.addHandler(file_handler)
 
     parser = argparse.ArgumentParser(description='test processing of desired_org_num_nodes_ttl with various orgs and dnn/ttl values')
-    parser.add_argument('--domain', type=str,  help='domain name e.g. localhost or testsliderule.org ')
-    parser.add_argument('--org_names', type=str, nargs='+', default=['unit-test-org'], help='org names e.g. UofMDTest or unit-test-org. You can provide multiple names separated by space.')  
+    parser.add_argument('--test_case', type=str, required=True, help='Test case name as defined in long_run_test_cfgs.json')
     args = parser.parse_args()
-    sys.exit(main(args.domain, args.org_names)) 
+
+    # Load the test case parameters
+    test_case_params = load_test_case_params(args.test_case)
+    DNN_TTL_SET_TUPLES = test_case_params["DNN_TTL_SET_TUPLES"]
+    CNN_DELAY_CHECK_TUPLES = test_case_params["CNN_DELAY_CHECK_TUPLES"]
+    TIMEOUT = test_case_params["TIMEOUT"] # max time to wait for a transition to occur
+    POLL_TM = test_case_params["POLL_TM"] # polling time to check for transition in seconds
+    ORG_NAMES = test_case_params["ORG_NAMES"]  # Load org_names from the test case
+    DOMAIN = test_case_params["DOMAIN"]  # Load domain from the test case
+    sys.exit(main(DOMAIN,ORG_NAMES))
