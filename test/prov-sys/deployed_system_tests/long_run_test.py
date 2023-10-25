@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-import logging
-import sys
-import os
-import json
 import sys
 import os
 import netrc
@@ -11,10 +7,14 @@ import argparse
 import requests
 import time
 import threading
+import logging
 
-logger = logging.getLogger(__name__)
-format_str = '%(asctime)s - %(name)s - %(levelname)s - Line %(lineno)d - %(message)s'
-logging.basicConfig(level=logging.INFO, format=format_str)
+# global constants
+DNN_TTL_SET_TUPLES = [(1,30),(2,20),(3,15)] # list of desired num node and time to live tuples
+CNN_DELAY_CHECK_TUPLES = [(3,0),(2,15),(1,20),(0,30)] # predicted transitions of cnn and times
+TIMEOUT = 120 # two minutes is MAX the time it should take to transition to a new num nodes
+POLL_TM = 5 # poll every 5 seconds for transition
+
 
 def state_check(session, host, token, org_name, cnn, delay_tm, poll_tm, TIMEOUT):
     '''
@@ -64,8 +64,6 @@ def set_dnns(session, host, token, org_name, dnn, ttl):
         response = session.get(get_url, headers=headers)
         json_data = response.json()            
         logger.info(f"GET {get_url}---> rsp:{json_data}")
-        dnn = 1
-        ttl = 60
         ######################################
         post_url = host+f'api/desired_org_num_nodes_ttl/{org_name}/{dnn}/{ttl}/'
         logger.info(f"POST {post_url}")
@@ -117,6 +115,7 @@ def run_test_case(threads, session, ps_username, ps_password, host, org_names, d
             threads.append(t)
 
 def main(domain,org_names):
+
     try:
         ps_username = None
         ps_password = None
@@ -153,10 +152,6 @@ def main(domain,org_names):
 
             ###################################################
             threads = []
-            dnn_ttl_set_tuples = [(1,30),(2,20),(3,15)] # list of desired num node and time to live tuples
-            cnn_delay_check_tuples = [(3,0),(2,15),(1,20),(0,30)] # predicted transitions of cnn and times
-            TIMEOUT = 120 # two minutes is MAX the time it should take to transition to a new num nodes
-            poll_tm = 5 # poll every 5 seconds for transition
             # Join the threads to wait for their completion
             run_test_case(  threads=threads, 
                             session=session, 
@@ -164,9 +159,9 @@ def main(domain,org_names):
                             ps_password=ps_password,
                             host=host,
                             org_names=org_names, 
-                            dnn_ttl_set_tuples=dnn_ttl_set_tuples,
-                            cnn_delay_check_tuples=cnn_delay_check_tuples, 
-                            poll_tm=poll_tm, 
+                            dnn_ttl_set_tuples=DNN_TTL_SET_TUPLES,
+                            cnn_delay_check_tuples=CNN_DELAY_CHECK_TUPLES, 
+                            poll_tm=POLL_TM, 
                             TIMEOUT=TIMEOUT)
             for t in threads:
                 t.join()
@@ -182,7 +177,31 @@ def main(domain,org_names):
         sys.exit(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Disable the provisioning in preparation for deploying a new provisioning system version.')
+
+    # Step 1: Get the current script's filename without extension
+    log_filename = os.path.splitext(os.path.basename(__file__))[0] + ".log"
+
+    # Set up the logger 
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    # Create handlers
+    console_handler = logging.StreamHandler()
+    file_handler = logging.FileHandler(log_filename)  # Using the dynamic filename
+
+    # Specify a format
+    formatter = logging.Formatter(
+        "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d:%(funcName)s] [%(message)s]",
+        datefmt="%Y-%m-%d:%H:%M:%S",
+    )    
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+
+    # Add handlers to logger
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    parser = argparse.ArgumentParser(description='test processing of desired_org_num_nodes_ttl with various orgs and dnn/ttl values')
     parser.add_argument('--domain', type=str,  help='domain name e.g. localhost or testsliderule.org ')
     parser.add_argument('--org_names', type=str, nargs='+', default=['unit-test-org'], help='org names e.g. UofMDTest or unit-test-org. You can provide multiple names separated by space.')  
     args = parser.parse_args()
