@@ -299,7 +299,15 @@ def check_provision_env_ready(orgAccountObj):
                                 rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
                                 clusterObj.prov_env_version = rsp.setup_cfg.version
                                 clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
-                                if clusterObj.prov_env_version == '':
+                                if rsp.setup_cfg.version != '':
+                                    changed_version = (clusterObj.cur_version != clusterObj.prov_env_version)
+                                    changed_is_public = (clusterObj.is_public != clusterObj.prov_env_is_public )
+                                    LOG.info(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
+                                    if clusterObj.is_deployed and (changed_version or changed_is_public):
+                                        LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+                                        process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
+                                        enqueue_process_state_change(orgAccountObj.name)
+                                else:
                                     clusterObj.provision_env_ready = False
                                     orgAccountObj.provisioning_suspended = True
                                     orgAccountObj.save(update_fields=['provisioning_suspended'])
@@ -310,6 +318,7 @@ def check_provision_env_ready(orgAccountObj):
                                 orgAccountObj.num_setup_cmd_successful += 1
                                 orgAccountObj.save(update_fields=['num_ps_cmd_successful','num_setup_cmd_successful'])
                             LOG.info(f"{org_cmd_str} got rrsp done from ps_server!")
+
         except Exception as e:
             error_msg = f"ERROR: {org_cmd_str}  {orgAccountObj.version}:"
             LOG.exception(f"{error_msg} caught exception:") 
@@ -354,31 +363,31 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                 expire_time = None
                 onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
                 if onnTop is not None:
-                    if need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
+                    # if need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
+                    #     try:
+                    #         clusterObj = Cluster.objects.get(org=orgAccountObj)
+                    #         LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+                    #         process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
+                    #     except Exception as e:
+                    #         LOG.exception("ERROR processing Destroy when version or is_public changes in ONN: caught exception:")
+                    #         clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=True)
+                    #         LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                    #         sleep(COOLOFF_SECS)
+                    # else:
+                    user = onnTop.user
+                    expire_time = onnTop.expiration
+                    if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
+                        deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                        LOG.info(f"{orgAccountObj.name} Using top entries of each user sorted by num/exp_tm  with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} ")
                         try:
-                            clusterObj = Cluster.objects.get(org=orgAccountObj)
-                            LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
-                            process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
+                            process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                         except Exception as e:
-                            LOG.exception("ERROR processing Destroy when version or is_public changes in ONN: caught exception:")
-                            clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=True)
+                            LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} Update {orgAccountObj.name} {user.username} {deploy_values} Exception:")
+                            clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=False)
                             LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                             sleep(COOLOFF_SECS)
-                    else:
-                        user = onnTop.user
-                        expire_time = onnTop.expiration
-                        if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
-                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
-                            LOG.info(f"{orgAccountObj.name} Using top entries of each user sorted by num/exp_tm  with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} ")
-                            try:
-                                process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
-                            except Exception as e:
-                                LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} Update {orgAccountObj.name} {user.username} {deploy_values} Exception:")
-                                clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=False)
-                                LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
-                                sleep(COOLOFF_SECS)
-                            
-                            LOG.info(f"Update {orgAccountObj.name} processed")
+                        
+                        LOG.info(f"Update {orgAccountObj.name} processed")
                 else:
                     # No entries in table
                     user = orgAccountObj.owner

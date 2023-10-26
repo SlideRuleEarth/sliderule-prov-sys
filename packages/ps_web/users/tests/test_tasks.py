@@ -299,8 +299,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,create
 def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,create_TEST_USER,initialize_test_environ):
     '''
         This procedure will test the 'process_num_node_table' routine
-        for the case when the ONN table is not empty and  the is_public flag changes
-        and generates a Destroy cmd
+        for the case when the ONN table is not empty 
     '''
 
     orgAccountObj = get_test_org()
@@ -335,10 +334,10 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,crea
     
     assert OwnerPSCmd.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 1
-    assert orgAccountObj.desired_num_nodes == 0 # destroyed
+    assert orgAccountObj.desired_num_nodes == 3 
     assert PsCmdResult.objects.count() == 1
     psCmdResultObj = PsCmdResult.objects.first()
-    assert 'Destroy' in psCmdResultObj.ps_cmd_summary_label
+    assert 'Update' in psCmdResultObj.ps_cmd_summary_label
     assert OrgNumNode.objects.count() == 1 # until it expires
 
 #@pytest.mark.dev
