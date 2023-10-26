@@ -30,6 +30,7 @@ data "template_file" "prov-sys" {
     fargate_cpu                   = var.prov-sys-fargate-cpu
     django_app_port               = var.django_app_port
     nginx_port                    = var.nginx_port
+    redis_host                    = var.redis_host
     redis_port                    = var.redis_port
     rds_db_name                   = local.provsys_creds.rds_db_name
     rds_username                  = local.provsys_creds.rds_username
@@ -39,7 +40,6 @@ data "template_file" "prov-sys" {
     django_settings_allowed_hosts = var.django_allowed_hosts
     django_csrf_trusted_origins   = var.django_csrf_trusted_origins
     django_secret_key             = local.provsys_creds.django_secret_key
-    django_celery_url             = var.django_celery_url
     ps_server_host                = var.ps_server_host
     ps_server_port                = var.ps_server_port
     mfa_placeholder               = local.provsys_creds.mfa_placeholder

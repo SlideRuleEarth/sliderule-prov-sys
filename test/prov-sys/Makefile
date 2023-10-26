@@ -5,9 +5,9 @@ DOCKER_TAG ?= $(VERSION)
 PYTEST_ARGS ?= 
 NGINX_CONF ?= dev
 DB_BACKUP_DIR = $(ROOT)/db_backups
-PS_SERVER_SOURCE_DIR = $(ROOT)/../../packages/ps-server
-PS_WEB_SOURCE_DIR = $(ROOT)/../../packages/ps-web
-PS_NGINX_SOURCE_DIR = $(ROOT)/../../packages/ps-web # nginx docker is built in web directory
+PS_SERVER_SOURCE_DIR = $(ROOT)/../../packages/ps_server
+PS_WEB_SOURCE_DIR = $(ROOT)/../../packages/ps_web
+PS_NGINX_SOURCE_DIR = $(ROOT)/../../packages/ps_web # nginx docker is built in web directory
 REPO ?= $(DOCKER_REPO) 
 BLD_ENVVER = $(shell cd ../../; git --git-dir .git --work-tree . describe --abbrev --dirty --always --tags --long)
 # PS_BRANCH is the branch of ps-server to use for fetching the init_aws_localstack.py script
@@ -110,6 +110,21 @@ run: docker ## run prov-sys locally
 	@echo SITE_ID value:$($(SITE_ID))
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
+
+run-debug: docker-test ## run prov-sys locally
+	make down && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_WEB_DIR=$(PS_WEB_DIR) && \
+	export DOCKER_TAG=$(DOCKER_TAG) && \
+	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	docker compose up --detach
+	make docker-versions && \
+	make db-backup-timestamped-running
+	@echo SITE_ID:$(SITE_ID)
+	@echo SITE_ID value:$($(SITE_ID))
+	@echo DOMAIN:$(DOMAIN)
+	@echo BLD_ENVVER:$(BLD_ENVVER)
+
 
 unit-tests-local-stack: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
 	make down && \

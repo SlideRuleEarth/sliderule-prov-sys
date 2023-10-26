@@ -55,8 +55,12 @@ services:
       - PS_SERVER_ALTERNATE_PORT=${PS_SERVER_ALTERNATE_PORT} 
     expose:
       - 8000
+      - 5555
     image: icesat2sliderule/sliderule-ps-web:${DOCKER_TAG}
     container_name: ps-web
+    privileged: true
+    cap_add:
+      - SYS_PTRACE
     entrypoint: /home/reg_user/ps/docker-entrypoint.sh
     volumes:
       - ${PS_WEB_DIR}/users/migrations:/home/reg_user/ps/users/migrations
@@ -68,6 +72,8 @@ services:
       - ps-db
       - redis
       - ps-server
+    ports:
+      - "5555:5555"
   nginx:
     image: "icesat2sliderule/sliderule-ps-nginx:${DOCKER_TAG}"
     container_name: ps-nginx

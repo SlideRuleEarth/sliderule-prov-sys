@@ -1,9 +1,9 @@
 ROOT = $(shell pwd)
 STAGE = $(ROOT)/stage
 
-PS_SERVER_SOURCE_DIR = $(ROOT)/packages/ps-server
-PS_WEB_SOURCE_DIR = $(ROOT)/packages/ps-web
-PS_NGINX_SOURCE_DIR = $(ROOT)/packages/ps-web # nginx docker is built in web directory
+PS_SERVER_SOURCE_DIR = $(ROOT)/packages/ps_server
+PS_WEB_SOURCE_DIR = $(ROOT)/packages/ps_web
+PS_NGINX_SOURCE_DIR = $(ROOT)/packages/ps_web # nginx docker is built in web directory
 
 VERSION ?= latest
 VERSION_TOKENS := $(subst ., ,$(lastword $(VERSION)))

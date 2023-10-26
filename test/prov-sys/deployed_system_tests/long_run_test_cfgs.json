@@ -1,0 +1,38 @@
+{
+    "test_cases": [
+        {
+            "name": "TestCase1",
+            "DOMAIN": "testsliderule.org",
+            "ORG_NAMES": ["test_org_1","test_org_2","test_org_3"],
+            "DNN_TTL_SET_TUPLES": [
+                [1, 30],
+                [2, 20],
+                [3, 15]
+            ],
+            "CNN_DELAY_CHECK_TUPLES": [
+                [3, 0],
+                [2, 15],
+                [1, 20],
+                [0, 30]
+            ],
+            "TIMEOUT": 120,
+            "POLL_TM": 5
+        },
+        {
+            "name": "TestCase2",
+            "DOMAIN": "testsliderule.org",
+            "ORG_NAMES": ["test_org_1","test_org_2","test_org_3"],
+            "DNN_TTL_SET_TUPLES": [
+                [1, 20],
+                [2, 15]
+            ],
+            "CNN_DELAY_CHECK_TUPLES": [
+                [2, 0], 
+                [1, 15],
+                [0, 20]
+            ],
+            "TIMEOUT": 120,
+            "POLL_TM": 5
+        }
+    ]
+}

@@ -82,9 +82,9 @@ variable "django_csrf_trusted_origins"{
   default = "https://*.testsliderule.org https://*.slideruleearth.io"
 }
 
-variable "django_celery_url" {
-  description = "Django celery message broker url"
-  default = "redis://localhost:6379/0" 
+variable "redis_host" {
+  description = "redis host"
+  default = "localhost" 
 }
 
 # logs
@@ -116,7 +116,7 @@ variable "rds_restore_with_snapshot" {
 # Fargate
 variable "prov-sys-fargate-cpu" {
   description = "Fargate task CPU units to provision (1 vCPU = 1024 CPU units)"
-  default     = 2048
+  default     = 1024
 }
 
 variable "prov-sys-fargate-memory" {
