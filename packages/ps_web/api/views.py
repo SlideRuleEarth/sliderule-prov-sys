@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema_view
 from rest_framework_simplejwt.settings import api_settings
 
 from rest_framework.decorators import api_view
-from api.serializers import MembershipSerializer, OrgTokenObtainPairSerializer, OrgTokenRefreshSerializer
+from api.serializers import MembershipSerializer, OrgTokenObtainPairSerializer, OrgTokenObtainPairGitHubSerializer, OrgTokenRefreshSerializer
 from rest_framework_simplejwt.backends import TokenBackend
 from rest_framework.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
@@ -508,11 +508,19 @@ class DisableProvisioningView(generics.UpdateAPIView):
 
 class OrgTokenObtainPairView(TokenObtainPairView):
     '''
-    Takes a set of user credentials along with an organization and returns an access and refresh JSON web if the user is an active member of that organization.
+    Takes a set of user credentials along with an organization and returns an access and refresh JSON web token if the user is an active member of that organization.
     The Access token will contain the organization name and the user name in the claims and expire in 1 hour.
     The Refresh token will expire in 1 day. A Refresh token can be used with the /org_token/refresh/ endpoint to obtain a new Access token.
     '''
     serializer_class = OrgTokenObtainPairSerializer
+
+class OrgTokenObtainPairGitHubView(TokenObtainPairView):
+    '''
+    Takes a set of user credentials along with an organization and returns an access and refresh JSON web token if the user is an active member of that organization.
+    The Access token will contain the organization name and the user name in the claims and expire in 1 hour.
+    The Refresh token will expire in 1 day. A Refresh token can be used with the /org_token/refresh/ endpoint to obtain a new Access token.
+    '''
+    serializer_class = OrgTokenObtainPairGitHubSerializer
 
 class OrgTokenRefreshView(TokenRefreshView):
     '''
