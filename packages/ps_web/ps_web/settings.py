@@ -461,7 +461,9 @@ CORS_ALLOWED_ORIGINS = [
     "https://developers.slideruleearth.io",
     "https://uw.slideruleearth.io",
     "https://utexas.slideruleearth.io",
-    "https://sliderule.testsliderule.org",
     "https://uofmdtest.testsliderule.org",
-    "http://localhost", #<-- TBD remove this: temporary for dev testing with postman on local laptop 
+    "https://esr.slideruleearth.io",
+    "https://brown.slideruleearth.io",
 ]
+if DEBUG:
+    CORS_ALLOWED_ORIGINS.append("http://localhost")
