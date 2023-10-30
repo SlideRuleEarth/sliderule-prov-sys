@@ -155,18 +155,20 @@ class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
         return username
     
     def get_github_social_user(self,access_token):
-        LOG.info(f"access_token:{access_token}")
+        #LOG.info(f"access_token:{access_token}")
         github_username = self.get_github_username(access_token)
         #LOG.info(f"github_username:{github_username}")
         user = None
         if github_username:
             try:
+                #LOG.info(f"SocialAccount.objects.count():{SocialAccount.objects.count()} looking for github_username:{github_username}")
                 for social_account in SocialAccount.objects.filter(provider='github'):
-                    #LOG.info(f"user:{user}")
+                    #LOG.info(f"github_username:{github_username} user:{social_account.user} extra_data:{social_account.extra_data}")
                     if social_account.extra_data['login'] == github_username:
                         user = social_account.user
             except SocialAccount.DoesNotExist:
                 LOG.error('No SocialAccount found with provider "github"')
+        LOG.info(f"user:{user}")
         return user
             
     def validate(self, attrs):

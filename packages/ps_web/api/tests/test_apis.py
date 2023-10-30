@@ -573,3 +573,67 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_org_token_github(caplog,client, social_user, social_user_membership, github_social_account, mock_email_backend,initialize_test_environ):
+    '''
+        This procedure will test using a github access token that matches a github social account to get org token and can queue a ONN
+        You must set the GITHUB_DEVTESTER_SLIDERULE_ACCESS_TOKEN to a valid github access token for github account devtester-sliderule
+    '''
+
+    GITHUB_DEVTESTER_SLIDERULE_ACCESS_TOKEN = os.environ.get('GITHUB_DEVTESTER_SLIDERULE_ACCESS_TOKEN')
+    assert GITHUB_DEVTESTER_SLIDERULE_ACCESS_TOKEN is not None
+    caplog.set_level(logging.DEBUG)
+    assert social_user_membership.user == social_user
+    assert social_user_membership.org == get_test_org()
+    
+    url = reverse('org-token-github-obtain-pair')
+   
+    response = client.post(url,data={'access_token':GITHUB_DEVTESTER_SLIDERULE_ACCESS_TOKEN,'org_name':TEST_ORG_NAME})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 200)   
+    assert (OwnerPSCmd.objects.count()==0)
+    assert (OrgNumNode.objects.count()==0)
+    # Decode the JSON response
+    json_data = json.loads(response.content)    
+    #logger.info(f"rsp:{json_data}")
+    assert(json_data['access_lifetime']=='3600.0')   
+    assert(json_data['refresh_lifetime']=='86400.0') 
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_org_token_github_invalid_access_token(caplog,client, social_user, social_user_membership, github_social_account, mock_email_backend,initialize_test_environ):
+    '''
+        This procedure will negative test using an invalid github access token that matches a github social account to get org token and can queue a ONN
+        You must set the GITHUB_OTHER_USER_ACCESS_TOKEN to a valid github access token but not the correct user
+        for a github account that is NOT devtester-sliderule
+    '''
+
+    GITHUB_OTHER_USER_ACCESS_TOKEN = os.environ.get('GITHUB_OTHER_USER_ACCESS_TOKEN')
+    assert GITHUB_OTHER_USER_ACCESS_TOKEN is not None
+    caplog.set_level(logging.DEBUG)
+    assert social_user_membership.user == social_user
+    assert social_user_membership.org == get_test_org()
+    
+    url = reverse('org-token-github-obtain-pair')
+   
+    response = client.post(url,data={'access_token':GITHUB_OTHER_USER_ACCESS_TOKEN,'org_name':TEST_ORG_NAME})
+    logger.info(f"status:{response.status_code}")
+    assert (response.status_code == 403)   # unauthorized
+    assert (OwnerPSCmd.objects.count()==0)
+    assert (OrgNumNode.objects.count()==0)
+
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_github_social_account(social_user, social_user_membership, github_social_account):
+    assert github_social_account.user == social_user
+    assert github_social_account.provider == 'github'
+    assert social_user_membership.user == social_user
+    assert social_user_membership.org == get_test_org()
+  
