@@ -29,6 +29,11 @@
                                             {{ formset.management_form }}
                                             {{ formset.non_form_errors.as_ul }}
                                             <div class="container text-center" > 
+                                                <div class="btn-group justify-content-center">
+                                                    <input type="button" value="Activate All" id='activateall' class="btn btn-outline-primary">  
+                                                    <input type="button" value="Delete All" id='deleteall' class="btn btn-outline-primary">  
+                                                    <input type="button" value="Restore" id='restore' class="btn btn-outline-primary">  
+                                                </div>
                                                 <fieldset>
                                                     <table id="formset" class="formPage my-sm">
                                                     {% for form in formset.forms %}
@@ -57,12 +62,7 @@
                                                     </table>
                                                 </fieldset>
                                             </div>
-                                            <div class="btn-group">
-                                                <input type="button" value="Activate All" id='activateall' class="btn btn-outline-secondary">  
-                                                <input type="button" value="Delete All" id='deleteall' class="btn btn-outline-secondary">  
-                                                <input type="button" value="Restore" id='restore' class="btn btn-outline-secondary">  
-                                            </div>
-                                            <div class="btn-group">
+                                            <div class="btn-group me-5 justify-content-center">
                                                 <input type="submit" value="Submit" class="btn btn-outline-primary">
                                             </div>
                                         </form>
@@ -76,7 +76,7 @@
                                         </tr>
                                     </tbody>
                                 </table>
-                        </div>
+                            </div>
                         </div>
                     </div>
                 </div>
