@@ -213,7 +213,7 @@ class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
             data["access"] = str(refresh.access_token)
             #LOG.info(data)
         else:
-            msg = f"{username} is NOT an active Member of {org_name}"
+            msg = f"{user.username} is NOT an active Member of {org_name}"
             LOG.info(msg)
             raise PermissionDenied(msg) 
         LOG.info("returning data")
