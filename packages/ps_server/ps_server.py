@@ -1508,6 +1508,8 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     node_asg_desired_capacity
                 ]
                 try:
+                    if request.reload:
+                        self.get_specific_tf_version_files_from_s3(s3_client=s3_client, name=request.name, version=request.version)
                     yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
                 except Exception as e:
                     emsg = f"FAILED! {str(e)} for Update {request.name}"

@@ -77,7 +77,8 @@ message UpdateRequest {
   uint32  min_nodes = 2;
   uint32  max_nodes = 3;
   uint32  num_nodes = 4;
-  string  now       = 5; 
+  string  now       = 5;
+  bool    reload    = 6; 
 }
 
 message RefreshRequest {

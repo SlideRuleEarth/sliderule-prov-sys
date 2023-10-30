@@ -177,7 +177,6 @@ def cull_expired_entries(org,tm):
             break
     LOG.debug(f"ended with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
 
-
 def need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     # LOG.debug(f"cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
@@ -220,127 +219,11 @@ def check_provision_env_ready(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     setup_occurred = False
     if not clusterObj.provision_env_ready:
-        st = datetime.now(timezone.utc)
-        psCmdResultObj,org_cmd_str = get_psCmdResultObj(orgAccountObj, 'SetUp', version=orgAccountObj.version, username=orgAccountObj.owner, is_adhoc=False)
-        LOG.info(f"STARTED {org_cmd_str} is_public:{orgAccountObj.is_public}")
-        try:
-            with ps_client.create_client_channel("control") as channel:
-                stub = ps_server_pb2_grpc.ControlStub(channel)
-                timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
-                rsp_gen = stub.SetUp(
-                    ps_server_pb2.SetUpReq(
-                        name=orgAccountObj.name,
-                        version=orgAccountObj.version,
-                        is_public=orgAccountObj.is_public,
-                        now=datetime.now(timezone.utc).strftime(FMT)),
-                        timeout=timeout)
-                done = False
-                setup_occurred = True
-                clusterObj = Cluster.objects.get(org=orgAccountObj)
-                clusterObj.active_ps_cmd = 'SetUp'
-                clusterObj.save(update_fields=['active_ps_cmd'])
-                while(not done): 
-                    # make the call to get cached streamed response messages from server
-                    #LOG.info(f"getting next response from ps-server...")
-                    rrsp = None
-                    try:
-                        # Read until rrsp.done is True or until StopIteration exception is caught
-                        rrsp = next(rsp_gen)  # grab the next one and process it
-                        psCmdResultObj.ps_cmd_output += get_cli_html(orgAccountObj, rrsp.cli)
-                        psCmdResultObj.save()
-                        if rrsp.ps_server_error:
-                            error_msg =  f"ps-server returned error for {org_cmd_str} FAILED with error:{rrsp.error_msg}"
-                            LOG.error(error_msg)
-                            psCmdResultObj.error = error_msg
-                            psCmdResultObj.save()
-                    except StopIteration:
-                        done = True
-                        error_msg = f"{org_cmd_str} read off the end...caught StopIteration exception but should be able to read until done flag is sent: "
-                        LOG.exception(error_msg) 
-                        psCmdResultObj.error = error_msg 
-                        psCmdResultObj.save()
-                    except (grpc.RpcError) as e:
-                        done = True
-                        error_msg = f"{org_cmd_str} caught gRpc exception: "
-                        LOG.exception(error_msg) 
-                        psCmdResultObj.error = error_msg + repr(e)
-                        psCmdResultObj.save()
-                        raise e
-                    except subprocess.CalledProcessError as e:
-                        done = True
-                        error_msg = f"{org_cmd_str} caught CalledProcessError exception: "
-                        LOG.exception(error_msg) 
-                        psCmdResultObj.error = error_msg + repr(e)
-                        psCmdResultObj.save()
-                        raise e
-                    except Exception as e:
-                        done = True
-                        error_msg = f"{org_cmd_str} caught UNKNOWN exception: "
-                        LOG.exception(error_msg) 
-                        psCmdResultObj.error = error_msg + repr(e)
-                        psCmdResultObj.save()
-                        raise e
-                    finally:
-                        if rrsp is None:
-                            done = True
-                            error_msg = f"{org_cmd_str} rrsp is None?"
-                            LOG.error(error_msg)
-                            psCmdResultObj.error = error_msg
-                            psCmdResultObj.save()
-                            raise Exception(error_msg)
-                        if rrsp.done:
-                            done = True
-                            psCmdResultObj.error = ''
-                            psCmdResultObj.save(update_fields=['error'])
-                            if not rrsp.ps_server_error:
-                                clusterObj = Cluster.objects.get(org=orgAccountObj)
-                                clusterObj.provision_env_ready = True
-                                ps_server_pb2.GetCurrentSetUpCfgRsp()
-                                rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
-                                clusterObj.prov_env_version = rsp.setup_cfg.version
-                                clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
-                                if rsp.setup_cfg.version != '':
-                                    changed_version = (clusterObj.cur_version != clusterObj.prov_env_version)
-                                    changed_is_public = (clusterObj.is_public != clusterObj.prov_env_is_public )
-                                    LOG.info(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-                                    if clusterObj.is_deployed and (changed_version or changed_is_public):
-                                        LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
-                                        process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
-                                        enqueue_process_state_change(orgAccountObj.name)
-                                else:
-                                    clusterObj.provision_env_ready = False
-                                    orgAccountObj.provisioning_suspended = True
-                                    orgAccountObj.save(update_fields=['provisioning_suspended'])
-                                    LOG.warning(f"{orgAccountObj.name} cluster current_version is null Suspending provisioning")
-                                LOG.info(f"{orgAccountObj.name} cluster current_version:{clusterObj.cur_version} provision_env_ready:{clusterObj.provision_env_ready}")
-                                clusterObj.save()
-                                orgAccountObj.num_ps_cmd_successful += 1
-                                orgAccountObj.num_setup_cmd_successful += 1
-                                orgAccountObj.save(update_fields=['num_ps_cmd_successful','num_setup_cmd_successful'])
-                            LOG.info(f"{org_cmd_str} got rrsp done from ps_server!")
-
-        except Exception as e:
-            error_msg = f"ERROR: {org_cmd_str}  {orgAccountObj.version}:"
-            LOG.exception(f"{error_msg} caught exception:") 
-            psCmdResultObj.error = 'Server Error'
-            psCmdResultObj.ps_cmd_summary_label = f" --- {org_cmd_str} {orgAccountObj.version} ---"
-            psCmdResultObj.save()
-
-        finally:
-            clusterObj = Cluster.objects.get(org=orgAccountObj)
-            clusterObj.active_ps_cmd = ''
-            clusterObj.save(update_fields=['active_ps_cmd'])
-            time_to_process = datetime.now(timezone.utc) - st
-            time_to_process = time_to_process - timedelta(microseconds=time_to_process.microseconds)
-            LOG.info(f"DONE {org_cmd_str} {orgAccountObj.version} has completed in {str(time_to_process)}")
-            if orgAccountObj.provisioning_suspended != clusterObj.provision_env_ready:
-                orgAccountObj.provisioning_suspended = not clusterObj.provision_env_ready
-                orgAccountObj.save(update_fields=['provisioning_suspended'])
+        clusterObj.provision_env_ready,setup_occurred = process_SetUp_cmd(orgAccountObj=orgAccountObj)
     return clusterObj.provision_env_ready,setup_occurred       
 
 def process_num_node_table(orgAccountObj,prior_need_refresh):
     '''
-    This routine is called in the main loop (high frequency).
     If the the OrgNumNode table changed and the highest num nodes desired 
     in the table is different than what is currently running
     then it will send and update to set desired num nodes to value in table 
@@ -363,17 +246,6 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                 expire_time = None
                 onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
                 if onnTop is not None:
-                    # if need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
-                    #     try:
-                    #         clusterObj = Cluster.objects.get(org=orgAccountObj)
-                    #         LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} onnTop.desired_num_nodes:{onnTop.desired_num_nodes} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
-                    #         process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
-                    #     except Exception as e:
-                    #         LOG.exception("ERROR processing Destroy when version or is_public changes in ONN: caught exception:")
-                    #         clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=True)
-                    #         LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
-                    #         sleep(COOLOFF_SECS)
-                    # else:
                     user = onnTop.user
                     expire_time = onnTop.expiration
                     if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
@@ -680,7 +552,6 @@ def update_orgCost(orgAccountObj, gran):
 
     return updated
 
-
 def update_ccr(org):
     updated = (update_orgCost(org, "HOURLY") or update_orgCost(org, "DAILY") or update_orgCost(org, "MONTHLY"))
     LOG.info("updated:%s",updated)
@@ -703,7 +574,6 @@ def update_cur_num_nodes(orgAccountObj):
         except Exception as e:
             LOG.error(f"FAILED: caught exception on NumNodesReq")
             raise
-
 
 def calculate_ddt(label, dollar_balance, dollar_allowance, dollar_hourly_burn_rate):
     # Convert all inputs to Decimal
@@ -744,15 +614,12 @@ def calculate_ddt(label, dollar_balance, dollar_allowance, dollar_hourly_burn_ra
     #LOG.info(log_template.format(time=formatted_end_time))
     return end_time
 
-
 def update_ddt(orgAccountObj):
     orgAccountObj.min_ddt = calculate_ddt('min',orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.min_hrly)
     orgAccountObj.cur_ddt = calculate_ddt('cur', orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.cur_hrly)
     orgAccountObj.max_ddt = calculate_ddt('max',orgAccountObj.balance, orgAccountObj.monthly_allowance, orgAccountObj.max_hrly)
     LOG.info(f"update_ddt:{orgAccountObj.name} min_ddt:{orgAccountObj.min_ddt} cur_ddt:{orgAccountObj.cur_ddt} max_ddt:{orgAccountObj.max_ddt}")
     orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt'])
-
-
 
 def update_burn_rates(orgAccountObj):
     '''
@@ -972,7 +839,6 @@ def is_org_broke(orgAccountObj):
         LOG.info(f"{clusterObj.org.name} deployed_state is {clusterObj.deployed_state}")
     return broke_status
 
-
 def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hourly_days_to_forecast=None):
     ''' 
         This routine calculates hourly,daily,and monthly forecasts for a given hourly rate.
@@ -1095,7 +961,6 @@ def create_all_forecasts(orgAccountObj):
     LOG.info(f"min_ddt:{orgAccountObj.min_ddt.strftime(FMT)},cur_ddt:{orgAccountObj.cur_ddt.strftime(FMT)},max_ddt:{orgAccountObj.max_ddt.strftime(FMT)}")
     orgAccountObj.save(update_fields=['min_ddt','cur_ddt','max_ddt','fc_min_hourly','fc_min_daily','fc_min_monthly','fc_cur_hourly','fc_cur_daily','fc_cur_monthly','fc_max_hourly','fc_max_daily','fc_max_monthly'])
 
-
 def create_all_forecasts_for_all_orgs():
     orgs_qs = OrgAccount.objects.all()
     LOG.info("orgs_qs:%s", repr(orgs_qs))
@@ -1136,20 +1001,6 @@ def refresh_token_maintenance():
     except Exception as e:
         LOG.exception('Exception caught')
         return False
-
-# def force_ad_hoc_cost_reconcile_uuid(uuid):
-#     LOG.info(f"Started -- force_ad_hoc_cost_reconcile_uuid({uuid}) ")
-#     orgObj = OrgAccount.objects.get(id=uuid)
-#     ad_hoc_cost_reconcile_for_org(orgObj)
-#     LOG.info(f"Finished -- force_ad_hoc_cost_reconcile_uuid({uuid})")
-
-
-# def force_ad_hoc_cost_reconcile():
-#     LOG.info(f"Started -- force_ad_hoc_cost_reconcile ")
-#     orgs_qs = OrgAccount.objects.all()
-#     for orgObj in orgs_qs:
-#         ad_hoc_cost_reconcile_for_org(orgObj)
-#     LOG.info(f"Finished -- force_ad_hoc_cost_reconcile ")
 
 def cost_accounting(orgObj):
     try:
@@ -1387,6 +1238,129 @@ def get_psCmdResultObj(orgAccountObj, ps_cmd, version=None, username=None, is_ad
     org_cmd_str = f"{orgAccountObj.name} cmd-{orgAccountObj.num_ps_cmd}: {ps_cmd} {username if username is not None else ''}"
     return psCmdResultObj,org_cmd_str
 
+def process_SetUp_cmd(orgAccountObj):
+    '''
+        This function processes the SetUp command (that shows up as Configure in the results)
+    '''
+    LOG.info(f"Configure {orgAccountObj.name}")
+    st = datetime.now(timezone.utc)
+    psCmdResultObj,org_cmd_str = get_psCmdResultObj(orgAccountObj, 'SetUp', version=orgAccountObj.version, username=orgAccountObj.owner, is_adhoc=False)
+    LOG.info(f"STARTED {org_cmd_str} is_public:{orgAccountObj.is_public}")
+    try:
+        with ps_client.create_client_channel("control") as channel:
+            stub = ps_server_pb2_grpc.ControlStub(channel)
+            timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
+            rsp_gen = stub.SetUp(
+                ps_server_pb2.SetUpReq(
+                    name=orgAccountObj.name,
+                    version=orgAccountObj.version,
+                    is_public=orgAccountObj.is_public,
+                    now=datetime.now(timezone.utc).strftime(FMT)),
+                    timeout=timeout)
+            done = False
+            setup_occurred = True
+            clusterObj = Cluster.objects.get(org=orgAccountObj)
+            clusterObj.active_ps_cmd = 'SetUp'
+            clusterObj.save(update_fields=['active_ps_cmd'])
+            while(not done): 
+                # make the call to get cached streamed response messages from server
+                #LOG.info(f"getting next response from ps-server...")
+                rrsp = None
+                try:
+                    # Read until rrsp.done is True or until StopIteration exception is caught
+                    rrsp = next(rsp_gen)  # grab the next one and process it
+                    psCmdResultObj.ps_cmd_output += get_cli_html(orgAccountObj, rrsp.cli)
+                    psCmdResultObj.save()
+                    if rrsp.ps_server_error:
+                        error_msg =  f"ps-server returned error for {org_cmd_str} FAILED with error:{rrsp.error_msg}"
+                        LOG.error(error_msg)
+                        psCmdResultObj.error = error_msg
+                        psCmdResultObj.save()
+                except StopIteration:
+                    done = True
+                    error_msg = f"{org_cmd_str} read off the end...caught StopIteration exception but should be able to read until done flag is sent: "
+                    LOG.exception(error_msg) 
+                    psCmdResultObj.error = error_msg 
+                    psCmdResultObj.save()
+                except (grpc.RpcError) as e:
+                    done = True
+                    error_msg = f"{org_cmd_str} caught gRpc exception: "
+                    LOG.exception(error_msg) 
+                    psCmdResultObj.error = error_msg + repr(e)
+                    psCmdResultObj.save()
+                    raise e
+                except subprocess.CalledProcessError as e:
+                    done = True
+                    error_msg = f"{org_cmd_str} caught CalledProcessError exception: "
+                    LOG.exception(error_msg) 
+                    psCmdResultObj.error = error_msg + repr(e)
+                    psCmdResultObj.save()
+                    raise e
+                except Exception as e:
+                    done = True
+                    error_msg = f"{org_cmd_str} caught UNKNOWN exception: "
+                    LOG.exception(error_msg) 
+                    psCmdResultObj.error = error_msg + repr(e)
+                    psCmdResultObj.save()
+                    raise e
+                finally:
+                    if rrsp is None:
+                        done = True
+                        error_msg = f"{org_cmd_str} rrsp is None?"
+                        LOG.error(error_msg)
+                        psCmdResultObj.error = error_msg
+                        psCmdResultObj.save()
+                        raise Exception(error_msg)
+                    if rrsp.done:
+                        done = True
+                        psCmdResultObj.error = ''
+                        psCmdResultObj.save(update_fields=['error'])
+                        if not rrsp.ps_server_error:
+                            clusterObj = Cluster.objects.get(org=orgAccountObj)
+                            clusterObj.provision_env_ready = True
+                            ps_server_pb2.GetCurrentSetUpCfgRsp()
+                            rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+                            clusterObj.prov_env_version = rsp.setup_cfg.version
+                            clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
+                            if rsp.setup_cfg.version != '':
+                                changed_version = (clusterObj.cur_version != clusterObj.prov_env_version)
+                                changed_is_public = (clusterObj.is_public != clusterObj.prov_env_is_public )
+                                LOG.info(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
+                                if clusterObj.is_deployed and (changed_version or changed_is_public):
+                                    LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+                                    process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
+                                    enqueue_process_state_change(orgAccountObj.name)
+                            else:
+                                clusterObj.provision_env_ready = False
+                                orgAccountObj.provisioning_suspended = True
+                                orgAccountObj.save(update_fields=['provisioning_suspended'])
+                                LOG.warning(f"{orgAccountObj.name} cluster current_version is null Suspending provisioning")
+                            LOG.info(f"{orgAccountObj.name} cluster current_version:{clusterObj.cur_version} provision_env_ready:{clusterObj.provision_env_ready}")
+                            clusterObj.save()
+                            orgAccountObj.num_ps_cmd_successful += 1
+                            orgAccountObj.num_setup_cmd_successful += 1
+                            orgAccountObj.save(update_fields=['num_ps_cmd_successful','num_setup_cmd_successful'])
+                        LOG.info(f"{org_cmd_str} got rrsp done from ps_server!")
+
+    except Exception as e:
+        error_msg = f"ERROR: {org_cmd_str}  {orgAccountObj.version}:"
+        LOG.exception(f"{error_msg} caught exception:") 
+        psCmdResultObj.error = 'Server Error'
+        psCmdResultObj.ps_cmd_summary_label = f" --- {org_cmd_str} {orgAccountObj.version} ---"
+        psCmdResultObj.save()
+
+    finally:
+        clusterObj = Cluster.objects.get(org=orgAccountObj)
+        clusterObj.active_ps_cmd = ''
+        clusterObj.save(update_fields=['active_ps_cmd'])
+        time_to_process = datetime.now(timezone.utc) - st
+        time_to_process = time_to_process - timedelta(microseconds=time_to_process.microseconds)
+        LOG.info(f"DONE {org_cmd_str} {orgAccountObj.version} has completed in {str(time_to_process)}")
+        if orgAccountObj.provisioning_suspended != clusterObj.provision_env_ready:
+            orgAccountObj.provisioning_suspended = not clusterObj.provision_env_ready
+            orgAccountObj.save(update_fields=['provisioning_suspended'])
+    return clusterObj.provision_env_ready,setup_occurred       
+
 def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
     global MIN_HRS_TO_LIVE_TO_START
     st = datetime.now(timezone.utc)
@@ -1414,14 +1388,16 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                 psCmdResultObj.ps_cmd_summary_label += f" {deploy_values['min_node_cap']}-{deploy_values['desired_num_nodes']}-{deploy_values['max_node_cap']} {deploy_values['version']}"
                 if int(deploy_values['desired_num_nodes']) == 0:
                     LOG.info("Setting num_nodes_to_use to zero (i.e. deploy load balancer and monitor only)")
+                clusterObj = Cluster.objects.get(org=orgAccountObj)
                 rsp_gen = stub.Update(
                     ps_server_pb2.UpdateRequest(
-                        name    = orgAccountObj.name,
+                        name        = orgAccountObj.name,
                         min_nodes   = int(deploy_values['min_node_cap']),
                         max_nodes   = int(deploy_values['max_node_cap']),
                         num_nodes   = int(deploy_values['desired_num_nodes']),
-                        now=datetime.now(timezone.utc).strftime(FMT)),
-                        timeout=timeout)
+                        now         = datetime.now(timezone.utc).strftime(FMT),
+                        reload      = bool(not clusterObj.is_deployed)),
+                        timeout     = timeout)
                 process_rsp_generator(  orgAccountObj=orgAccountObj,
                                         ps_cmd='Update', 
                                         rsp_gen=rsp_gen, 
@@ -1534,7 +1510,6 @@ def process_Destroy_cmd(orgAccountObj, username=None, owner_ps_cmd=None):
         for handler in LOG.handlers:
             handler.flush()
 
-
 def process_owner_ps_cmd(orgAccountObj,owner_ps_cmd):
     try:
         # This is a synchronous blocking call
@@ -1616,7 +1591,6 @@ def  process_prov_sys_tbls(orgAccountObj):
         sleep(COOLOFF_SECS)
     return (orgAccountObj.num_ps_cmd == start_cmd_cnt) # task is idle if no new commands were processed 
 
-
 def process_state_change(org_name):
     '''
     Process state changes for an organization account.
@@ -1647,7 +1621,6 @@ def process_state_change(org_name):
     OrgAccount.objects.filter(name=org_name).update(loop_count=F('loop_count') + 1) # F make this inline and an atomic update
     LOG.info(f"AFTER  {'{:>10}'.format(orgAccountObj.loop_count+1)}/{cache.get(key, 0)} {orgAccountObj.name} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd} ")
     return is_idle, orgAccountObj.loop_count+1 # +1 because we updated the loop_count above inline
-
 
 def get_redis_host():
     return os.environ.get("REDIS_HOST", "redis")
