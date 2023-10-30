@@ -2,9 +2,13 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 from drf_spectacular.utils import extend_schema_view
 from rest_framework_simplejwt.settings import api_settings
+from allauth.socialaccount.models import SocialAccount
 
 from rest_framework.decorators import api_view
 from api.serializers import MembershipSerializer, OrgTokenObtainPairSerializer, OrgTokenObtainPairGitHubSerializer, OrgTokenRefreshSerializer
@@ -29,7 +33,7 @@ from oauth2_provider.views.generic import ProtectedResourceView
 from django.http import JsonResponse
 from django.contrib.auth import authenticate, login
 from django.conf import settings
-
+import requests
 
 LOG = logging.getLogger('django')
 JWT_authenticator = JWTAuthentication()
@@ -514,13 +518,29 @@ class OrgTokenObtainPairView(TokenObtainPairView):
     '''
     serializer_class = OrgTokenObtainPairSerializer
 
-class OrgTokenObtainPairGitHubView(TokenObtainPairView):
-    '''
-    Takes a set of user credentials along with an organization and returns an access and refresh JSON web token if the user is an active member of that organization.
-    The Access token will contain the organization name and the user name in the claims and expire in 1 hour.
-    The Refresh token will expire in 1 day. A Refresh token can be used with the /org_token/refresh/ endpoint to obtain a new Access token.
-    '''
+
+
+class OrgTokenObtainPairGitHubView(APIView):
+    """
+    Takes a GitHub access token and an organization name. Returns an access and refresh JSON web token
+    if the user associated with the GitHub token is an active member of that organization.
+    """
     serializer_class = OrgTokenObtainPairGitHubSerializer
+    def post(self, request, *args, **kwargs):
+        try:
+            serializer = OrgTokenObtainPairGitHubSerializer(data=request.data)
+            if serializer.is_valid():
+                # Serializer is valid, return token data
+                return Response(serializer.validated_data, status=status.HTTP_200_OK)
+            else:
+                # Serializer is not valid, return errors
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
+        except PermissionDenied as e:
+            LOG.exception("caught PermissionDenied exception:")
+            return Response({'status': "FAILED","error_msg":f"Permission Denied: {str(e)}"}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e: 
+            LOG.exception("caught exception:")
+            return Response({'status': "FAILED","error_msg":f"Server Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
 
 class OrgTokenRefreshView(TokenRefreshView):
     '''

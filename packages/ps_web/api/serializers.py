@@ -109,12 +109,10 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
-    username_field = 'username'
     token_class = OrgRefreshToken
 
     def __init__(self, *args, **kwargs):
         LOG.info(f"args:{args} kwargs:{kwargs}")
-        self.fields[self.username_field] = serializers.CharField(write_only=True)
         super().__init__(*args, **kwargs)
         try:
             self.fields['org_name'] = serializers.CharField()
@@ -145,7 +143,7 @@ class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
         if response.status_code == 200:
             try:
                 username = response.json().get('login')
-                LOG.info(f"github username:{username}")
+                #LOG.info(f"github username:{username}")
             except KeyError:
                 LOG.warn('no "login" key in response')
                 LOG.error(response.json())
@@ -160,27 +158,32 @@ class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
         LOG.info(f"access_token:{access_token}")
         github_username = self.get_github_username(access_token)
         #LOG.info(f"github_username:{github_username}")
-        if github_username is None:
-            return None
-        try:
-            user = SocialAccount.objects.get(user=github_username,provider='github').user
-            LOG.info(f"user:{user}")
-            return user
-        except SocialAccount.DoesNotExist:
-            return None
-
+        user = None
+        if github_username:
+            try:
+                for social_account in SocialAccount.objects.filter(provider='github'):
+                    #LOG.info(f"user:{user}")
+                    if social_account.extra_data['login'] == github_username:
+                        user = social_account.user
+            except SocialAccount.DoesNotExist:
+                LOG.error('No SocialAccount found with provider "github"')
+        return user
+            
     def validate(self, attrs):
+        '''
+        This method is called by the serializer when validating the data.
+        It should return a dictionary of validated data and a pair of 
+        Refresh/Access tokens.
+        '''
         LOG.info(attrs)
-        username = attrs['username']
         org_name = attrs['org_name']
         access_token    = attrs['access_token']
-        LOG.info(f"{username} {org_name} {access_token}")
+        LOG.info(f"{org_name}")
         user = self.get_github_social_user(access_token)
         if user is None:
-            msg = f"GitHub user NOT found"
+            msg = f"No Social account found that matches login field of given token"
             LOG.info(msg)
             raise PermissionDenied(msg)
-        
         try:
             orgAccountObj = OrgAccount.objects.get(name=org_name)
         except (OrgAccount.DoesNotExist):
@@ -193,13 +196,12 @@ class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
             msg = f"{user.username} is NOT a member of {orgAccountObj.name}"
             LOG.info(msg)
             raise PermissionDenied(msg)
-
         serializer  = MembershipSerializer(membership, many=False)
         #LOG.info('serializer_data:%s',serializer.data)
         LOG.info(f"active:{serializer.data['active']}")
         data = {}
         if serializer.data['active']:
-            refresh = self.get_token(self.user, username, attrs['org_name'])
+            refresh = self.get_token(user, user.username, attrs['org_name'])
             valid_data = TokenBackend(algorithm='HS256').decode(str(refresh.access_token), verify=False)         
             #LOG.info("exp:%s",datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT))
             data["exp"] = datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT)

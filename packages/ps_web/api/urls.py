@@ -9,7 +9,7 @@ from rest_framework_simplejwt.views import (
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 urlpatterns = [
-    path('org_token_github/', OrgTokenObtainPairGitHubView.as_view(),name='org-token-obtain-pair'),
+    path('org_token_github/', OrgTokenObtainPairGitHubView.as_view(),name='org-token-github-obtain-pair'),
     path('org_token/', OrgTokenObtainPairView.as_view(),name='org-token-obtain-pair'),
     path('org_token/refresh/', OrgTokenRefreshView.as_view(),name='org-token-refresh'),
     path('membership_status/<str:org_name>/', views.MembershipStatusView.as_view(),name='get-membership-status'),
