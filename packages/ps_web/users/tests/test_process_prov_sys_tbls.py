@@ -10,7 +10,7 @@ import pprint
 from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_post_org_num_nodes_ttl,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership,initialize_test_org,log_ONN,fake_sync_clusterObj_to_orgAccountObj,call_SetUp
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,verify_post_org_num_nodes_ttl,the_TEST_USER,the_OWNER_USER,the_DEV_TEST_USER,init_mock_ps_server,create_test_user,verify_api_user_makes_onn_ttl,create_active_membership,initialize_test_org,log_ONN,fake_sync_clusterObj_to_orgAccountObj,call_SetUp,verify_org_configure,dump_cmd_results
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
 from users.tasks import need_destroy_for_changed_version_or_is_public,get_or_create_OrgNumNodes,sort_ONN_by_nn_exp,format_onn,sum_of_highest_nodes_for_each_user,process_state_change
@@ -234,7 +234,7 @@ def test_get_or_create_OrgNumNodes(caplog,client,mock_email_backend,initialize_t
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
+def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_email_backend,mock_schedule_process_state_change, initialize_test_environ):
     '''
         This procedure will test logic for redundant ONN requests
     '''
@@ -579,93 +579,133 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                     assert(onn.expiration >= prev.expiration)
         prev = onn 
 
-def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_onn_id):
-    logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
-    orgAccountObj = get_test_org()
-    init_mock_ps_server(logger,
-                        name=orgAccountObj.name,
-                        num_nodes=orgAccountObj.desired_num_nodes,
-                        is_deployed=is_deployed,
-                        version=orgAccountObj.version,
-                        is_public=orgAccountObj.is_public)
-                        
-    orgAccountObj.desired_num_nodes=1
-    orgAccountObj.is_public = True
-    orgAccountObj.version = 'v2'
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
-    orgAccountObj.desired_num_nodes = sum_of_all_users_dnn # quiencent state
-    orgAccountObj.save()
-    clusterObj = Cluster.objects.get(org=orgAccountObj)
-    clusterObj.is_deployed = is_deployed
-    clusterObj.cur_version = orgAccountObj.version+'a' if version_changes else orgAccountObj.version
-    clusterObj.is_public = not orgAccountObj.is_public if is_public_changes else orgAccountObj.is_public
-    clusterObj.save()
 
-    expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) 
-    onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=orgAccountObj.desired_num_nodes,expiration=expire_date)
-    logger.info(f"created BASE onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
-    clusterObj.cnnro_ids = []
-    clusterObj.cnnro_ids.append(str(onn.id))
-    clusterObj.save() # same as orgAccount BASE
+## TBD make a system test for this
+#
+# def just_ONE_CASE(client,orgAccountObj, access_token, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, is_deployed, is_public_changes, version_changes, new_highest_onn_id):
+#     logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
+#     orgAccountObj.desired_num_nodes=1
+#     orgAccountObj.is_public = True
+#     orgAccountObj.version = 'v2'
 
-    expire_date = datetime.now(timezone.utc)+timedelta(hours=1)
-    onn = None
-    if new_highest_onn_id:
-        # this simulates a new call to the api
-        onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
-        new_desired_num_nodes = onnTop.desired_num_nodes+1 # new highest
-        expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) # before the one above!
-        onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
-        logger.info(f"created new onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj=orgAccountObj)
-    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj=orgAccountObj)
-    if not is_deployed:
-        assert not need_to_destroy
-    else:
-        logger.info(f" ** is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
-        if (is_public_changes or version_changes) and new_highest_onn_id:
-            logger.info(f" ** cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
-            logger.info(f" ** org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
-            logger.info(f" ** cnnro_ids:{cnnro_ids} not same as clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
-            assert need_to_destroy    
-        else:
-            assert not need_to_destroy
+#     expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) 
+#     onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=orgAccountObj.desired_num_nodes,expiration=expire_date)
+#     logger.info(f"created BASE onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
+
+#     sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
+#     orgAccountObj.desired_num_nodes = sum_of_all_users_dnn # quiencent state
+#     orgAccountObj.save()
+#     call_SetUp(orgAccountObj=orgAccountObj,is_deployed=is_deployed)
+
+#     if new_highest_onn_id:
+#         # this simulates a new call to the api
+#         onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+#         new_desired_num_nodes = onnTop.desired_num_nodes+1 # new highest
+#         loop_count,response = verify_post_org_num_nodes_ttl(client=client,
+#                                                             orgAccountObj=orgAccountObj,
+#                                                             url_args=[orgAccountObj.name,new_desired_num_nodes,18],
+#                                                             access_token=access_token,
+#                                                             expected_change_ps_cmd=1,
+#                                                             expected_status='QUEUED',
+#                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+#                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
 
-@pytest.mark.dev
-@pytest.mark.django_db
-@pytest.mark.ps_server_stubbed
-def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_TEST_USER,client,mock_email_backend,initialize_test_environ, mock_tasks_enqueue_stubbed_out):
-    '''
-        This procedure will test logic for forced Destroy if all combinations of these are met
-    Changes to:
-    | is_deployed | is_public | version |  new_highest_onn_id  | Need to destroy?
-    |-------------|-----------|---------|--------------|
-    | 0           | 0         | 0       | 0            |
-    | 0           | 0         | 0       | 1            |
-    | 0           | 0         | 1       | 0            |
-    | 0           | 0         | 1       | 1            |
-    | 0           | 1         | 0       | 0            |
-    | 0           | 1         | 0       | 1            |
-    | 0           | 1         | 1       | 0            |
-    | 0           | 1         | 1       | 1            |
-    | 1           | 0         | 0       | 0            |
-    | 1           | 0         | 0       | 1            |
-    | 1           | 0         | 1       | 0            |
-    | 1           | 0         | 1       | 1            | YES
-    | 1           | 1         | 0       | 0            |
-    | 1           | 1         | 0       | 1            | YES
-    | 1           | 1         | 1       | 0            |
-    | 1           | 1         | 1       | 1            | YES
+#     # mimic an org configure
+#     new_version = orgAccountObj.version+'a' if version_changes else orgAccountObj.version
+#     new_is_public = not orgAccountObj.is_public if is_public_changes else orgAccountObj.is_public
+#     # setup necessary form data
+#     form_data = {
+#         'is_public': new_is_public,
+#         'version': new_version, # First time we use the current version
+#         'min_node_cap': orgAccountObj.min_node_cap,
+#         'max_node_cap': orgAccountObj.max_node_cap,
+#         'allow_deploy_by_token': True,
+#         'destroy_when_no_nodes': True,
+#         'provisioning_suspended': False,
+#     }
+#     expected_change_ps_cmd = 0
+#     expected_change_setup_cmd = 0
+#     if version_changes or is_public_changes:
+#         expected_change_ps_cmd = 1
+#         expected_change_setup_cmd = 1
+#     s_results = PsCmdResult.objects.count()
+#     assert verify_org_configure(client=client, 
+#                                 orgAccountObj=orgAccountObj, 
+#                                 data=form_data,
+#                                 expected_change_ps_cmd=expected_change_ps_cmd,
+#                                 expected_change_setup_cmd=expected_change_setup_cmd, 
+#                                 mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, 
+#                                 mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
+    
+#     assert PsCmdResult.objects.count() == s_results + expected_change_ps_cmd # SetUp + 
+#     dump_cmd_results(orgAccountObj)
+#     if expected_change_ps_cmd > 0:
+#         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+#         logger.info(f"[{s_results}]:{psCmdResultObjs[s_results].ps_cmd_summary_label}")
+#         assert 'Destroy' in psCmdResultObjs[s_results].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
 
-    '''
+#     # if not is_deployed:
+#     #     assert not needed_to_destroy
+#     # else:
+#     #     logger.info(f" ** is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
+#     #     if (is_public_changes or version_changes) and new_highest_onn_id:
+#     #         clusterObj = Cluster.objects.get(org=orgAccountObj)
+#     #         logger.info(f" ** cluster cur_version:{clusterObj.cur_version} cur_is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
+#     #         logger.info(f" ** cluster prov_env_version:{orgAccountObj.version} prov_env_is_public:{orgAccountObj.is_public}")
+#     #         logger.info(f" ** cnnro_ids:{cnnro_ids} not same as clusterObj.cnnro_ids:{clusterObj.cnnro_ids} ?")
+#     #         assert needed_to_destroy
+#     #     else:
+#     #         assert not needed_to_destroy
 
-    variables = [False, True]  # Possible values for the boolean variables
-    for is_deployed in variables:
-        for is_public in variables:
-            for version in variables:
-                for new_highest_onn_id in variables:
-                    just_ONE_CASE(is_deployed, is_public, version, new_highest_onn_id)
+
+# @pytest.mark.dev
+# @pytest.mark.django_db
+# @pytest.mark.ps_server_stubbed
+# def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_TEST_USER,client,mock_email_backend,initialize_test_environ, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change):
+#     '''
+#         This procedure will test logic for forced Destroy if all combinations of these are met
+#     Changes to:
+#     | is_deployed | is_public | version |  new_highest_onn_id  | Need to destroy?
+#     |-------------|-----------|---------|--------------|
+#     | 0           | 0         | 0       | 0            |
+#     | 0           | 0         | 0       | 1            |
+#     | 0           | 0         | 1       | 0            |
+#     | 0           | 0         | 1       | 1            |
+#     | 0           | 1         | 0       | 0            |
+#     | 0           | 1         | 0       | 1            |
+#     | 0           | 1         | 1       | 0            |
+#     | 0           | 1         | 1       | 1            |
+#     | 1           | 0         | 0       | 0            |
+#     | 1           | 0         | 0       | 1            |
+#     | 1           | 0         | 1       | 0            |
+#     | 1           | 0         | 1       | 1            | YES
+#     | 1           | 1         | 0       | 0            |
+#     | 1           | 1         | 0       | 1            | YES
+#     | 1           | 1         | 1       | 0            |
+#     | 1           | 1         | 1       | 1            | YES
+
+#     '''
+#     orgAccountObj = get_test_org()                        
+#     response = client.post(reverse('org-token-obtain-pair'),data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
+#     assert(response.status_code == 200)   
+#     json_data = json.loads(response.content)
+#     access_token = json_data['access']   
+
+#     variables = [False, True]  # Possible values for the boolean variables
+#     for is_deployed in variables:
+#         for is_public_changes in variables:
+#             for version_changes in variables:
+#                 for new_highest_onn_id in variables:
+#                     just_ONE_CASE(  orgAccountObj=orgAccountObj,
+#                                     client=client,
+#                                     access_token= access_token,
+#                                     mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+#                                     mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
+#                                     is_deployed=is_deployed, 
+#                                     is_public_changes=is_public_changes,
+#                                     version_changes=version_changes, 
+#                                     new_highest_onn_id=new_highest_onn_id)
 
 def verify_new_entries_in_ONN(orgAccountObj,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
 

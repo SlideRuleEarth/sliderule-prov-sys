@@ -143,7 +143,7 @@ def test_SetUp(initialize_test_environ,setup_logging):
     '''
     logger = setup_logging
     orgAccountObj = get_test_org()
-    assert(call_SetUp(orgAccountObj))
+    assert(call_SetUp(orgAccountObj=orgAccountObj,reset_counters=False))
 
 #@pytest.mark.dev
 @pytest.mark.real_ps_server

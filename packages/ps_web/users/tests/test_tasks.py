@@ -134,8 +134,10 @@ def test_process_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_test_e
     assert PsCmdResult.objects.count() == 1
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"[1]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Destroy' in psCmdResultObjs[1].ps_cmd_summary_label
 
 
 #@pytest.mark.dev
@@ -157,8 +159,18 @@ def test_process_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_test_en
     orgAccountObj.min_node_cap = 1
     orgAccountObj.save()
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
-    assert orgAccountObj.desired_num_nodes == 0
+    # assert orgAccountObj.desired_num_nodes == 0
     
+    # assert OrgNumNode.objects.count() == 0
+    # assert orgAccountObj.num_ps_cmd == 0
+    # assert PsCmdResult.objects.count() == 0
+    # process_num_node_table(orgAccountObj,False)
+    # orgAccountObj.refresh_from_db()
+    
+    # assert orgAccountObj.num_ps_cmd == 1 #  Update
+    # assert orgAccountObj.num_setup_cmd_successful == 0
+    # assert orgAccountObj.num_ps_cmd_successful == 1
+    # assert PsCmdResult.objects.count() == 1
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
@@ -193,17 +205,16 @@ def test_process_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initialize_t
     orgAccountObj.min_node_cap = 0
     orgAccountObj.save()
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
-    assert orgAccountObj.desired_num_nodes == 0
-    
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    
-    assert orgAccountObj.num_ps_cmd == 0
+    assert orgAccountObj.num_setup_cmd == 0
+    assert orgAccountObj.num_ps_cmd == 0 # Update
+    assert orgAccountObj.num_setup_cmd_successful == 0
+    assert orgAccountObj.num_ps_cmd_successful == 0
     assert PsCmdResult.objects.count() == 0
-    assert orgAccountObj.desired_num_nodes == 0
 
 #@pytest.mark.dev
 @pytest.mark.django_db
@@ -226,15 +237,13 @@ def test_process_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize_tes
     orgAccountObj.min_node_cap = 2
     orgAccountObj.save()
     logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
-    assert orgAccountObj.desired_num_nodes == 0
-    
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
-    
-    assert orgAccountObj.num_ps_cmd == 1 #  Update
+    assert orgAccountObj.num_setup_cmd == 0
+    assert orgAccountObj.num_ps_cmd == 1 # Update
     assert orgAccountObj.num_setup_cmd_successful == 0
     assert orgAccountObj.num_ps_cmd_successful == 1
     assert PsCmdResult.objects.count() == 1

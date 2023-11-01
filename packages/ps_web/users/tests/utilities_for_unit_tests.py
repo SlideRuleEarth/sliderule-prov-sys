@@ -8,7 +8,7 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core import mail
 from users.forms import OrgAccountForm
-from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
+from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.views import add_org_cluster_orgcost
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
@@ -956,8 +956,9 @@ def verify_rsp_gen(rrsp_gen, name, ps_cmd,  logger):
                 got_rsp_done = True
     return cnt, got_rsp_done, stop_exception_cnt, exception_cnt, ps_error_cnt, stdout, stderr
 
-def call_SetUp(orgAccountObj):
+def call_SetUp(orgAccountObj,is_deployed=None,reset_counters=True):
     assert(orgAccountObj != None)
+    is_deployed = is_deployed or False
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.provision_env_ready = False
     clusterObj.save()
@@ -968,28 +969,14 @@ def call_SetUp(orgAccountObj):
     if error_msg != '':
         logger.info(f"SetUp error_msg:{error_msg}")
     assert error_msg == ''
-    # setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
-    # logger.info(f"SetUp setup_req:{setup_req}")
-    # rsp = None
-    # with ps_client.create_client_channel("control") as channel:
-    #     stub = ps_server_pb2_grpc.ControlStub(channel)
-    #     rrsp_gen = stub.SetUp(setup_req)
-    #     cnt, got_rsp_done, stop_exception_cnt, exception_cnt, ps_error_cnt, stdout, stderr = verify_rsp_gen(rrsp_gen,orgAccountObj.name,'SetUp',logger)
-    #     logger.info(f"SetUp cnt:{cnt} got_rsp_done:{got_rsp_done} stop_exception_cnt:{stop_exception_cnt} exception_cnt:{exception_cnt} ps_error_cnt:{ps_error_cnt} stdout:{stdout} stderr:{stderr}")   
-    #     assert(got_rsp_done == True)
-    #     assert(stop_exception_cnt == 0)
-    #     assert(exception_cnt == 0)
-    #     assert(ps_error_cnt == 0)
-    #     assert(f"{setup_req.name}" in stdout)
-    #     assert(stderr == '')
-    #     logger.info(f"SetUp stdout:{stdout}")
-    #     rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
-    #     logger.info(f"GetCurrentSetUpCfg rsp:{rsp}")
-    # assert(rsp is not None)
-    # assert(rsp.setup_cfg.name == setup_req.name)
-    # assert(rsp.setup_cfg.version == setup_req.version)
-    # assert(rsp.setup_cfg.is_public == setup_req.is_public)
-    # assert(rsp.setup_cfg.now == setup_req.now)
+    if reset_counters:
+        orgAccountObj.num_owner_ps_cmd = 0
+        orgAccountObj.num_ps_cmd = 0
+        orgAccountObj.num_setup_cmd = 0
+        orgAccountObj.num_ps_cmd_successful = 0
+        orgAccountObj.num_setup_cmd_successful = 0
+        orgAccountObj.save()
+        PsCmdResult.objects.all().delete()
     return True
 
 def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
@@ -1062,3 +1049,9 @@ def verify_upload(s3_client, s3_bucket, s3_key, original_json_string):
         logger.error(f"Failed to verify JSON at {s3_key} in bucket {s3_bucket}. Error: {e}")
         return False
     
+def dump_cmd_results(orgAccountObj):
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    ndx=0
+    for psCmdResultObj in psCmdResultObjs:
+        logger.info(f"[{ndx}]:{psCmdResultObj.ps_cmd_summary_label}")
+        ndx+=1
