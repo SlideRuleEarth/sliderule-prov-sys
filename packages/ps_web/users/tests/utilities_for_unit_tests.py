@@ -42,7 +42,7 @@ from django_rq import get_scheduler
 
 
 
-logger = logging.getLogger('test_console')
+logger = logging.getLogger('unit_testing')
 formatter = logging.Formatter(
     "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d:%(funcName)s] [%(message)s]",
     datefmt="%Y-%m-%d:%H:%M:%S",
@@ -289,9 +289,8 @@ def create_test_org(name,
     desired_num_nodes = desired_num_nodes or 1
     version = version or 'latest'
     is_public = is_public or False
-    init_mock_ps_server(name=name,num_nodes=0)
 
-    return OrgAccount.objects.create(name=name, 
+    org = OrgAccount.objects.create(name=name, 
                                     owner=org_owner,
                                     max_allowance=max_allowance, 
                                     monthly_allowance=monthly_allowance,
@@ -306,7 +305,11 @@ def create_test_org(name,
                                     max_node_cap = max_node_cap,
                                     desired_num_nodes = desired_num_nodes,
                                     version=version,
-                                    is_public=is_public)
+                                    is_public=is_public,
+                                    allow_deploy_by_token=True,
+                                    destroy_when_no_nodes=True)
+    init_mock_ps_server(name=name,num_nodes=0,is_deployed=False,version=version)
+    return org
 def get_test_org(name=None):
     name = name or TEST_ORG_NAME
     return OrgAccount.objects.get(name=name)
@@ -804,7 +807,8 @@ def verify_org_configure(  client,
     logger.info(f"using url:{url}")
     orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
+    s_OwnerPSCmd_cnt = OwnerPSCmd.objects.count()
+    s_OrgNumNode_cnt = OrgNumNode.objects.count()
     s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
     if new_time is None:
         tm = datetime.now(timezone.utc)
@@ -882,14 +886,18 @@ def verify_schedule_process_state_change(mock_schedule_process_state_change,
         assert (call_args[0]) >= min_tm
         assert (call_args[0]) <= max_tm+timedelta(seconds=1)
 
-def init_mock_ps_server(name=None,num_nodes=None):
+def init_mock_ps_server(name=None, num_nodes=None, is_deployed=None, version=None):
     name = name or TEST_ORG_NAME
     num_nodes = num_nodes or 0
+    is_deployed = is_deployed or False
+    version = version or 'latest'
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.Init(ps_server_pb2.InitReq(name=name,num_nodes=num_nodes))
-        assert(rsp.success)
-        assert(rsp.error_msg=='')
+        init_rsp = stub.Init(ps_server_pb2.InitReq(name=name,num_nodes=num_nodes,is_deployed=is_deployed))
+        assert init_rsp.success
+        if init_rsp.error_msg != '':
+            logger.info(f"Init error_msg:{init_rsp.error_msg}")
+        assert init_rsp.error_msg == ''
 
 def verify_rsp_gen(rrsp_gen, name, ps_cmd,  logger):
     '''

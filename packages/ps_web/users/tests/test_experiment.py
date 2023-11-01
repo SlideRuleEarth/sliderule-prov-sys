@@ -29,7 +29,7 @@ import tasks
 #level = logging.DEBUG
 level = logging.INFO
 #logger = logging.getLogger(__name__)
-logger = logging.getLogger('django')
+logger = logging.getLogger('unit_testing')
 logger.setLevel(level)
 
 

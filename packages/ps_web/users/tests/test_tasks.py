@@ -45,7 +45,7 @@ import views
 #level = logging.DEBUG
 level = logging.INFO
 #logger = logging.getLogger(__name__)
-logger = logging.getLogger('django')
+logger = logging.getLogger('unit_testing')
 logger.setLevel(level)
 
 @pytest.fixture()
@@ -73,7 +73,7 @@ def test_update_burn_rates(tasks_module,initialize_test_environ):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
 
     assert(orgAccountObj.name == TEST_ORG_NAME)
-    init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1)
+    init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1,is_deployed=True, version='latest')
 
     assert(orgAccountObj.owner.username == OWNER_USER)
     update_burn_rates(orgAccountObj)

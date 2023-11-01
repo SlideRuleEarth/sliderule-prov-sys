@@ -87,14 +87,14 @@ formatter = logging.Formatter(
 )
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
-console_handler.setLevel(logging.ERROR)
+console_handler.setLevel(logging.INFO)
 
 # file_handler = logging.FileHandler("/home/logs/ps-server-test-stub.log")
 # file_handler.setFormatter(formatter)
 # file_handler.setLevel(logging.ERROR)
 
 LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.ERROR)
+LOG.setLevel(logging.INFO)
 
 LOG.addHandler(console_handler)
 #LOG.addHandler(file_handler)
@@ -110,8 +110,10 @@ class shared_Mock_Clusters:
     mocked_NUM_NODES_dict = {'':-1}  
     versions = ['v1', 'v2', 'v3', 'latest', 'unstable']
     deployed_dict = {False:-1}
-    cluster_version_dict = {'':-1}   # SetUp version is in setup.json
-    cluster_is_public_dict = {False:-1}   # SetUp version is in setup.json
+    cluster_cur_version_dict = {'':-1}   # SetUp version is in setup.json
+    cluster_cur_is_public_dict = {False:-1}   # SetUp version is in setup.json
+    cluster_env_version_dict = {'':-1}   # SetUp version is in setup.json
+    cluster_env_is_public_dict = {False:-1}   # SetUp version is in setup.json
 
 
 def get_domain_env():
@@ -193,8 +195,11 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             if request.name == '': # set all orgs to this value
                 for o in shared_Mock_Clusters.mocked_NUM_NODES_dict:
                     shared_Mock_Clusters.mocked_NUM_NODES_dict[o] = request.num_nodes
+                    shared_Mock_Clusters.deployed_dict[o] = request.is_deployed
+                    shared_Mock_Clusters.cluster_cur_version_dict[o] = request.version
             else:
                 shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = request.num_nodes
+                shared_Mock_Clusters.cluster_cur_version_dict[request.name] = request.version
         except Exception as e:
             LOG.critical(f'Exception in Init:{e}')
             return ps_server_pb2.InitRsp(success=False, error_msg=str(e))
@@ -221,17 +226,25 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         return rsp
 
     def check_for_fake_orgs(self, request, ps_cmd):
-
         if ps_cmd == 'Update':
+            LOG.info(f'#### Update {request.name} reload:{request.reload} deployed:{shared_Mock_Clusters.deployed_dict[request.name]}')
+            if not shared_Mock_Clusters.deployed_dict[request.name]:
+                if not request.reload:
+                    raise Exception(RELOAD_FLAG_SET_INCORRECTLY_MSG)
+            else:
+                if request.reload:
+                    raise Exception(RELOAD_FLAG_SET_INCORRECTLY_MSG)
             shared_Mock_Clusters.deployed_dict[request.name] = True
             shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = request.num_nodes
             setup_cfg = read_SetUpCfg(request.name)
-            shared_Mock_Clusters.cluster_version_dict[request.name] = setup_cfg.version
-            shared_Mock_Clusters.cluster_is_public_dict[request.name] = setup_cfg.is_public
+            shared_Mock_Clusters.cluster_cur_version_dict[request.name] = setup_cfg.version
+            shared_Mock_Clusters.cluster_cur_is_public_dict[request.name] = setup_cfg.is_public
+
         if ps_cmd == 'Destroy':
             shared_Mock_Clusters.deployed_dict[request.name] = False
-            shared_Mock_Clusters.cluster_version_dict[request.name] = ''
-            shared_Mock_Clusters.cluster_is_public_dict[request.name] = ''
+            shared_Mock_Clusters.cluster_cur_version_dict[request.name] = ''
+            shared_Mock_Clusters.cluster_cur_is_public_dict[request.name] = ''
+            shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
 
         cli_rsp = ps_server_pb2.cli_rsp(valid=True,updating=True,stdout=f'{ps_cmd} {request.name} testing 1..2...3...')
         state = ps_server_pb2.StateOfCluster(valid=True,deployed=shared_Mock_Clusters.deployed_dict[request.name],deployed_state=f'{ps_cmd} Testing....',ip_address='0.0.0.0')
@@ -328,21 +341,28 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         yield from self.FakeCMD(request,'Refresh')
 
     def Destroy(self, request, context):  ## This is called by GRPC framework
+        shared_Mock_Clusters.deployed_dict[request.name] = False
+        shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
         yield from self.FakeCMD(request,'Destroy')
 
     def Update(self, request, context):  ## This is called by GRPC framework
         yield from self.FakeCMD(request,'Update')
 
-
     def SetUp(self, request, context):
         try:
             LOG.critical(f'STUBBED SetUp {request.name} version:{request.version} is_public:{request.is_public} cluster in  domain:{domain_env}')
-            deployed = shared_Mock_Clusters.deployed_dict[request.name]
         except KeyError:
             shared_Mock_Clusters.deployed_dict[request.name] = False
             shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
+            shared_Mock_Clusters.cluster_cur_version_dict[request.name] = ''
+            shared_Mock_Clusters.cluster_cur_is_public_dict[request.name] = False
         update_SetUpCfg(request.name, request.version, request.is_public, request.now)
         yield from self.FakeCMD(request,'SetUp')
+
+    def TearDown(self, request, context):
+        shared_Mock_Clusters.deployed_dict[request.name] = False
+        shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
+        yield from self.FakeCMD(request,'TearDown')
 
     def GetCurrentSetUpCfg(self,request,context):
         '''

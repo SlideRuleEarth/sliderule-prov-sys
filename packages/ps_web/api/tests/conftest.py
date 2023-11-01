@@ -16,7 +16,7 @@ from users.tests.utilities_for_unit_tests import create_active_membership,get_te
 @pytest.fixture(scope='session', autouse=True)
 def setup_logging():
     # Create a custom logger
-    logger = logging.getLogger('unit-testing')
+    logger = logging.getLogger('unit_testing')
     # Set level of logging
     #logger.setLevel(logging.ERROR)
     logger.setLevel(logging.INFO)

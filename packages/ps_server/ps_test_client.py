@@ -41,7 +41,7 @@ import ps_server_pb2_grpc
 
 import os
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger('__name__')
 _LOGGER.setLevel(logging.INFO)
 
 _SERVER_ADDR_TEMPLATE = "ps-server:%d"

@@ -24,7 +24,7 @@ sys.path.append(src_path)
 #level = logging.DEBUG
 level = logging.INFO
 #logger = logging.getLogger(__name__)
-logger = logging.getLogger('test_console')
+logger = logging.getLogger('unit_testing')
 logger.setLevel(level)
 ch = logging.StreamHandler()
 ch.setLevel(level)

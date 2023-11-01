@@ -22,8 +22,7 @@ sys.path.append(src_path)
 # setup logging to terminal
 #level = logging.DEBUG
 level = logging.INFO
-#logger = logging.getLogger(__name__)
-logger = logging.getLogger('django')
+logger = logging.getLogger('unit_testing')
 logger.setLevel(level)
 logger.info(f"parent_dir:{parent_dir}src_path:{src_path}")
 

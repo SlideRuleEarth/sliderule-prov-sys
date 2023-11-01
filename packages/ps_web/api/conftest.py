@@ -11,7 +11,7 @@ from django.core.cache import cache
 
 
 import logging
-logger = logging.getLogger('test_console')
+logger = logging.getLogger('unit_testing')
 
 @pytest.fixture
 def mock_email_backend(mocker):

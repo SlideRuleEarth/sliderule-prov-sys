@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock, Mock
 @pytest.fixture(scope='session', autouse=True)
 def setup_logging():
     # Create a custom logger
-    logger = logging.getLogger('unit-testing')
+    logger = logging.getLogger('unit_testing')
     # Set level of logging
     #logger.setLevel(logging.ERROR)
     logger.setLevel(logging.INFO)
@@ -32,7 +32,7 @@ def setup_logging():
     logger.removeHandler(console_handler)
 
 def log_schedule_process_state_change(*args, **kwargs):
-    logger = logging.getLogger('unit-testing')
+    logger = logging.getLogger('unit_testing')
     logger.info(f"schedule_process_state_change args:{args} kwargs:{kwargs}")    
 
 
@@ -47,7 +47,7 @@ def mock_schedule_process_state_change():
 
 
 def log_tasks_enqueue_process_state_change(*args, **kwargs):
-    logger = logging.getLogger('unit-testing')
+    logger = logging.getLogger('unit_testing')
     logger.info(f"stub tasks_enqueue_process_state_change args:{args} kwargs:{kwargs}")    
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def mock_tasks_enqueue_stubbed_out():
         yield mock
 
 def log_views_enqueue_process_state_change(*args, **kwargs):
-    logger = logging.getLogger('unit-testing')
+    logger = logging.getLogger('unit_testing')
     logger.info(f"stub views_enqueue_process_state_change args:{args} kwargs:{kwargs}")    
 
 @pytest.fixture

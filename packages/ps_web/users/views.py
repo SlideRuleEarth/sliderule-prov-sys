@@ -413,6 +413,7 @@ def orgConfigure(request, pk):
                     LOG.info(f"saved clusterObj for orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} ")
                     messages.success(request,f'org {orgAccountObj.name} cfg updated successfully')
                     enqueue_process_state_change(orgAccountObj.name)
+                    enqueue_process_state_change(orgAccountObj.name) # one more time in case destroy needs to happen
                 else:
                     emsg = f"Input Errors:{config_form.errors.as_text}"
                     messages.warning(request, emsg)

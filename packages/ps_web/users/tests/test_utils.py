@@ -4,11 +4,11 @@ import os
 
 from users.tests.global_test import GlobalTestCase
 from users.utils import get_ps_server_versions,get_ps_server_versions_from_env
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER
 from users.tasks import get_org_queue_name_str
 
 import logging
-logger = logging.getLogger('test_console')
+logger = logging.getLogger('unit_testing')
 
 
 class UtilsTest(GlobalTestCase):

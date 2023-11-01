@@ -177,19 +177,19 @@ def cull_expired_entries(org,tm):
             break
     LOG.debug(f"ended with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
 
-def need_destroy_for_changed_version_or_is_public(orgAccountObj,num_nodes_to_deploy):
+def need_destroy_for_changed_version_or_is_public(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     # LOG.debug(f"cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
     # LOG.debug(f"    org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
-    if clusterObj.is_deployed:
-        changed_version = (clusterObj.cur_version != orgAccountObj.version)
-        changed_is_public = (clusterObj.is_public != orgAccountObj.is_public)
-        #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-        if changed_version or changed_is_public:
-            #LOG.debug(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-            if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: # we (changed version or is_public) and we are processing a new set of top items (new deployment request)
-                LOG.info(f"num_nodes_to_deploy:{num_nodes_to_deploy} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes} need_destroy_for_changed_version_or_is_public: True")
-                return True
+    changed_version = (clusterObj.cur_version != clusterObj.prov_env_version)
+    changed_is_public = (clusterObj.is_public != clusterObj.prov_env_is_public )
+    LOG.info(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
+    if clusterObj.is_deployed and (changed_version or changed_is_public):
+        LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
+        process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
+        enqueue_process_state_change(orgAccountObj.name) # one for Destroy
+        enqueue_process_state_change(orgAccountObj.name) # one for Update
+        return True
     return False
 
 def clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning):
@@ -1135,6 +1135,7 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
                     rsp_status, console_html = getConsoleHtml(orgAccountObj, rrsp)
                     psCmdResultObj.ps_cmd_output += console_html
                     psCmdResultObj.save()
+                    LOG.info(f"{org_cmd_str} iter:<{iterations}> state:{rrsp.state} rrsp.state.valid:{rrsp.state.valid} rrsp.done:{rrsp.done} rrsp.ps_server_error:{rrsp.ps_server_error}")
                     if rrsp.state.valid:
                         LOG.info(f"{org_cmd_str} iter:<{iterations}> got valid state in rsp with state:{rrsp.state} using deploy_values:{deploy_values}")
                         if deploy_values:
@@ -1323,13 +1324,7 @@ def process_SetUp_cmd(orgAccountObj):
                             clusterObj.prov_env_version = rsp.setup_cfg.version
                             clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
                             if rsp.setup_cfg.version != '':
-                                changed_version = (clusterObj.cur_version != clusterObj.prov_env_version)
-                                changed_is_public = (clusterObj.is_public != clusterObj.prov_env_is_public )
-                                LOG.info(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-                                if clusterObj.is_deployed and (changed_version or changed_is_public):
-                                    LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
-                                    process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
-                                    enqueue_process_state_change(orgAccountObj.name)
+                                need_destroy_for_changed_version_or_is_public(orgAccountObj=orgAccountObj)
                             else:
                                 clusterObj.provision_env_ready = False
                                 orgAccountObj.provisioning_suspended = True
@@ -1355,7 +1350,7 @@ def process_SetUp_cmd(orgAccountObj):
         clusterObj.save(update_fields=['active_ps_cmd'])
         time_to_process = datetime.now(timezone.utc) - st
         time_to_process = time_to_process - timedelta(microseconds=time_to_process.microseconds)
-        LOG.info(f"DONE {org_cmd_str} {orgAccountObj.version} has completed in {str(time_to_process)}")
+        LOG.info(f"DONE {org_cmd_str} org version:{orgAccountObj.version} cluster prov_env_version:{clusterObj.prov_env_version} cluster cur_version:{clusterObj.cur_version} has completed in {str(time_to_process)}")
         if orgAccountObj.provisioning_suspended != clusterObj.provision_env_ready:
             orgAccountObj.provisioning_suspended = not clusterObj.provision_env_ready
             orgAccountObj.save(update_fields=['provisioning_suspended'])
@@ -1389,6 +1384,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                 if int(deploy_values['desired_num_nodes']) == 0:
                     LOG.info("Setting num_nodes_to_use to zero (i.e. deploy load balancer and monitor only)")
                 clusterObj = Cluster.objects.get(org=orgAccountObj)
+                LOG.info(f"Update {orgAccountObj.name} clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.cur_version:{clusterObj.cur_version} deploy_values['version']:{deploy_values['version']}")
                 rsp_gen = stub.Update(
                     ps_server_pb2.UpdateRequest(
                         name        = orgAccountObj.name,
