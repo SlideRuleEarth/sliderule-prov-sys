@@ -92,7 +92,7 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
         #LOG.info('serializer_data:%s',serializer.data)
         LOG.info(f"active:{serializer.data['active']}")
         if serializer.data['active']:
-            refresh = self.get_token(self.user, username, attrs['org_name'])
+            refresh = self.get_token(user=self.user, user_name=username, org_name=attrs['org_name'])
             valid_data = TokenBackend(algorithm='HS256').decode(str(refresh.access_token), verify=False)         
             #LOG.info("exp:%s",datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT))
             data["exp"] = datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT)
@@ -226,9 +226,9 @@ class OrgTokenRefreshSerializer(TokenRefreshSerializer):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def get_token(cls, user, user_name, name):
-        LOG.info(f"{user_name} {name}")
-        return cls.token_class.for_user(user=user, name= name)
+    def get_token(cls, user, user_name, org_name):
+        LOG.info(f"{user_name} {org_name}")
+        return cls.token_class.for_user(user=user, org_name=org_name)
 
     def validate(self, attrs):
         #LOG.info(f"attrs:{attrs}")
@@ -259,7 +259,7 @@ class OrgTokenRefreshSerializer(TokenRefreshSerializer):
             # these will throw exception if refresh is invalid expired or blacklisted
             super(TokenRefreshSerializer,self).validate(attrs) # throw exception if invalid or blacklisted
             TokenRefreshSerializer.token_class(attrs["refresh"]).blacklist()
-            refresh = self.get_token(user=user, user_name=data['user_name'], name=data['org_name'])
+            refresh = self.get_token(user=user, user_name=data['user_name'], org_name=data['org_name'])
             valid_data = TokenBackend(algorithm='HS256').decode(str(refresh.access_token), verify=False)         
             #LOG.info("exp:%s",datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT))
             returned_data["exp"] = datetime.strftime(datetime.fromtimestamp(float(valid_data['exp']),tz=timezone.utc),format=TM_FMT)
