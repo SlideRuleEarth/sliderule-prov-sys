@@ -1,7 +1,7 @@
 pytest<8
 moto<5
 time-machine<3
-pytest-django<5
+pytest-django<4.6
 pipdeptree
 pytest-mock
 coverage
