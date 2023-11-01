@@ -203,9 +203,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     shared_Mock_Clusters.mocked_NUM_NODES_dict[o] = request.num_nodes
                     shared_Mock_Clusters.deployed_dict[o] = request.is_deployed
                     shared_Mock_Clusters.cluster_cur_version_dict[o] = request.version
+                    shared_Mock_Clusters.cluster_cur_is_public_dict[o] = request.is_public
             else:
                 shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = request.num_nodes
+                shared_Mock_Clusters.deployed_dict[request.name] = request.is_deployed
                 shared_Mock_Clusters.cluster_cur_version_dict[request.name] = request.version
+                shared_Mock_Clusters.cluster_cur_is_public_dict[request.name] = request.is_public
         except Exception as e:
             LOG.critical(f'Exception in Init:{e}')
             return ps_server_pb2.InitRsp(success=False, error_msg=str(e))

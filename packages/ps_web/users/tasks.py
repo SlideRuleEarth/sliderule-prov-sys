@@ -219,7 +219,9 @@ def check_provision_env_ready(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     setup_occurred = False
     if not clusterObj.provision_env_ready:
-        clusterObj.provision_env_ready,setup_occurred = process_SetUp_cmd(orgAccountObj=orgAccountObj)
+        clusterObj.provision_env_ready,setup_occurred,error_msg = process_SetUp_cmd(orgAccountObj=orgAccountObj)
+        if error_msg != '':
+            LOG.error(f"ERROR processing SetUp {orgAccountObj.name} returned error_msg:{error_msg}")
     return clusterObj.provision_env_ready,setup_occurred       
 
 def process_num_node_table(orgAccountObj,prior_need_refresh):
@@ -1244,6 +1246,8 @@ def process_SetUp_cmd(orgAccountObj):
         This function processes the SetUp command (that shows up as Configure in the results)
     '''
     LOG.info(f"Configure {orgAccountObj.name}")
+    setup_occurred = False
+    error_msg = ''
     st = datetime.now(timezone.utc)
     psCmdResultObj,org_cmd_str = get_psCmdResultObj(orgAccountObj, 'SetUp', version=orgAccountObj.version, username=orgAccountObj.owner, is_adhoc=False)
     LOG.info(f"STARTED {org_cmd_str} is_public:{orgAccountObj.is_public}")
@@ -1259,7 +1263,6 @@ def process_SetUp_cmd(orgAccountObj):
                     now=datetime.now(timezone.utc).strftime(FMT)),
                     timeout=timeout)
             done = False
-            setup_occurred = True
             clusterObj = Cluster.objects.get(org=orgAccountObj)
             clusterObj.active_ps_cmd = 'SetUp'
             clusterObj.save(update_fields=['active_ps_cmd'])
@@ -1336,6 +1339,7 @@ def process_SetUp_cmd(orgAccountObj):
                             orgAccountObj.num_setup_cmd_successful += 1
                             orgAccountObj.save(update_fields=['num_ps_cmd_successful','num_setup_cmd_successful'])
                         LOG.info(f"{org_cmd_str} got rrsp done from ps_server!")
+            setup_occurred = True
 
     except Exception as e:
         error_msg = f"ERROR: {org_cmd_str}  {orgAccountObj.version}:"
@@ -1354,7 +1358,7 @@ def process_SetUp_cmd(orgAccountObj):
         if orgAccountObj.provisioning_suspended != clusterObj.provision_env_ready:
             orgAccountObj.provisioning_suspended = not clusterObj.provision_env_ready
             orgAccountObj.save(update_fields=['provisioning_suspended'])
-    return clusterObj.provision_env_ready,setup_occurred       
+    return clusterObj.provision_env_ready,setup_occurred,error_msg       
 
 def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
     global MIN_HRS_TO_LIVE_TO_START

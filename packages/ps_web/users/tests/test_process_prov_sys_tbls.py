@@ -242,7 +242,7 @@ def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_vie
     
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-    
+    start_num_ps_cmd = orgAccountObj.num_ps_cmd
     url = reverse('org-token-obtain-pair')
 
     response = client.post(url,data={'username':OWNER_USER,'password':OWNER_PASSWORD, 'org_name':orgAccountObj.name})
@@ -304,7 +304,7 @@ def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_vie
     task_idle, loop_count = process_state_change(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    assert(orgAccountObj.num_ps_cmd==1)
+    assert(orgAccountObj.num_ps_cmd==start_num_ps_cmd+1) # only one
      # only process one of the entries
      # only process one here, wait for expire
     
@@ -581,8 +581,14 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
 
 def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_onn_id):
     logger.info(f"is_deployed: {is_deployed}, is_public_changes: {is_public_changes}, version_changes: {version_changes}, new_highest_onn_id: {new_highest_onn_id}")
-
     orgAccountObj = get_test_org()
+    init_mock_ps_server(logger,
+                        name=orgAccountObj.name,
+                        num_nodes=orgAccountObj.desired_num_nodes,
+                        is_deployed=is_deployed,
+                        version=orgAccountObj.version,
+                        is_public=orgAccountObj.is_public)
+                        
     orgAccountObj.desired_num_nodes=1
     orgAccountObj.is_public = True
     orgAccountObj.version = 'v2'
@@ -611,8 +617,8 @@ def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_o
         expire_date = datetime.now(timezone.utc)+timedelta(minutes=16) # before the one above!
         onn = OrgNumNode.objects.create(user=the_TEST_USER(),org=orgAccountObj, desired_num_nodes=new_desired_num_nodes,expiration=expire_date)
         logger.info(f"created new onn:{onn} OrgNumNode.objects.count():{OrgNumNode.objects.count()}")   
-    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
-    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj,sum_of_all_users_dnn)
+    sum_of_all_users_dnn,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj=orgAccountObj)
+    need_to_destroy = need_destroy_for_changed_version_or_is_public(orgAccountObj=orgAccountObj)
     if not is_deployed:
         assert not need_to_destroy
     else:
@@ -626,10 +632,10 @@ def just_ONE_CASE(is_deployed, is_public_changes, version_changes, new_highest_o
             assert not need_to_destroy
 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_TEST_USER,client,mock_email_backend,initialize_test_environ):
+def  test_need_destroy_for_changed_version_or_is_public_ALL_CASES(caplog,create_TEST_USER,client,mock_email_backend,initialize_test_environ, mock_tasks_enqueue_stubbed_out):
     '''
         This procedure will test logic for forced Destroy if all combinations of these are met
     Changes to:

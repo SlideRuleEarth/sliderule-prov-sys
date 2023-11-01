@@ -464,10 +464,12 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert(orgAccountObj.num_ps_cmd==1) # onn triggered update
     assert(orgAccountObj.num_ps_cmd_successful==1) 
 
-    assert PsCmdResult.objects.count() == 1 # Update 
+    assert PsCmdResult.objects.count() == 2 # Configure Update 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
 
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==1)
@@ -492,10 +494,10 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
 
     assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
 
-    assert orgAccountObj.num_setup_cmd == 0
-    assert orgAccountObj.num_setup_cmd_successful == 0
-    assert orgAccountObj.num_ps_cmd_successful == 0
-    assert orgAccountObj.num_ps_cmd == 0
+    assert orgAccountObj.num_setup_cmd == 1 # from setup
+    assert orgAccountObj.num_setup_cmd_successful == 1
+    assert orgAccountObj.num_ps_cmd_successful == 1
+    assert orgAccountObj.num_ps_cmd == 1
     assert orgAccountObj.min_node_cap == 0
     
     logger.info(f"orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
@@ -556,10 +558,12 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
 
-    assert PsCmdResult.objects.count() == 1 # Update 
+    assert PsCmdResult.objects.count() == 2 # Configure Update 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
     time_now = datetime.now(timezone.utc)
     # now change past the ttl triggers a call to process_state_change
     # so that the table is processed again and the exipred ONN is removed
@@ -568,10 +572,12 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
     with time_machine.travel(dt,tick=True):
         fake_now = datetime.now(timezone.utc)
         logger.info(f"fake_now:{fake_now} dt:{dt}")
-        assert psCmdResultObjs.count() == 1
+        assert psCmdResultObjs.count() == 2
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
 
 
 #@pytest.mark.dev

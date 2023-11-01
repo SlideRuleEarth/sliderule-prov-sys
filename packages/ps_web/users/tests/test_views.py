@@ -153,7 +153,7 @@ def test_reg_user_access_negative_test(caplog,client,mock_email_backend,initiali
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_org_account_cfg_success(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_email_backend,initialize_test_environ):
+def test_org_account_cfg_success(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_email_backend,initialize_mock_ps_server_and_test_environ):
     assert OrgAccount.objects.count() == 1
     
     orgAccountObj = get_test_org()

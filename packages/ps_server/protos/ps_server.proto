@@ -167,6 +167,8 @@ message InitReq{ // for testing only
   string name = 1;
   int32  num_nodes= 2;
   bool   is_deployed = 3;
+  string version = 4;
+  bool is_public = 5;
 }
 
 message InitRsp{

@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
 from django.contrib.messages import get_messages
 
-from users.tasks import init_new_org_memberships,process_state_change,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED
+from users.tasks import init_new_org_memberships,process_state_change,process_SetUp_cmd,sort_ONN_by_nn_exp,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED
 from django.core import serializers
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -886,14 +886,15 @@ def verify_schedule_process_state_change(mock_schedule_process_state_change,
         assert (call_args[0]) >= min_tm
         assert (call_args[0]) <= max_tm+timedelta(seconds=1)
 
-def init_mock_ps_server(logger,name=None, num_nodes=None, is_deployed=None, version=None):
+def init_mock_ps_server(logger,name=None, num_nodes=None, is_deployed=None, version=None, is_public=None):
     name = name or TEST_ORG_NAME
     num_nodes = num_nodes or 0
     is_deployed = is_deployed or False
     version = version or 'latest'
+    is_public = is_public or False
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        init_rsp = stub.Init(ps_server_pb2.InitReq(name=name,num_nodes=num_nodes,is_deployed=is_deployed))
+        init_rsp = stub.Init(ps_server_pb2.InitReq(name=name,num_nodes=num_nodes,is_deployed=is_deployed,version=version,is_public=is_public))
         assert init_rsp.success
         if init_rsp.error_msg != '':
             logger.info(f"Init error_msg:{init_rsp.error_msg}")
@@ -960,28 +961,35 @@ def call_SetUp(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.provision_env_ready = False
     clusterObj.save()
-    setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
-    logger.info(f"SetUp setup_req:{setup_req}")
-    rsp = None
-    with ps_client.create_client_channel("control") as channel:
-        stub = ps_server_pb2_grpc.ControlStub(channel)
-        rrsp_gen = stub.SetUp(setup_req)
-        cnt, got_rsp_done, stop_exception_cnt, exception_cnt, ps_error_cnt, stdout, stderr = verify_rsp_gen(rrsp_gen,orgAccountObj.name,'SetUp',logger)
-        logger.info(f"SetUp cnt:{cnt} got_rsp_done:{got_rsp_done} stop_exception_cnt:{stop_exception_cnt} exception_cnt:{exception_cnt} ps_error_cnt:{ps_error_cnt} stdout:{stdout} stderr:{stderr}")   
-        assert(got_rsp_done == True)
-        assert(stop_exception_cnt == 0)
-        assert(exception_cnt == 0)
-        assert(ps_error_cnt == 0)
-        assert(f"{setup_req.name}" in stdout)
-        assert(stderr == '')
-        logger.info(f"SetUp stdout:{stdout}")
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
-        logger.info(f"GetCurrentSetUpCfg rsp:{rsp}")
-    assert(rsp is not None)
-    assert(rsp.setup_cfg.name == setup_req.name)
-    assert(rsp.setup_cfg.version == setup_req.version)
-    assert(rsp.setup_cfg.is_public == setup_req.is_public)
-    assert(rsp.setup_cfg.now == setup_req.now)
+    init_mock_ps_server(logger=logger,name=orgAccountObj.name, num_nodes=orgAccountObj.desired_num_nodes, is_deployed=False, version=orgAccountObj.version, is_public=orgAccountObj.is_public)
+    env_ready,setup_occurred,error_msg = process_SetUp_cmd(orgAccountObj)
+    assert env_ready
+    assert setup_occurred
+    if error_msg != '':
+        logger.info(f"SetUp error_msg:{error_msg}")
+    assert error_msg == ''
+    # setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
+    # logger.info(f"SetUp setup_req:{setup_req}")
+    # rsp = None
+    # with ps_client.create_client_channel("control") as channel:
+    #     stub = ps_server_pb2_grpc.ControlStub(channel)
+    #     rrsp_gen = stub.SetUp(setup_req)
+    #     cnt, got_rsp_done, stop_exception_cnt, exception_cnt, ps_error_cnt, stdout, stderr = verify_rsp_gen(rrsp_gen,orgAccountObj.name,'SetUp',logger)
+    #     logger.info(f"SetUp cnt:{cnt} got_rsp_done:{got_rsp_done} stop_exception_cnt:{stop_exception_cnt} exception_cnt:{exception_cnt} ps_error_cnt:{ps_error_cnt} stdout:{stdout} stderr:{stderr}")   
+    #     assert(got_rsp_done == True)
+    #     assert(stop_exception_cnt == 0)
+    #     assert(exception_cnt == 0)
+    #     assert(ps_error_cnt == 0)
+    #     assert(f"{setup_req.name}" in stdout)
+    #     assert(stderr == '')
+    #     logger.info(f"SetUp stdout:{stdout}")
+    #     rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+    #     logger.info(f"GetCurrentSetUpCfg rsp:{rsp}")
+    # assert(rsp is not None)
+    # assert(rsp.setup_cfg.name == setup_req.name)
+    # assert(rsp.setup_cfg.version == setup_req.version)
+    # assert(rsp.setup_cfg.is_public == setup_req.is_public)
+    # assert(rsp.setup_cfg.now == setup_req.now)
     return True
 
 def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
