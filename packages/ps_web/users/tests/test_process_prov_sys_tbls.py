@@ -368,12 +368,12 @@ def test_org_ONN_remove(caplog,client,mock_email_backend,initialize_test_environ
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_orgNumNodes(caplog,client,mock_email_backend,initialize_test_environ):
+def test_orgNumNodes(setup_logging,client,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test the get org num nodes api/view
     '''
-    caplog.set_level(logging.DEBUG)
-    init_mock_ps_server()
+    logger = setup_logging
+    init_mock_ps_server(logger)
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.is_deployed = True
@@ -417,12 +417,12 @@ def test_orgNumNodes(caplog,client,mock_email_backend,initialize_test_environ):
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_environ):
+def test_org_ONN_redundant_2(setup_logging,client,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test logic for deploy using ONN requests
     '''
-    caplog.set_level(logging.DEBUG)
-    init_mock_ps_server()
+    logger = setup_logging
+    init_mock_ps_server(logger)
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     

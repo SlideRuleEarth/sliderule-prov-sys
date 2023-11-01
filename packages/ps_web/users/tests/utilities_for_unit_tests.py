@@ -308,7 +308,7 @@ def create_test_org(name,
                                     is_public=is_public,
                                     allow_deploy_by_token=True,
                                     destroy_when_no_nodes=True)
-    init_mock_ps_server(name=name,num_nodes=0,is_deployed=False,version=version)
+    init_mock_ps_server(logger,name=name,num_nodes=0,is_deployed=False,version=version)
     return org
 def get_test_org(name=None):
     name = name or TEST_ORG_NAME
@@ -886,7 +886,7 @@ def verify_schedule_process_state_change(mock_schedule_process_state_change,
         assert (call_args[0]) >= min_tm
         assert (call_args[0]) <= max_tm+timedelta(seconds=1)
 
-def init_mock_ps_server(name=None, num_nodes=None, is_deployed=None, version=None):
+def init_mock_ps_server(logger,name=None, num_nodes=None, is_deployed=None, version=None):
     name = name or TEST_ORG_NAME
     num_nodes = num_nodes or 0
     is_deployed = is_deployed or False

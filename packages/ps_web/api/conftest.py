@@ -2,7 +2,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER
-from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user,check_redis_for_testing
+from users.tests.utilities_for_unit_tests import init_mock_ps_server,random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user,check_redis_for_testing
 from users.tests.conftest import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME
 from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import Group
@@ -77,3 +77,32 @@ def initialize_test_environ(setup_logging,request):
                                             version=version,
                                             is_public=is_public)
     logger.info(f"org:{orgAccountObj.name} owner:{orgAccountObj.owner.username}")
+
+@pytest.fixture
+def initialize_mock_ps_server_and_test_environ(setup_logging,request):
+
+    logger = setup_logging
+    if hasattr(request, "param"):
+        if 'version' in request.param:
+            version = request.param['version']
+        if 'is_public' in request.param:
+            is_public = request.param['is_public']
+        if 'num_nodes' in request.param:
+            num_nodes = request.param['num_nodes']
+    logger.info(f"init version: {version}")
+    logger.info(f"is_public: {is_public}")
+    orgAccountObj,owner = init_test_environ(the_logger=logger,
+                                            name=TEST_ORG_NAME,
+                                            org_owner=None,
+                                            max_allowance=20000, 
+                                            monthly_allowance=1000,
+                                            balance=2000,
+                                            fytd_accrued_cost=100, 
+                                            most_recent_charge_time=datetime.now(timezone.utc), 
+                                            most_recent_credit_time=datetime.now(timezone.utc),
+                                            most_recent_recon_time=datetime.now(timezone.utc),
+                                            version=version,
+                                            is_public=is_public)
+    logger.info(f"org:{orgAccountObj.name} owner:{orgAccountObj.owner.username}")
+
+    init_mock_ps_server(logger=logger,version=version,is_public=is_public,num_nodes=num_nodes)

@@ -115,6 +115,12 @@ class shared_Mock_Clusters:
     cluster_env_version_dict = {'':-1}   # SetUp version is in setup.json
     cluster_env_is_public_dict = {False:-1}   # SetUp version is in setup.json
 
+    @classmethod
+    def log_fields(cls):
+        for attr, value in cls.__dict__.items():
+            if not attr.startswith('__') and not callable(value):
+                LOG.info(f"{attr}: {value}")
+
 
 def get_domain_env():
     return os.environ.get("DOMAIN",'localhost')
@@ -226,6 +232,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         return rsp
 
     def check_for_fake_orgs(self, request, ps_cmd):
+        LOG.info(f'check_for_fake_orgs {request.name} {ps_cmd}')
         if ps_cmd == 'Update':
             LOG.info(f'#### Update {request.name} reload:{request.reload} deployed:{shared_Mock_Clusters.deployed_dict[request.name]}')
             if not shared_Mock_Clusters.deployed_dict[request.name]:
@@ -275,6 +282,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         try:
             yield from self.check_for_fake_orgs(request, ps_cmd)
         except Exception as e:
+            shared_Mock_Clusters.log_fields()
             emsg = (f" Processing fake_cmd {ps_cmd} {request.name} cluster caught this exception: ")
             LOG.exception(emsg)
             emsg += str(e)

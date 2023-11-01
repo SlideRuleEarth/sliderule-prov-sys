@@ -64,16 +64,16 @@ def tasks_module():
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_update_burn_rates(tasks_module,initialize_test_environ):
+def test_update_burn_rates(setup_logging,tasks_module,initialize_test_environ):
     '''
         This procedure will test the 'update_burn_rates' routine
     '''
 
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
-
+    logger = setup_logging
     assert(orgAccountObj.name == TEST_ORG_NAME)
-    init_mock_ps_server(name=TEST_ORG_NAME,num_nodes=1,is_deployed=True, version='latest')
+    init_mock_ps_server(logger,name=TEST_ORG_NAME,num_nodes=1,is_deployed=True, version='latest')
 
     assert(orgAccountObj.owner.username == OWNER_USER)
     update_burn_rates(orgAccountObj)

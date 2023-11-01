@@ -290,11 +290,11 @@ def test_org_refresh_cluster_only_one(caplog, client, mock_tasks_enqueue_stubbed
     current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
     call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-@pytest.mark.parametrize('initialize_test_environ', [{'version': 'latest', 'is_public': False},], indirect=True)
-def test_change_version_with_user_view1(setup_logging, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, client, initialize_test_environ):
+@pytest.mark.parametrize('initialize_mock_ps_server_and_test_environ', [{'version': 'latest', 'is_public': False, 'num_nodes': 0},], indirect=True)
+def test_change_version_with_user_view1(setup_logging, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, client,initialize_mock_ps_server_and_test_environ):
     logger = setup_logging
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
