@@ -234,7 +234,7 @@ def test_get_or_create_OrgNumNodes(caplog,client,mock_email_backend,initialize_t
 #@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
-def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
+def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_schedule_process_state_change,mock_email_backend,initialize_test_environ):
     '''
         This procedure will test logic for redundant ONN requests
     '''
@@ -490,7 +490,7 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_environ,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
+def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_environ,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_schedule_process_state_change):
     '''
         This procedure will test logic the routine sort_ONN_by_nn_exp
     '''
