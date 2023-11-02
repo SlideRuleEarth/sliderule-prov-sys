@@ -112,8 +112,6 @@ class shared_Mock_Clusters:
     deployed_dict = {False:-1}
     cluster_cur_version_dict = {'':-1}   # SetUp version is in setup.json
     cluster_cur_is_public_dict = {False:-1}   # SetUp version is in setup.json
-    cluster_env_version_dict = {'':-1}   # SetUp version is in setup.json
-    cluster_env_is_public_dict = {False:-1}   # SetUp version is in setup.json
 
     @classmethod
     def log_fields(cls):
@@ -199,11 +197,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         LOG.critical(f'Init request:{request}')
         try:
             if request.name == '': # set all orgs to this value
-                for o in shared_Mock_Clusters.mocked_NUM_NODES_dict:
-                    shared_Mock_Clusters.mocked_NUM_NODES_dict[o] = request.num_nodes
-                    shared_Mock_Clusters.deployed_dict[o] = request.is_deployed
-                    shared_Mock_Clusters.cluster_cur_version_dict[o] = request.version
-                    shared_Mock_Clusters.cluster_cur_is_public_dict[o] = request.is_public
+                return ps_server_pb2.InitRsp(success=False, error_msg='No Name given')
             else:
                 shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = request.num_nodes
                 shared_Mock_Clusters.deployed_dict[request.name] = request.is_deployed
@@ -253,7 +247,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         if ps_cmd == 'Destroy':
             shared_Mock_Clusters.deployed_dict[request.name] = False
             shared_Mock_Clusters.cluster_cur_version_dict[request.name] = ''
-            shared_Mock_Clusters.cluster_cur_is_public_dict[request.name] = ''
+            shared_Mock_Clusters.cluster_cur_is_public_dict[request.name] = None
             shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
 
         cli_rsp = ps_server_pb2.cli_rsp(valid=True,updating=True,stdout=f'{ps_cmd} {request.name} testing 1..2...3...')

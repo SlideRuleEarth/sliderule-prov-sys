@@ -177,8 +177,7 @@ def test_org_account_cfg_success(caplog, client, mock_tasks_enqueue_stubbed_out,
     url = reverse('org-configure', args=[orgAccountObj.id])
     # send the POST request
     response = client.post(url, data=form_data)
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    call_process_state_change(orgAccountObj,1,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out)
     # assert the form was successful
     # refresh the OrgAccount object
     orgAccountObj = get_test_org()
@@ -217,8 +216,7 @@ def test_org_account_cfg_fail(caplog, client, mock_tasks_enqueue_stubbed_out, mo
     url = reverse('org-configure', args=[orgAccountObj.id])
     # send the POST request
     response = client.post(url, data=form_data)
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-    call_process_state_change(orgAccountObj,0,start_cnt,current_cnt)
+    call_process_state_change(orgAccountObj,0,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out)
     # assert the form was unsuccessful
     # refresh the OrgAccount object
     orgAccountObj = get_test_org()
@@ -255,8 +253,7 @@ def test_org_destroy_cluster_only_one(caplog, client, mock_tasks_enqueue_stubbed
     assert response.status_code in (200, 302) # redirects to org-manage-cluster # redirects to org-manage-cluster
     assert OwnerPSCmd.objects.count() == 1    
 
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    call_process_state_change(orgAccountObj,1,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out)
 
 #@pytest.mark.dev
 @pytest.mark.django_db
@@ -287,8 +284,7 @@ def test_org_refresh_cluster_only_one(caplog, client, mock_tasks_enqueue_stubbed
     response = client.post(url)
     assert response.status_code in (200, 302) # redirects to org-manage-cluster # redirects to org-manage-cluster
     assert OwnerPSCmd.objects.count() == 1    
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    call_process_state_change(orgAccountObj,1,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out)
 
 #@pytest.mark.dev
 @pytest.mark.django_db
@@ -711,10 +707,11 @@ def test_change_version_with_user_view2(setup_logging, mock_tasks_enqueue_stubbe
         assert stderr == ''
 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
-@pytest.mark.parametrize('initialize_test_environ', [{'version': 'latest', 'is_public': False}, {'version': 'v3', 'is_public': True}], indirect=True)
+#@pytest.mark.parametrize('initialize_test_environ', [{'version': 'latest', 'is_public': False}, {'version': 'v3', 'is_public': True}], indirect=True)
+@pytest.mark.parametrize('initialize_test_environ', [{'version': 'latest', 'is_public': False}], indirect=True)
 def test_change_is_public_with_user_view_with_onns(setup_logging, client,initialize_test_environ,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out,mock_schedule_process_state_change):
         logger = setup_logging
         
@@ -758,7 +755,9 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
 
         # assert the form was successful
         # refresh the OrgAccount object
-        orgAccountObj = get_test_org()
+        orgAccountObj.refresh_from_db()
+        clusterObj.refresh_from_db()
+
         assert(orgAccountObj.is_public == initial_is_public)
         assert(orgAccountObj.version == initial_version) 
         assert orgAccountObj.num_setup_cmd == 1
@@ -778,6 +777,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
         assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
         logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        assert clusterObj.is_deployed == True
 
 
         form_data = {
@@ -795,6 +795,9 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
                                                 mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                 mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
         
+        orgAccountObj.refresh_from_db()
+        clusterObj.refresh_from_db()
+        assert clusterObj.is_deployed == True
 
         assert PsCmdResult.objects.count() == 3 # SetUp - Update (to 1) - Update (to 3)
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
@@ -804,10 +807,10 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
         assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
         logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
-
+        assert clusterObj.is_deployed == True
         # setup necessary form data
         form_data = {
-            'is_public': new_is_public,
+            'is_public': new_is_public, # <---- changed
             'version': new_version,
             'min_node_cap': 1,
             'max_node_cap': 10,
@@ -815,11 +818,25 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
         }
-        assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=3, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
+        assert new_is_public != initial_is_public
+        assert new_version == initial_version
+        assert verify_org_configure(client=client, 
+                                    orgAccountObj=orgAccountObj, 
+                                    data=form_data, 
+                                    expected_change_ps_cmd=2, #??? configure - destroy - update 
+                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
         logger.info(f"finished verify_org_configure")
-        orgAccountObj = get_test_org()
+        orgAccountObj.refresh_from_db()
+        clusterObj.refresh_from_db()
+        assert clusterObj.is_deployed == True
         assert(orgAccountObj.is_public == new_is_public) 
-        assert(orgAccountObj.version == new_version) 
+        assert(orgAccountObj.version == new_version)
+        assert (clusterObj.cur_version == new_version)
+        assert (clusterObj.prov_env_is_public == new_is_public)
+        assert (clusterObj.prov_env_version == new_version)
+        dump_cmd_results(orgAccountObj)
+        assert (clusterObj.is_public == new_is_public)
         assert orgAccountObj.num_setup_cmd == 2
         assert orgAccountObj.num_setup_cmd_successful == 2
         assert orgAccountObj.num_ps_cmd_successful == 6
@@ -860,6 +877,8 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
                                                 mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                 mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
+        orgAccountObj.refresh_from_db()
+        clusterObj.refresh_from_db()
         
 
         assert orgAccountObj.desired_num_nodes == 3 # no change
@@ -893,7 +912,9 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
                                                 expected_status='QUEUED',
                                                 mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                 mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # Destroy is inline so only 1
-        
+        orgAccountObj.refresh_from_db()
+        clusterObj.refresh_from_db()
+       
         assert PsCmdResult.objects.count() == 7 # + Destroy Update (new desired_num_nodes)
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")

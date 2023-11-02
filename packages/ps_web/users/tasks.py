@@ -177,18 +177,18 @@ def cull_expired_entries(org,tm):
             break
     LOG.debug(f"ended with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
 
-def need_destroy_for_changed_version_or_is_public(orgAccountObj):
+def destroy_if_changed_version_or_is_public(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     # LOG.debug(f"cluster v:{clusterObj.cur_version} ip:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed}")
     # LOG.debug(f"    org v:{orgAccountObj.version} ip:{orgAccountObj.is_public}")
+    LOG.info(f"clusterObj.cur_version:{clusterObj.cur_version} clusterObj.prov_env_version:{clusterObj.prov_env_version} clusterObj.prov_env_is_public:{clusterObj.prov_env_is_public} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.version:{orgAccountObj.version} orgAccountObj.is_public:{orgAccountObj.is_public}")
     changed_version = (clusterObj.cur_version != clusterObj.prov_env_version)
     changed_is_public = (clusterObj.is_public != clusterObj.prov_env_is_public )
-    LOG.info(f"changed_version:{changed_version} changed_is_public:{changed_is_public}")
-    if clusterObj.is_deployed and (changed_version or changed_is_public):
+    LOG.info(f"is_deployed:{clusterObj.is_deployed} changed_version:{changed_version} changed_is_public:{changed_is_public}")
+    if (changed_version or changed_is_public):
         LOG.info(f"TRIGGERED Destroy {orgAccountObj.name} --> cluster v:{clusterObj.cur_version} cluster is_public:{clusterObj.is_public} is_deployed:{clusterObj.is_deployed} org v:{orgAccountObj.version} orgAccount ip:{orgAccountObj.is_public} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
         process_Destroy_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
         enqueue_process_state_change(orgAccountObj.name) # one for Destroy
-        enqueue_process_state_change(orgAccountObj.name) # one for Update
         return True
     return False
 
@@ -251,7 +251,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                     user = onnTop.user
                     expire_time = onnTop.expiration
                     if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
-                        deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                        deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap,  'expire_time': expire_time }
                         LOG.info(f"{orgAccountObj.name} Using top entries of each user sorted by num/exp_tm  with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} ")
                         try:
                             process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
@@ -287,7 +287,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                         if orgAccountObj.min_node_cap != orgAccountObj.desired_num_nodes: 
                             num_entries = OrgNumNode.objects.filter(org=orgAccountObj).count()
                             LOG.info(f"{orgAccountObj.name} ({num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} exp_time:None")
-                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': orgAccountObj.min_node_cap, 'max_node_cap': orgAccountObj.max_node_cap,'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                            deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': orgAccountObj.min_node_cap, 'max_node_cap': orgAccountObj.max_node_cap, 'expire_time': expire_time }
                             try:
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                             except Exception as e:
@@ -1140,13 +1140,14 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
                     LOG.info(f"{org_cmd_str} iter:<{iterations}> state:{rrsp.state} rrsp.state.valid:{rrsp.state.valid} rrsp.done:{rrsp.done} rrsp.ps_server_error:{rrsp.ps_server_error}")
                     if rrsp.state.valid:
                         LOG.info(f"{org_cmd_str} iter:<{iterations}> got valid state in rsp with state:{rrsp.state} using deploy_values:{deploy_values}")
-                        if deploy_values:
-                            update_cur_num_nodes(orgAccountObj)
+                        if deploy_values: # Update
+                            # This is called at very end
+                            # update_cur_num_nodes(orgAccountObj)
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             clusterObj.cur_min_node_cap = deploy_values['min_node_cap']
                             clusterObj.cur_max_node_cap = deploy_values['max_node_cap']
-                            clusterObj.cur_version = deploy_values['version']
-                            clusterObj.is_public = deploy_values['is_public']
+                            #clusterObj.cur_version = deploy_values['version']
+                            #clusterObj.is_public = deploy_values['is_public']
                             clusterObj.expire_time = expire_time
                             clusterObj.save(update_fields=['cur_min_node_cap','cur_max_node_cap','cur_version','is_public','expire_time'])
                             orgAccountObj.desired_num_nodes = int(deploy_values['desired_num_nodes'])
@@ -1159,8 +1160,14 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
                         clusterObj.mgr_ip_address = rrsp.state.ip_address.replace('"', '')
                         if clusterObj.mgr_ip_address == '':
                             clusterObj.mgr_ip_address = '0.0.0.0'
-                        if not clusterObj.is_deployed:
+                        if clusterObj.is_deployed:
+                            clusterObj.cur_version = clusterObj.prov_env_version
+                            clusterObj.is_public = clusterObj.prov_env_is_public
+                        else:
                             clusterObj.cur_version = ''
+                            clusterObj.mgr_ip_address = ''
+                            clusterObj.expire_time = None
+                            clusterObj.is_public = None
                         clusterObj.save(update_fields=['deployed_state','is_deployed','cur_version','mgr_ip_address'])
                         msg = f" Saving state of {orgAccountObj.name} cluster -> is_deployed:{clusterObj.is_deployed} deployed_state:{clusterObj.deployed_state} cur_version:{clusterObj.cur_version} mgr_ip_address:{clusterObj.mgr_ip_address}"
                         LOG.info(msg)
@@ -1243,14 +1250,20 @@ def get_psCmdResultObj(orgAccountObj, ps_cmd, version=None, username=None, is_ad
 
 def process_SetUp_cmd(orgAccountObj):
     '''
-        This function processes the SetUp command (that shows up as Configure in the results)
+        This function processes the SetUp command
+        The SetUp command shows up as Configure in the cmd results
+        SetUp runs init and validate terraform commands on the terraform files it downloads from s3
+        It does not use the common process_rsp_generator because it has different logic than other cmds
+        and because it displays the terminal commands outputs as well as terraform output
     '''
     LOG.info(f"Configure {orgAccountObj.name}")
     setup_occurred = False
     error_msg = ''
     st = datetime.now(timezone.utc)
     psCmdResultObj,org_cmd_str = get_psCmdResultObj(orgAccountObj, 'SetUp', version=orgAccountObj.version, username=orgAccountObj.owner, is_adhoc=False)
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
     LOG.info(f"STARTED {org_cmd_str} is_public:{orgAccountObj.is_public}")
+    LOG.info(f"begin configure - clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.cur_version:{clusterObj.cur_version} clusterObj.prov_env_version:{clusterObj.prov_env_version} clusterObj.prov_env_is_public:{clusterObj.prov_env_is_public} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.version:{orgAccountObj.version} orgAccountObj.is_public:{orgAccountObj.is_public} clusterObj.provision_env_ready:{clusterObj.provision_env_ready}")
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
@@ -1263,7 +1276,6 @@ def process_SetUp_cmd(orgAccountObj):
                     now=datetime.now(timezone.utc).strftime(FMT)),
                     timeout=timeout)
             done = False
-            clusterObj = Cluster.objects.get(org=orgAccountObj)
             clusterObj.active_ps_cmd = 'SetUp'
             clusterObj.save(update_fields=['active_ps_cmd'])
             while(not done): 
@@ -1322,13 +1334,16 @@ def process_SetUp_cmd(orgAccountObj):
                         if not rrsp.ps_server_error:
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             clusterObj.provision_env_ready = True
-                            ps_server_pb2.GetCurrentSetUpCfgRsp()
                             rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+                            LOG.info(f"{org_cmd_str} clusterObj.is_deployed:{clusterObj.is_deployed} rsp.setup_cfg:{rsp.setup_cfg}")
                             clusterObj.prov_env_version = rsp.setup_cfg.version
                             clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
                             if rsp.setup_cfg.version != '':
-                                need_destroy_for_changed_version_or_is_public(orgAccountObj=orgAccountObj)
-                            else:
+                                if clusterObj.is_deployed:
+                                    if destroy_if_changed_version_or_is_public(orgAccountObj=orgAccountObj):
+                                        if orgAccountObj.min_node_cap != orgAccountObj.desired_num_nodes:
+                                            enqueue_process_state_change(orgAccountObj.name)
+                            else:           
                                 clusterObj.provision_env_ready = False
                                 orgAccountObj.provisioning_suspended = True
                                 orgAccountObj.save(update_fields=['provisioning_suspended'])
@@ -1349,15 +1364,11 @@ def process_SetUp_cmd(orgAccountObj):
         psCmdResultObj.save()
 
     finally:
-        clusterObj = Cluster.objects.get(org=orgAccountObj)
-        clusterObj.active_ps_cmd = ''
-        clusterObj.save(update_fields=['active_ps_cmd'])
-        time_to_process = datetime.now(timezone.utc) - st
-        time_to_process = time_to_process - timedelta(microseconds=time_to_process.microseconds)
-        LOG.info(f"DONE {org_cmd_str} org version:{orgAccountObj.version} cluster prov_env_version:{clusterObj.prov_env_version} cluster cur_version:{clusterObj.cur_version} has completed in {str(time_to_process)}")
+        ps_cmd_cleanup(orgAccountObj,st,org_cmd_str)
         if orgAccountObj.provisioning_suspended != clusterObj.provision_env_ready:
             orgAccountObj.provisioning_suspended = not clusterObj.provision_env_ready
             orgAccountObj.save(update_fields=['provisioning_suspended'])
+        LOG.info(f"end configure - clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.cur_version:{clusterObj.cur_version} clusterObj.prov_env_version:{clusterObj.prov_env_version} clusterObj.prov_env_is_public:{clusterObj.prov_env_is_public} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.version:{orgAccountObj.version} orgAccountObj.is_public:{orgAccountObj.is_public} clusterObj.provision_env_ready:{clusterObj.provision_env_ready} setup_occurred:{setup_occurred}")
     return clusterObj.provision_env_ready,setup_occurred,error_msg       
 
 def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
@@ -1384,11 +1395,12 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                 stub = ps_server_pb2_grpc.ControlStub(channel)
                 timeout= int(os.environ.get("GRPC_TIMEOUT_SECS",900))
                 LOG.info(f"gRpc: {org_cmd_str} deploy_args:{deploy_values} timeout:{timeout}")
-                psCmdResultObj.ps_cmd_summary_label += f" {deploy_values['min_node_cap']}-{deploy_values['desired_num_nodes']}-{deploy_values['max_node_cap']} {deploy_values['version']}"
+                clusterObj = Cluster.objects.get(org=orgAccountObj)
+                psCmdResultObj.ps_cmd_summary_label += f" {deploy_values['min_node_cap']}-{deploy_values['desired_num_nodes']}-{deploy_values['max_node_cap']} {clusterObj.prov_env_version}"
                 if int(deploy_values['desired_num_nodes']) == 0:
                     LOG.info("Setting num_nodes_to_use to zero (i.e. deploy load balancer and monitor only)")
                 clusterObj = Cluster.objects.get(org=orgAccountObj)
-                LOG.info(f"Update {orgAccountObj.name} clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.cur_version:{clusterObj.cur_version} deploy_values['version']:{deploy_values['version']}")
+                LOG.info(f"Update {orgAccountObj.name} clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.cur_version:{clusterObj.cur_version} clusterObj.prov_env_version:{clusterObj.prov_env_version}")
                 rsp_gen = stub.Update(
                     ps_server_pb2.UpdateRequest(
                         name        = orgAccountObj.name,

@@ -483,31 +483,44 @@ def getObjectCnts():
     return OwnerPSCmd.objects.count(),OrgNumNode.objects.count()
 
 
-def call_process_state_change(orgAccountObj,expected_change_ps_cmd,start_cnt,current_cnt):
+def call_process_state_change(orgAccountObj,expected_change_ps_cmd,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
     '''
     This routine will call process_state_change for the given orgAccountObj 
-    based on the start_cnt and current_cnt
+    based on the start_cnt and current_cnt.
+    It is possible that enqueue_process_state_change will be called inside the process_state_change function itself
+    so we need to keep track of the number of calls to enqueue_process_state_change until we process them all
     essentially mimicing the calls to process_state_change that would be made 
-    when the mocked enqueue_process_state_change function was called
+    if enqueue_process_state_change was not stubbed out and the process_state_change was sheduled to run
+    and executed.
     '''
-    orgAccountObj.refresh_from_db()
-    logger.info(f"call_process_state_change orgAccountObj:{orgAccountObj.name} expected_change_ps_cmd:{expected_change_ps_cmd} start_cnt:{start_cnt} current_cnt:{current_cnt}")   
-    num_iters = current_cnt - start_cnt
+    SANITY=10
+    ndx=0
+    total_cnt = 0
     num_idle=0
     task_idle = True
-    for _ in range(num_iters):
-        idle, loop_count = process_state_change(orgAccountObj.name)
-        if idle:
-            num_idle = num_idle + 1
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
+    while current_cnt > start_cnt and ndx < SANITY:
+        orgAccountObj.refresh_from_db()
+        logger.info(f"[{ndx}]:call_process_state_change orgAccountObj:{orgAccountObj.name} expected_change_ps_cmd:{expected_change_ps_cmd} start_cnt:{start_cnt} current_cnt:{current_cnt}")   
+        num_iters = current_cnt - start_cnt
+        for _ in range(num_iters):
+            idle, loop_count = process_state_change(orgAccountObj.name)
+            total_cnt = total_cnt + 1
+            if idle:
+                num_idle = num_idle + 1
+            else:
+                task_idle = False
+        if num_iters == 0:
+            logger.info(f"NO CALLS to process_state_change --> num_iters:{num_iters} num_idle:{num_idle} task_idle:{task_idle}")
         else:
-            task_idle = False
-    if num_iters == 0:
-        logger.info(f"NO CALLS to process_state_change --> num_iters:{num_iters} num_idle:{num_idle} task_idle:{task_idle}")
-    else:
+            assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
+            logger.info(f"num_iters:{num_iters} num_idle:{num_idle} task_idle:{task_idle}")
         assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
-        logger.info(f"num_iters:{num_iters} num_idle:{num_idle} task_idle:{task_idle}")
-    assert(task_idle==(expected_change_ps_cmd==0)),f"task_idle:{task_idle} expected_change_ps_cmd:{expected_change_ps_cmd}"
-    return num_iters,num_idle,task_idle
+        start_cnt = current_cnt
+        current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
+        ndx = ndx + 1
+    logger.info(f"{orgAccountObj.name} total_cnt:{total_cnt} ndx:{ndx} ")
+    return total_cnt,num_idle,task_idle
 
 def verify_post_org_num_nodes_ttl( client,
                                     orgAccountObj,
@@ -578,8 +591,7 @@ def verify_post_org_num_nodes_ttl( client,
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
         num_iters = 0
         if mock_tasks_enqueue_stubbed_out is not None and mock_views_enqueue_stubbed_out is not None:
-            current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
-            num_iters,_,_ = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,current_cnt=current_cnt)
+            num_iters,_,_ = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         
@@ -660,8 +672,7 @@ def verify_put_org_num_nodes(  client,
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
         num_iters = 0
         if mock_tasks_enqueue_stubbed_out is not None and mock_views_enqueue_stubbed_out is not None:
-            current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
-            num_iters,_,_ = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,current_cnt=current_cnt)
+            num_iters,_,_ = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         
@@ -740,8 +751,7 @@ def verify_org_manage_cluster_onn( client,
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # no change just queued
         num_iters = 0
         if mock_tasks_enqueue_stubbed_out is not None and mock_views_enqueue_stubbed_out is not None:
-            current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
-            num_iters,_,_ = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,current_cnt=current_cnt)
+            num_iters,_,_ = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)
@@ -786,8 +796,7 @@ def do_owner_ps_cmd(client,
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd) # only changes after we do a process_state_change 
         assert(orgAccountObj.num_ps_cmd == s_orgAccountObj_num_ps_cmd) # only changes after we do a process_state_change 
         if mock_tasks_enqueue_stubbed_out is not None and mock_views_enqueue_stubbed_out is not None:
-            current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
-            call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=1,start_cnt=start_cnt,current_cnt=current_cnt)
+            call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=1,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
         orgAccountObj.refresh_from_db() 
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd + EXPECTED_PS_CMD_PROCESSED) # only changes if we did a process_state_change else no change just queued
@@ -823,8 +832,8 @@ def verify_org_configure(  client,
             assert((response.status_code == 200) or (response.status_code == 302))
             logger.info(f" mock_tasks_enqueue_stubbed_out.call_count:{mock_tasks_enqueue_stubbed_out.call_count} mock_views_enqueue_stubbed_out.call_count:{mock_views_enqueue_stubbed_out.call_count} expected_change_ps_cmd:{expected_change_ps_cmd} ")
             if mock_tasks_enqueue_stubbed_out is not None and mock_views_enqueue_stubbed_out is not None:
-                current_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
-                call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,current_cnt=current_cnt)
+                numIters,num_idle,task_idle = call_process_state_change(orgAccountObj=orgAccountObj,expected_change_ps_cmd=expected_change_ps_cmd,start_cnt=start_cnt,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
+                assert(not task_idle)
         # logger.info(f"dir(response):{dir(response)}")
         # logger.info(f"Response status code: {response.status_code}")
         # logger.info(f"Response content: {response.content}")
@@ -834,6 +843,7 @@ def verify_org_configure(  client,
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
         logger.info(f"DONE processing org-configure --- checking counts")
         getOrgAccountObjCnts(orgAccountObj) # log them
+        dump_cmd_results(orgAccountObj)
         assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) 
         assert(OrgNumNode.objects.count() == (s_OrgNumNode_cnt))
         assert(orgAccountObj.num_owner_ps_cmd == s_orgAccountObj_num_owner_ps_cmd)  

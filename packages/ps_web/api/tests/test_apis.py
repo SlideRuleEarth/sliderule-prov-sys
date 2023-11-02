@@ -449,7 +449,7 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
     current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count    
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    call_process_state_change(orgAccountObj,1,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
 
@@ -553,8 +553,7 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
     assert(orgAccountObj.provisioning_suspended==False)
     assert(orgAccountObj.num_ps_cmd==0) #
     assert(orgAccountObj.num_ps_cmd_successful==0) 
-    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
-    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    call_process_state_change(orgAccountObj,1,start_cnt,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
 
