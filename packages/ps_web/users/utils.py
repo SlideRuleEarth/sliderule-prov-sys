@@ -23,7 +23,7 @@ import requests
 from api.tokens import OrgRefreshToken
 from api.serializers import MembershipSerializer
 from rest_framework_simplejwt.settings import api_settings
-from .tasks import get_ps_versions, enqueue_process_state_change, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis,hourly_processing,refresh_token_maintenance,get_scheduler
+from .tasks import get_ps_versions, enqueue_process_state_change, getGranChoice, set_PROVISIONING_DISABLED, get_PROVISIONING_DISABLED, check_redis,hourly_processing,refresh_token_maintenance,get_scheduler,schedule_process_state_change,log_scheduled_jobs
 from oauth2_provider.models import AbstractApplication
 from users.global_constants import *
 from django_rq import get_queue
@@ -174,24 +174,6 @@ def create_worker(worker_name,queue_name):
     LOG.info(f"subprocess--> {SHELL_CMD}")
     subprocess.Popen(SHELL_CMD)
 
-def log_scheduled_jobs():
-
-    list_of_job_instances = get_scheduler().get_jobs()
-
-    # Iterate through each job instance and log details
-    for job in list_of_job_instances:
-        LOG.info(f"Job ID: {job.id}")
-        LOG.info(f"Function to be called: {job.func_name}")
-        LOG.info(f"Arguments: {job.args}")
-        LOG.info(f"Keyword Arguments: {job.kwargs}")
-        LOG.info(f"meta: {job.meta}")
-        LOG.info(f"Is job scheduled: {job.is_scheduled}")
-        LOG.info(f"Job creation time: {job.created_at}")
-        LOG.info(f"Job enqueued time: {job.enqueued_at}")
-        LOG.info(f"Job timeout: {job.timeout}")
-        LOG.info("-" * 20)
-
-
 def init_redis_queues():
     LOG.critical("environ DEBUG:%s",os.environ.get("DEBUG"))
     LOG.critical("environ DOCKER_TAG:%s",os.environ.get("DOCKER_TAG"))
@@ -213,6 +195,8 @@ def init_redis_queues():
     check_redis(log_label="init_redis_queues")
     set_PROVISIONING_DISABLED('False')
     LOG.info(f"get_PROVISIONING_DISABLED:{get_PROVISIONING_DISABLED()}")
+
+    log_scheduled_jobs()
     # uses the default queue
     SHELL_CMD=f"python manage.py rqworker".split(" ")
     LOG.info(f"subprocess--> {SHELL_CMD}")
@@ -254,9 +238,9 @@ def init_redis_queues():
                 orgAccountObj.save(update_fields=['loop_count','num_ps_cmd','num_ps_cmd_successful','num_owner_ps_cmd'])
                 loop_count = orgAccountObj.loop_count
                 clusterObj = Cluster.objects.get(org=orgAccountObj)
+                LOG.info(f"Setting provision_env_ready to False to force initialization for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd}")
                 clusterObj.provision_env_ready = False # this forces a SetUp 
                 clusterObj.save(update_fields=['provision_env_ready'])
-                LOG.info(f"Setting provision_env_ready to False to force initialization for {orgAccountObj.name} at loop_count:{orgAccountObj.loop_count} num_ps_cmd:{orgAccountObj.num_ps_cmd_successful}/{orgAccountObj.num_ps_cmd}")
                 enqueue_process_state_change(orgAccountObj.name)
         except Exception as ex:
             LOG.exception(f"Caught an exception creating queues for {orgAccountObj.name}: {str(ex)}")
@@ -273,6 +257,29 @@ def init_redis_queues():
     for i in range(int(num_cmd_workers)):
         create_worker(f"cmd_worker_{i}",'cmd')
 
+
+
+    orgs_qs = OrgAccount.objects.all()
+    LOG.info("orgs_qs:%s", repr(orgs_qs))
+    for orgAccountObj in orgs_qs:
+        LOG.info(f"Clearing provisioning_suspended for {orgAccountObj.name}")
+        orgAccountObj.provisioning_suspended = False
+        now =  datetime.now(timezone.utc)
+        expired_cnt = 0
+        for onn in OrgNumNode.objects.filter(org=orgAccountObj).order_by('expiration'):
+            LOG.info(f"onn.expiration:{onn.expiration} tm(now):{now}")
+            now = datetime.now(timezone.utc)
+            if(onn.expiration > now):
+                LOG.info(f"{orgAccountObj.name} {onn.expiration}")
+                schedule_process_state_change(onn.expiration,orgAccountObj)
+            else:
+                expired_cnt = expired_cnt+1
+        if expired_cnt > 0:
+            tm = now+timedelta(seconds=1)
+            LOG.info(f"expired_cnt:{expired_cnt} {orgAccountObj.name} {tm} (one second in future)")
+            schedule_process_state_change(tm,orgAccountObj)
+
+    log_scheduled_jobs()
     LOG.info("Finished init_redis_queues")
 
 def disable_provisioning(user,req_msg):
@@ -288,6 +295,17 @@ def disable_provisioning(user,req_msg):
                 set_PROVISIONING_DISABLED('True')
                 disable_msg = f"User:{user.username} has disabled provisioning!"
                 LOG.critical(disable_msg)
+                orgs_qs = OrgAccount.objects.all()
+                LOG.info("orgs_qs:%s", repr(orgs_qs))
+                for orgAccountObj in orgs_qs:
+                    if orgAccountObj.name == 'uninitialized':
+                        LOG.error(f"Ignoring uninitialized OrgAccount.id:{OrgAccount.id}")
+                    else:
+                        LOG.info(f"Setting provisioning_suspended to True for {orgAccountObj.name}")
+                        orgAccountObj.provisioning_suspended = True  
+        except Exception as ex:
+            LOG.exception(f"Caught an exception creating queues for {orgAccountObj.name}: {str(ex)}")
+
         except Exception as e:
             error_msg = f"Caught Exception in requested shutdown"
             LOG.exception(f"{error_msg}")

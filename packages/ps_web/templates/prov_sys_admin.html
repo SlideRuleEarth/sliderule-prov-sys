@@ -11,7 +11,43 @@
                 {% if PROVISIONING_DISABLED  %}
                     <p class="text-danger font-weight-bold fs-1">Provisioning Disabled!</p>
                 {% endif %}         
-            <li><button class="btn btn-primary mx-2 my-2" type="button" id="disable_modal_btn" data-bs-toggle="modal" data-bs-target="#psDisableModal" data-bs-url="{% url 'disable-provisioning' %}" data-bs-action="Disable">Disable Provisioning</button></li>
+            <div><button class="btn btn-primary mx-2 my-2" type="button" id="disable_modal_btn" data-bs-toggle="modal" data-bs-target="#psDisableModal" data-bs-url="{% url 'disable-provisioning' %}" data-bs-action="Disable">Disable Provisioning</button></div>
+            </div>
+            <p class="utc-time mx-1 my-1 text-center" data-utc-time="{{ now.isoformat }}">Loading...</p>
+            <div class="container-fluid overflow-auto">
+                <h3 class="text-center">Job Schedule</h3>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Function</th>
+                            <th>Arguments</th>
+                            <th>Keyword Arguments</th>
+                            <th>meta</th>
+                            <th>Is job scheduled</th>
+                            <th>Job creation time</th>
+                            <th>Job enqueued time</th>
+                            <th>Job timeout</th>
+                            <th>ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in jobs %}
+                        <tr>
+                            <td><p class="utc-time mx-1 my-1" data-utc-time="{{ job.tm }}">Loading...</p></td>
+                            <td>{{ job.func_name }}</td>
+                            <td>{{ job.args }}</td>
+                            <td>{{ job.kwargs }}</td>
+                            <td>{{ job.meta }}</td>
+                            <td>{{ job.is_scheduled }}</td>
+                            <td><p class="utc-time mx-1 my-1" data-utc-time="{{ job.created_at }}">Loading...</p></td>
+                            <td><p class="utc-time mx-1 my-1" data-utc-time="{{ job.enqueued_at }}">Loading...</p></td>
+                            <td>{{ job.timeout }}</td>
+                            <td>{{ job.id }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div> 
@@ -45,5 +81,16 @@
 
 {% endblock content %}
 {% block javascript %}
-
+<script type="text/javascript">
+    $(document).ready(function () {
+        const utcTimes = document.querySelectorAll('.utc-time');
+        utcTimes.forEach(utcTimeElement => {
+            const utcTime = new Date(utcTimeElement.dataset.utcTime);
+            utcTimeElement.textContent = utcTime.toLocaleString();
+            if (utcTimeElement.textContent == "Invalid Date") {
+                utcTimeElement.textContent = "None";
+            }
+        });
+    });
+</script>
 {% endblock javascript %}

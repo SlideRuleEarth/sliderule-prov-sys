@@ -165,13 +165,98 @@ def sum_of_highest_nodes_for_each_user(orgAccountObj):
     clusterObj.save(update_fields=['cnnro_ids'])
     return num_nodes_to_deploy, ids_list
 
+def get_scheduled_jobs():
+    list_of_job_instances = get_scheduler().get_jobs(with_times=True)
+    # Iterate through each job instance and log details
+    jobs = []
+    try:
+        for job,tm in list_of_job_instances:
+            if tm is None:
+                tm_str = None
+            else:
+                sched_tm = tm.astimezone(timezone.utc)
+                tm_str = sched_tm.isoformat()
+
+            if job.enqueued_at is None:
+                enqueue_tm_str = None
+            else:
+                enqueue_tm = job.enqueued_at.astimezone(timezone.utc)
+                enqueue_tm_str = enqueue_tm.isoformat()
+
+            if job.created_at is None:
+                created_at_tm_str = None
+            else:
+                created_at_tm = job.created_at.astimezone(timezone.utc)
+                created_at_tm_str = created_at_tm.isoformat()
+
+            jobs.append({
+                'id': job.id,
+                'tm': tm_str,
+                'func_name': job.func_name,
+                'args': job.args,
+                'kwargs': job.kwargs,
+                'meta': job.meta,
+                'is_scheduled': job.is_scheduled,
+                'created_at': created_at_tm_str,
+                'enqueued_at': enqueue_tm_str,
+                'timeout': job.timeout,
+            })
+    except Exception as e:
+        LOG.exception(f"Caught an exception: {e}")
+    LOG.info(f"Number of jobs in scheduler: {len(jobs)}")
+
+    return jobs
+
+def log_job(job):
+    LOG.info(f"Job ID: {job.id} tm:{job.tm}")
+    LOG.info(f"Function to be called: {job.func_name}")
+    LOG.info(f"Arguments: {job.args}")
+    LOG.info(f"Keyword Arguments: {job.kwargs}")
+    LOG.info(f"meta: {job.meta}")
+    LOG.info(f"Is job scheduled: {job.is_scheduled}")
+    LOG.info(f"Job creation time: {job.created_at}")
+    LOG.info(f"Job enqueued time: {job.enqueued_at}")
+    LOG.info(f"Job timeout: {job.timeout}")
+    LOG.info("-" * 20)
+
+def log_scheduled_jobs():
+    # Iterate through each job instance and log details
+    try:
+        jobs = get_scheduled_jobs()
+        for job in jobs:
+            log_job(job)
+    except Exception as e:
+        LOG.exception(f"Caught an exception: {e}")
+    LOG.info(f"Number of jobs in scheduler: {len(jobs)}")
+
+    return jobs
+
+def delete_onn_and_its_scheduled_job(onn):
+    '''
+    This routine is called when an OrgNumNode is deleted.
+    It will delete the scheduled job that was created when the OrgNumNode was created.
+    '''
+    LOG.info(f"deleting expired/null OrgNumNode request {format_onn(onn)}")
+    try:
+        for job,tm in get_scheduler().get_jobs(with_times=True):
+            tm_aware = tm.astimezone(timezone.utc)
+            LOG.info(f"job.func_name:{job.func_name} job.tm:{tm_aware}  onn.expiration:{ onn.expiration}")
+            if tm_aware == onn.expiration and job.func_name == 'users.tasks.enqueue_process_state_change':
+                LOG.info(f"canceling job {job.func_name} at {tm_aware} for {format_onn(onn)}")
+                get_scheduler().cancel(job.id)
+                break
+        onn.delete()
+    except Exception as e:
+        LOG.exception(f"Caught an exception: {e}")
+
+
 def cull_expired_entries(org,tm):
     LOG.debug(f"started with {OrgNumNode.objects.filter(org=org).count()} OrgNumNode for {org.name}")
     for onn in OrgNumNode.objects.filter(org=org).order_by('expiration'):
         LOG.debug(f"onn.expiration:{onn.expiration} tm(now):{tm}")
         if(onn.expiration <= tm):
             LOG.info(f"deleting expired/null OrgNumNode request {format_onn(onn)}")
-            onn.delete()
+            delete_onn_and_its_scheduled_job(onn)
         else:
             LOG.debug("nothing to delete")
             break
@@ -207,7 +292,7 @@ def clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning):
         onns = OrgNumNode.objects.filter(id__in=uuids_list)
         LOG.info(f"REMOVING OrgNumNode clusterObj.cnnro_ids: {onns}")
         for onn in onns:
-            onn.delete()
+            delete_onn_and_its_scheduled_job(onn)
         cnt = OrgNumNode.objects.filter(org=orgAccountObj).count()
         clusterObj.cnnro_ids = []
         clusterObj.save(update_fields=['cnnro_ids'])
@@ -415,7 +500,7 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                             LOG.info(f"{orgAccountObj.name} ({num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} exp_time:None")
                             deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': orgAccountObj.min_node_cap, 'max_node_cap': orgAccountObj.max_node_cap,'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                             try:
-                                process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
+                                process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=None)
                             except Exception as e:
                                 LOG.exception("ERROR in Update {orgAccountObj.name} ps_cmd when no entries in ONN and min != desired: caught exception:")
                                 LOG.warning(f"Setting {orgAccountObj.name} min_node_cap to zero; Update FAILED when no entries in ONN and min_node_cap != desired_num_nodes (i.e. current target, assumed num nodes)")
@@ -424,8 +509,6 @@ def process_num_node_table(orgAccountObj,prior_need_refresh):
                                 orgAccountObj.save(update_fields=['min_node_cap','desired_num_nodes'])
                                 LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
-
-                            
                             LOG.info(f"{orgAccountObj.name} Update processed")
                 # if we setup the env but did not process any commands, then we need to Refresh to set state
                 need_refresh = False
@@ -483,11 +566,10 @@ def get_or_create_OrgNumNodes(orgAccountObj,user,desired_num_nodes,expire_date):
     redundant = False
     msg = ''
     try:
-        orgNumNode,created = OrgNumNode.objects.get_or_create(user=user,org=orgAccountObj, desired_num_nodes=desired_num_nodes,expiration=expire_date)
+        orgNumNode,created = OrgNumNode.objects.get_or_create(user=user,org=orgAccountObj, desired_num_nodes=desired_num_nodes,expiration=expire_date.replace(microsecond=0))
         if created:
             if expire_date is not None:
                 msg = f"Created new entry for {orgAccountObj.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} expiration:{expire_date.strftime(FMT) if expire_date is not None else 'None'}"
-                #get_scheduler().enqueue_at(expire_date,enqueue_process_state_change,orgAccountObj.name)
                 schedule_process_state_change(expire_date,orgAccountObj)
             else:
                 msg = f"Created new entry for {orgAccountObj.name} {user.username} desired_num_nodes {orgNumNode.desired_num_nodes} uuid:{orgNumNode.id} with NO expiration"
@@ -1216,9 +1298,9 @@ def remove_num_node_requests(user,orgAccountObj,only_owned_by_user=None):
                 if str(onn.id) in clusterObj.cnnro_ids:
                     LOG.info(f"Skipping active OrgNumNode.id:{onn.id} with org:{onn.org.name} user:{onn.user.username}")
                 else:
-                    onn.delete()
+                    delete_onn_and_its_scheduled_job(onn)
             else:
-                onn.delete()
+                delete_onn_and_its_scheduled_job(onn)
         jrsp = {'status': "SUCCESS","msg":f"{user.username} cleaned all PENDING org node reqs for {orgAccountObj.name} "}
         LOG.info(f"{user.username} cleaned up OrgNumNode for {orgAccountObj.name} {'owned by:{user.username}' if only_owned_by_user else ''} onn_cnt:{OrgNumNode.objects.count()}")
         enqueue_process_state_change(orgAccountObj.name)
@@ -1429,6 +1511,11 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                                         org_cmd_str=org_cmd_str, 
                                         deploy_values=deploy_values, 
                                         expire_time=expire_time)
+                now = datetime.now(timezone.utc)
+                if now > expire_time:
+                    elapsed = now - st
+                    LOG.warn(f"Update {orgAccountObj.name} took {elapsed} expire_time:{expire_time} has already passed (now:{now}) calling enqueue_process_state_change for {orgAccountObj.name}")
+                    enqueue_process_state_change(orgAccountObj.name)
         except LowBalanceError as e:
             error_msg = f"{org_cmd_str} Low Balance Error: The account balance ({str(orgAccountObj.balance)}) of this organization is too low.The auto-shutdown time is {str(orgAccountObj.min_ddt)}  Check with the support team for assistance. Can NOT deploy with less than 8 hrs left until automatic shutdown"
             LOG.warning(error_msg)
