@@ -4,19 +4,30 @@ import boto3
 from django.contrib.auth import get_user_model
 from django.core import mail
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER,create_test_user
-from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,get_test_org,call_SetUp,check_redis_for_testing
-from users.models import Cluster
-from users.tasks import process_state_change
+from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,get_test_org,call_SetUp,check_for_scheduled_jobs,check_redis_for_testing,clear_enqueue_process_state_change
+from users.models import Cluster,OrgNumNode
+from users.tasks import process_state_change,log_scheduled_jobs
 from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import Group
 from django.contrib.sites.models import Site
 from django.contrib.sites.shortcuts import get_current_site
 from django.conf import settings
 from unittest.mock import patch, MagicMock, Mock
+from time import sleep
+from django.core.cache import cache
 
 import logging
 from importlib import import_module
 
+
+
+@pytest.fixture(scope="session", autouse=True)
+def redis_scheduled_jobs_setup(setup_logging):
+    logger = setup_logging
+    check_redis_for_testing(logger,__name__)
+    assert(check_for_scheduled_jobs(logger,__name__,2)) # two cron jobs in docker init script
+    jobs = log_scheduled_jobs()
+    assert (len(jobs) == 2)
 
 @pytest.fixture(scope="session")
 def s3(setup_logging):
@@ -72,13 +83,12 @@ def verified_TEST_USER(create_TEST_USER):
     return verify_user(create_TEST_USER)
 
 @pytest.fixture
-def initialize_test_environ(setup_logging,request):
+def initialize_test_environ(setup_logging,redis_scheduled_jobs_setup,request):
     logger = setup_logging
     version = 'latest'
     is_public = False
     settings.DEBUG = True
-
-    check_redis_for_testing(logger=logger,log_label="initialize_test_environ")
+    OrgNumNode.objects.all().delete()
 
     if hasattr(request, "param"):
         if 'version' in request.param:
@@ -88,6 +98,7 @@ def initialize_test_environ(setup_logging,request):
     
     logger.info(f"init version: {version}")
     logger.info(f"is_public: {is_public}")
+
     orgAccountObj,owner = init_test_environ(the_logger=logger,
                                             name=TEST_ORG_NAME,
                                             org_owner=None,
@@ -101,4 +112,4 @@ def initialize_test_environ(setup_logging,request):
                                             version=version,
                                             is_public=is_public)
     logger.info(f"finished initializing org:{orgAccountObj.name} owner:{orgAccountObj.owner.username}")
-
+    clear_enqueue_process_state_change(logger)

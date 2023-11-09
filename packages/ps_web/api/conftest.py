@@ -1,8 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
+from users.tasks import log_scheduled_jobs
 from users.tests.utilities_for_unit_tests import TEST_EMAIL,TEST_ORG_NAME,TEST_PASSWORD,TEST_USER,DEV_TEST_EMAIL,DEV_TEST_PASSWORD,DEV_TEST_USER
-from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user,check_redis_for_testing
+from users.tests.utilities_for_unit_tests import random_test_user,init_test_environ,verify_user,mock_django_email_backend,create_test_user,check_redis_for_testing,check_for_scheduled_jobs,clear_enqueue_process_state_change
 from users.tests.conftest import TEST_USER,TEST_PASSWORD,DEV_TEST_USER,DEV_TEST_PASSWORD,TEST_ORG_NAME
 from datetime import datetime, timezone, timedelta
 from django.contrib.auth.models import Group
@@ -12,6 +13,16 @@ from django.core.cache import cache
 
 import logging
 logger = logging.getLogger('test_console')
+
+
+@pytest.fixture(scope="session", autouse=True)
+def redis_scheduled_jobs_setup(setup_logging):
+    logger = setup_logging
+    check_redis_for_testing(logger,__name__)
+    assert(check_for_scheduled_jobs(logger,__name__,2)) # two cron jobs in docker init script
+    jobs = log_scheduled_jobs()
+    assert (len(jobs) == 2)
+
 
 @pytest.fixture
 def mock_email_backend(mocker):
@@ -46,15 +57,12 @@ def developer_TEST_USER(setup_logging):
 def verified_TEST_USER(create_TEST_USER):
     return verify_user(create_TEST_USER)
 
-
 @pytest.fixture
-def initialize_test_environ(setup_logging,request):
+def initialize_test_environ(setup_logging,redis_scheduled_jobs_setup,request):
     logger = setup_logging
     version = 'latest'
     is_public = True
     settings.DEBUG = True
-
-    check_redis_for_testing(logger=logger,log_label="initialize_test_environ")
 
     if hasattr(request, "param"):
         if 'version' in request.param:
@@ -77,3 +85,4 @@ def initialize_test_environ(setup_logging,request):
                                             version=version,
                                             is_public=is_public)
     logger.info(f"org:{orgAccountObj.name} owner:{orgAccountObj.owner.username}")
+    clear_enqueue_process_state_change(logger)

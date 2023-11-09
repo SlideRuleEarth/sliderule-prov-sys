@@ -19,10 +19,10 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server,verify_org_manage_cluster_onn,the_OWNER_USER,check_for_scheduled_jobs,clear_enqueue_process_state_change
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
-from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready
+from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes
 from time import sleep
 from django.contrib import messages
 from allauth.account.decorators import verified_email_required
@@ -805,3 +805,41 @@ def test_provision_env_ready(tasks_module_to_import,developer_TEST_USER,initiali
     assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public
+
+@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_delete_onn_and_its_scheduled_job(setup_logging,client,tasks_module,initialize_test_environ):
+    '''
+        This procedure will test the 'delete_onn_and_its_scheduled_job' routine
+    '''
+    logger = setup_logging
+    jobs = log_scheduled_jobs()
+    assert (len(jobs) == 2), f"jobs:{jobs}" # two cron jobs
+    orgAccountObj = get_test_org()
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    logger.info(f"clusterObj.cur_version={clusterObj.cur_version} clusterObj.is_deployed={clusterObj.is_deployed}")
+    orgAccountObj.destroy_when_no_nodes = False
+    orgAccountObj.min_node_cap = 2
+    orgAccountObj.desired_num_nodes = 2
+    orgAccountObj.version = 'v3'
+    orgAccountObj.save()
+    now = datetime.now(timezone.utc)
+    exp_tm = now+timedelta(minutes=15)
+    onn,redundant,msg = get_or_create_OrgNumNodes(orgAccountObj=orgAccountObj,
+                                                    user=orgAccountObj.owner,
+                                                    desired_num_nodes=orgAccountObj.desired_num_nodes+1,
+                                                    expire_date=exp_tm)
+    assert(msg.startswith('Created'))
+    assert(onn.desired_num_nodes == orgAccountObj.desired_num_nodes+1)
+    assert(onn.expiration==exp_tm.replace(microsecond=0)) # verify that it is truncated to seconds
+    process_state_change(orgAccountObj) # verify that it doesn't matter if this is called
+    assert OrgNumNode.objects.count() == 1
+    onn = OrgNumNode.objects.first()
+    jobs = log_scheduled_jobs()
+    assert (len(jobs) == 3)
+    assert orgAccountObj.desired_num_nodes == 2 # no change
+    delete_onn_and_its_scheduled_job(onn)
+    jobs = get_scheduled_jobs()
+    assert (len(jobs) == 2)
+    assert OrgNumNode.objects.count() == 0

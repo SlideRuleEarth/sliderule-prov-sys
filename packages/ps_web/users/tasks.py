@@ -208,15 +208,15 @@ def get_scheduled_jobs():
     return jobs
 
 def log_job(job):
-    LOG.info(f"Job ID: {job.id} tm:{job.tm}")
-    LOG.info(f"Function to be called: {job.func_name}")
-    LOG.info(f"Arguments: {job.args}")
-    LOG.info(f"Keyword Arguments: {job.kwargs}")
-    LOG.info(f"meta: {job.meta}")
-    LOG.info(f"Is job scheduled: {job.is_scheduled}")
-    LOG.info(f"Job creation time: {job.created_at}")
-    LOG.info(f"Job enqueued time: {job.enqueued_at}")
-    LOG.info(f"Job timeout: {job.timeout}")
+    LOG.info(f"Job ID: {job['id']} tm:{job['tm']}")
+    LOG.info(f"Function to be called: {job['func_name']}")
+    LOG.info(f"Arguments: {job['args']}")
+    LOG.info(f"Keyword Arguments: {job['kwargs']}")
+    LOG.info(f"meta: {job['meta']}")
+    LOG.info(f"Is job scheduled: {job['is_scheduled']}")
+    LOG.info(f"Job creation time: {job['created_at']}")
+    LOG.info(f"Job enqueued time: {job['enqueued_at']}")
+    LOG.info(f"Job timeout: {job['timeout']}")
     LOG.info("-" * 20)
 
 def log_scheduled_jobs():
@@ -331,10 +331,11 @@ def check_provision_env_ready(orgAccountObj):
                     try:
                         # Read until rrsp.done is True or until StopIteration exception is caught
                         rrsp = next(rsp_gen)  # grab the next one and process it
-                        psCmdResultObj.ps_cmd_output += get_cli_html(orgAccountObj, rrsp.cli)
+                        ansi_txt,html =  get_cli_html(orgAccountObj, rrsp.cli)
+                        psCmdResultObj.ps_cmd_output += html
                         psCmdResultObj.save()
                         if rrsp.ps_server_error:
-                            error_msg =  f"ps-server returned error for {org_cmd_str} FAILED with error:{rrsp.error_msg}"
+                            error_msg =  f"ps-server returned error for {org_cmd_str} FAILED with error:{rrsp.error_msg} {ansi_txt}"
                             LOG.error(error_msg)
                             psCmdResultObj.error = error_msg
                             psCmdResultObj.save()
@@ -1254,28 +1255,29 @@ def find_broke_orgs():
 def get_cli_html(orgAccountObj, cli):
     conv = Ansi2HTMLConverter(inline=True)
     console_html = ''
+    ansi_txt = ''
     if(cli.valid):
         if(cli.cmd_args != ''):
-            console_html += conv.convert(
-                "".join(cli.cmd_args), full=False)
+            console_html += conv.convert("".join(cli.cmd_args), full=False)
+            ansi_txt += "".join(cli.cmd_args)
         if(cli.stdout != ''):
-            console_html += conv.convert(
-                "".join(cli.stdout), full=False)
+            console_html += conv.convert("".join(cli.stdout), full=False)
+            ansi_txt += "".join(cli.stdout)
         if(cli.stderr != ''):
-            console_html += conv.convert(
-                "".join(cli.stderr), full=False)
-    return console_html
+            console_html += conv.convert("".join(cli.stderr), full=False)
+            ansi_txt += "".join(cli.stderr)
+    return ansi_txt,console_html
 
 def getConsoleHtml(orgAccountObj, rrsp):
     console_html = ''
     try:
-        console_html = get_cli_html(orgAccountObj, rrsp.cli)
+        ansi_txt,console_html = get_cli_html(orgAccountObj, rrsp.cli)
         if(rrsp.ps_server_error):
             LOG.error("Error in server:\n %s", rrsp.error_msg)
             rsp_status = 500
         else:
             rsp_status = 200
-        return rsp_status, console_html
+        return rsp_status, ansi_txt, console_html
     except Exception as e:
         LOG.exception("caught exception:")
         failed_cli = ps_server_pb2.cli_rsp(valid=False)
@@ -1350,6 +1352,7 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
     stopped = False
     iterations = 0
     got_ps_server_error = False
+    ansi_txt = ''
     try:
         while(not stopped): 
             # make the call to get cached streamed response messages from server
@@ -1363,7 +1366,8 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
                     LOG.error(f"{org_cmd_str} iter:<{iterations}> got None response from ps_server!")
                     stopped = True # if we get here then we got a None response from the ps_server
                 else:
-                    rsp_status, console_html = getConsoleHtml(orgAccountObj, rrsp)
+                    rsp_status, ansi_txt_snippet, console_html = getConsoleHtml(orgAccountObj, rrsp)
+                    ansi_txt += ansi_txt_snippet
                     psCmdResultObj.ps_cmd_output += console_html
                     psCmdResultObj.save()
                     if rrsp.state.valid:
@@ -1412,7 +1416,8 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
                 LOG.info(f"{org_cmd_str} iter:<{iterations}> got expected StopIteration exception")
     except ProvisionCmdError as e:
         error_msg = f"{org_cmd_str} iter:<{iterations}> caught ProvisionCmdError exception: "
-        LOG.exception(error_msg) 
+        LOG.exception(error_msg)
+        LOG.error(ansi_txt) 
         psCmdResultObj.error = error_msg + repr(e)
         psCmdResultObj.save()
         raise ProvisionCmdError(f"{error_msg}:{str(e)}")
@@ -1425,6 +1430,7 @@ def process_rsp_generator(orgAccountObj, ps_cmd, rsp_gen, psCmdResultObj, org_cm
     except subprocess.CalledProcessError as e:
         error_msg = f"{org_cmd_str} iter:<{iterations}> caught CalledProcessError exception: "
         LOG.exception(error_msg) 
+        LOG.error(ansi_txt) 
         psCmdResultObj.error = error_msg + repr(e)
         psCmdResultObj.save()
         raise ProvisionCmdError(f"{error_msg}:{str(e)}")

@@ -1208,15 +1208,19 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         cmd_args = ["state", "list"]
         yield from self.execute_sequence_of_terraform_cmds(name, ps_cmd, cmd_args)
 
-    def batch_std_lines(self, name, ps_cmd, proc_lines, get_std_response):
+    def get_std_lines(self, name, ps_cmd, proc_lines):
         stdlines = "".encode()
-        LOG.info("Reading lines...")
+        LOG.info(f"{name} {ps_cmd} reading lines...")
         n = 0
         for line in proc_lines:
             #LOG.info("Read line:%s", n)
             stdlines = stdlines + line
             n = n + 1
-        LOG.info(f"Sending response with {n} lines")
+        return n,stdlines
+    
+    def batch_std_lines(self, name, ps_cmd, proc_lines, get_std_response):
+        n,stdlines = self.get_std_lines(name, ps_cmd, proc_lines)
+        LOG.info(f"{name} {ps_cmd} sending response with {n} lines")
         yield get_std_response(
             name,
             ps_cmd,
@@ -1242,15 +1246,15 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         yield self.get_cmd_args_response(name, ps_cmd, cmd_args)
         n = 0
         while proc.poll() is None:
-            LOG.info("calling for stdout")
+            LOG.info(f"{name} {ps_cmd} calling for stdout")
             yield from self.batch_std_lines(name, ps_cmd, proc.stdout, self.get_stdout_response)
-            LOG.info("calling for stderr")
+            LOG.info(f"{name} {ps_cmd} calling for stderr")
             yield from self.batch_std_lines(name, ps_cmd, proc.stderr, self.get_stderr_response)
             if n > 1:
-                LOG.info("sleeping 1 ...")
+                LOG.info(f"{name} {ps_cmd} sleeping 1 ...")
                 sleep(1)
             n = n + 1
-        LOG.info(f"Polled {n} times with return code:{proc.returncode} for {ps_cmd} SUB cmd_args:{cmd_args}")
+        LOG.info(f"{name} {ps_cmd} Polled {n} times with return code:{proc.returncode} SUB cmd_args:{cmd_args}")
         LOG.handlers[0].flush()
         if proc.returncode != 0:
             emsg = (f"{cmd_args} FAILED for ps_cmd |{ps_cmd}| {name} with return code {proc.returncode}")
