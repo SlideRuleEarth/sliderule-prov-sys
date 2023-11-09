@@ -1512,7 +1512,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                                         deploy_values=deploy_values, 
                                         expire_time=expire_time)
                 now = datetime.now(timezone.utc)
-                if now > expire_time:
+                if expire_time is not None and expire_time < now:
                     elapsed = now - st
                     LOG.warn(f"Update {orgAccountObj.name} took {elapsed} expire_time:{expire_time} has already passed (now:{now}) calling enqueue_process_state_change for {orgAccountObj.name}")
                     enqueue_process_state_change(orgAccountObj.name)
