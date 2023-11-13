@@ -25,9 +25,9 @@ from importlib import import_module
 def redis_scheduled_jobs_setup(setup_logging):
     logger = setup_logging
     check_redis_for_testing(logger,__name__)
-    assert(check_for_scheduled_jobs(logger,__name__,2)) # two cron jobs in docker init script
+    assert(check_for_scheduled_jobs(logger,__name__,3)) # three cron jobs in docker init script
     jobs = log_scheduled_jobs()
-    assert (len(jobs) == 2)
+    assert (len(jobs) == 3)
 
 @pytest.fixture(scope="session")
 def s3(setup_logging):

@@ -9,7 +9,7 @@ import json
 import pprint
 import grpc
 from users import ps_client
-
+import time_machine
 from subprocess import CalledProcessError
 import ps_server_pb2
 import ps_server_pb2_grpc
@@ -22,7 +22,7 @@ from django.urls import reverse
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server,verify_org_manage_cluster_onn,the_OWNER_USER,check_for_scheduled_jobs,clear_enqueue_process_state_change
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
 from users.forms import OrgAccountForm
-from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes
+from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes,remove_PsCmdResultsWithNoExpirationAndOldCreationDate
 from time import sleep
 from django.contrib import messages
 from allauth.account.decorators import verified_email_required
@@ -806,7 +806,7 @@ def test_provision_env_ready(tasks_module_to_import,developer_TEST_USER,initiali
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_delete_onn_and_its_scheduled_job(setup_logging,client,tasks_module,initialize_test_environ):
@@ -815,7 +815,7 @@ def test_delete_onn_and_its_scheduled_job(setup_logging,client,tasks_module,init
     '''
     logger = setup_logging
     jobs = log_scheduled_jobs()
-    assert (len(jobs) == 2), f"jobs:{jobs}" # two cron jobs
+    assert (len(jobs) == 3), f"jobs:{jobs}" # three cron jobs
     orgAccountObj = get_test_org()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     logger.info(f"clusterObj.cur_version={clusterObj.cur_version} clusterObj.is_deployed={clusterObj.is_deployed}")
@@ -837,9 +837,37 @@ def test_delete_onn_and_its_scheduled_job(setup_logging,client,tasks_module,init
     assert OrgNumNode.objects.count() == 1
     onn = OrgNumNode.objects.first()
     jobs = log_scheduled_jobs()
-    assert (len(jobs) == 3)
+    assert (len(jobs) == 4)
     assert orgAccountObj.desired_num_nodes == 2 # no change
     delete_onn_and_its_scheduled_job(onn)
     jobs = get_scheduled_jobs()
-    assert (len(jobs) == 2)
+    assert (len(jobs) == 3)
     assert OrgNumNode.objects.count() == 0
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_remove_PsCmdResultsWithNoExpirationAndOldCreationDate(setup_logging,client,tasks_module,initialize_test_environ):
+    '''
+        This procedure will test the 'remove_PsCmdResultsWithNoExpirationAndOldCreationDate' routine
+    '''
+    logger = setup_logging
+    orgAccountObj = get_test_org()
+    current_time = datetime.now(timezone.utc)
+    time_before = datetime.now(timezone.utc) - timedelta(days=orgAccountObj.pcqr_retention_age_in_days,minutes=1)
+    logger.info(f"time_before:{time_before} current_time:{current_time.strftime(FMT)}")
+    with time_machine.travel(time_before):
+        logger.info(f"new time now:{datetime.now(timezone.utc).strftime(FMT)} time_before:{time_before.strftime(FMT)}")
+        assert datetime.now(timezone.utc) < current_time
+        assert (datetime.now(timezone.utc) - time_before) < timedelta(seconds=1)
+        psCmdResultObj = PsCmdResult.objects.create(org=orgAccountObj)
+        psCmdResultObj.expiration = None
+        psCmdResultObj.save()
+    new_current = datetime.now(timezone.utc)
+    logger.info(f"new_current:{new_current.strftime(FMT)} current_time:{current_time.strftime(FMT)}")
+    assert new_current >= current_time
+    assert PsCmdResult.objects.count() == 1
+    first = PsCmdResult.objects.first()
+    logger.info(f"expiration:{first.expiration} create_date:{first.creation_date}")
+    remove_PsCmdResultsWithNoExpirationAndOldCreationDate(orgAccountObj)
+    assert PsCmdResult.objects.count() == 0

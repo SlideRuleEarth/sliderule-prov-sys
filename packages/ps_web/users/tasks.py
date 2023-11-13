@@ -1593,6 +1593,7 @@ def process_Destroy_cmd(orgAccountObj, username=None, owner_ps_cmd=None):
                                     rsp_gen=rsp_gen, 
                                     psCmdResultObj=psCmdResultObj,
                                     org_cmd_str=org_cmd_str)
+        remove_PsCmdResultsWithNoExpirationAndOldCreationDate(orgAccountObj) # remove all PsCmdResults with no expiration
     except Exception as e:
         error_msg = f"ERROR: {org_cmd_str}"
         LOG.exception(f"{error_msg} caught exception:") 
@@ -1803,13 +1804,27 @@ def enqueue_process_state_change(name: str) -> bool:
     return True
 
 def purge_old_PsCmdResultsForOrg(this_org):
-    purge_time = datetime.now(timezone.utc)-timedelta(days=this_org.pcqr_retention_age_in_days)
-    LOG.info(f"started with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name} {purge_time}")
-    PsCmdResult.objects.filter(expiration__lte=(purge_time)).filter(org=this_org).delete()    
-    LOG.info(f"ended with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name}")
+    try:
+        purge_time = datetime.now(timezone.utc)-timedelta(days=this_org.pcqr_retention_age_in_days)
+        LOG.info(f"started with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name} {purge_time}")
+        PsCmdResult.objects.filter(expiration__lte=(purge_time)).filter(org=this_org).delete()    
+        LOG.info(f"ended with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name}")
+    except Exception as e:
+        LOG.error(f"Failed to purge PsCmdResults for {this_org.name}. Error: {str(e)}")
 
 def purge_old_PsCmdResultsForAllOrgs():
     orgs_qs = OrgAccount.objects.all()
     LOG.info("orgs_qs:%s", repr(orgs_qs))
     for orgAccountObj in orgs_qs:
         purge_old_PsCmdResultsForOrg(orgAccountObj)
+
+def remove_PsCmdResultsWithNoExpirationAndOldCreationDate(this_org):
+    try:
+        # Calculate the threshold time for creation_date
+        threshold_time = datetime.now(timezone.utc) - timedelta(days=this_org.pcqr_retention_age_in_days)
+        LOG.info(f"Started with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name} {threshold_time}")
+        # Filter for PsCmdResult objects where expiration is None, creation_date is older than threshold_time, and belonging to this_org
+        PsCmdResult.objects.filter(expiration__isnull=True, creation_date__lt=threshold_time, org=this_org).delete()
+        LOG.info(f"Ended with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name}")
+    except Exception as e:
+        LOG.error(f"Failed to remove None expire time PsCmdResults for {this_org.name}. Error: {str(e)}")
