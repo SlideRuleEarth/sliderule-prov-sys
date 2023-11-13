@@ -19,7 +19,7 @@ The following third-party libraries are used by sliderule-ps-web:
 * __Django__: https://github.com/django/django (BSD 3-Clause)
 * __psycopg2__: https://github.com/psycopg/psycopg2 (GNU Lesser General Public License)
 * __djangorestframework__: https://github.com/encode/django-rest-framework (BSD 3-Clause)
-* __djangorestframework-simplejwt__: https://github.com/jazzband/djangorestframework-simplejwt (MIT license)
+* __djangorestframework-simplejwt__: https://github.com/jazzband/djangorestframework-simplejwt (Open source license https://github.com/encode/django-rest-framework/blob/master/LICENSE.md)
 * __django-amazon-ses__: https://github.com/azavea/django-amazon-ses (Apache-2.0 license)
 * __grpcio__: https://github.com/grpc/grpc (Apache-2.0 license)
 * __grpcio-tools__: https://github.com/grpc/grpc (Apache-2.0 license)
@@ -29,8 +29,8 @@ The following third-party libraries are used by sliderule-ps-web:
 * __Babel__: https://github.com/babel/babel (MIT license)
 * __django-phonenumber-field__: https://github.com/stefanfoulis/django-phonenumber-field (MIT license)
 * __redis__: https://redis.io/ (BSD 3-Clause)
-* __celery__: https://github.com/celery/celery (BSD 3-Clause)
-* __django-celery-results__: https://github.com/celery/django-celery-results (BSD 3-Clause)
+* __celery__: https://github.com/celery/celery (BSD 3-Clause) - DEPRECATED
+* __django-celery-results__: https://github.com/celery/django-celery-results (BSD 3-Clause) DEPRECATED
 * __django-simple-captcha__: (MIT license)
 * __django-crispy-forms__: https://github.com/django-crispy-forms/django-crispy-forms (MIT license)
 * __PALS__: https://github.com/level12/pals (BSD 3-Clause)
@@ -45,3 +45,7 @@ The following third-party libraries are used by sliderule-ps-web:
 * __django-oauth-toolkit__: https://github.com/jazzband/django-oauth-toolkit (BSD 2-Clause License)
 * __django-cors-headers__:https://github.com/adamchainz/django-cors-headers (MIT License)
 * __drf_spectacular__:https://github.com/tfranzel/drf-spectacular (BSD 3-clause License)
+* __django-redis__:https://github.com/jazzband/django-redis (Open source License https://github.com/jazzband/django-redis/blob/master/LICENSE)
+* __django-rq__:https://github.com/rq/django-rq (MIT License)
+* __rq-scheduler__:https://github.com/rq/rq-scheduler (MIT License)
+* __lz4__:https://pypi.org/project/lz4/ (BSD License)
