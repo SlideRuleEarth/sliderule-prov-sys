@@ -19,8 +19,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning,log_scheduled_jobs
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts
+from .utils import get_db_org_cost,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
+from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -885,7 +885,10 @@ def reqNewMembership(request, pk):
 def provSysAdmin(request):
 
     if user_in_one_of_these_groups(user=request.user,groups=['PS_Developer']):
-        return render(request, 'prov_sys_admin.html', {'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED()})
+        jobs = get_scheduled_jobs()
+        now = datetime.now(timezone.utc)
+        context = {'now':now,'jobs':jobs,'PROVISIONING_DISABLED': get_PROVISIONING_DISABLED()}
+        return render(request, 'prov_sys_admin.html', context=context)
     else:
         messages.error(request, 'You Do NOT have privileges to access this page')
         return redirect('browse')

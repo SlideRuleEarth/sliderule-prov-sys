@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
 from django.contrib.messages import get_messages
 
-from users.tasks import init_new_org_memberships,process_state_change,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED
+from users.tasks import init_new_org_memberships,process_state_change,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED,get_scheduler,get_scheduled_jobs,log_scheduled_jobs
 from django.core import serializers
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -84,7 +84,6 @@ def mock_django_email_backend(mocker):
     test_email_backend = 'django.core.mail.backends.locmem.EmailBackend'
     mocker.patch('django_amazon_ses.EmailBackend', mail.get_connection(backend=test_email_backend))
 
-
 def check_redis_for_testing(logger,log_label):
     logger.info(f"{log_label} check_redis_for_testing")
     try:
@@ -96,6 +95,27 @@ def check_redis_for_testing(logger,log_label):
     except Exception as e:
         logger.critical(f"{log_label} check_redis_for_testing got this exception:{str(e)}")
 
+
+def check_for_scheduled_jobs(logger,log_label,expected_num_jobs,timeout=None):
+    timeout = timeout or 10
+    logger.info(f"{log_label} check_for_scheduled_jobs expected_num_jobs:{expected_num_jobs} timeout:{timeout}")
+    while(timeout > 0):
+        jobs = get_scheduled_jobs()
+        if len(jobs) == expected_num_jobs:
+            return True
+        else:
+            logger.info(f"{log_label} check_for_scheduled_jobs waiting for {expected_num_jobs} jobs to be scheduled len(jobs):{len(jobs)} == expected_num_jobs:{expected_num_jobs}")
+            sleep(1)
+            timeout = timeout - 1
+    return False
+
+def clear_enqueue_process_state_change(logger):
+    for job,tm in get_scheduler().get_jobs(with_times=True):
+        tm_aware = tm.astimezone(timezone.utc)
+        logger.info(f"job.func_name:{job.func_name} job.tm:{tm_aware}")
+        if job.func_name == 'users.tasks.enqueue_process_state_change':
+            logger.info(f"canceling job {job.func_name} at {tm_aware}")
+            get_scheduler().cancel(job.id)
 
 def the_TEST_USER():
     return get_user_model().objects.get(username=TEST_USER)
@@ -392,7 +412,6 @@ def init_test_environ(  name=None,
     clusterObj = Cluster.objects.get(org=new_orgAccountObj)
     this_logger.info(f"org:{new_orgAccountObj.name} provision_env_ready:{clusterObj.provision_env_ready} clusterObj.cur_version:{clusterObj.cur_version} orgAccountObj.version:{new_orgAccountObj.version} ")       
     assert clusterObj.cur_version == new_orgAccountObj.version
-    check_redis_for_testing(log_label="init_test_environ",logger=this_logger)
     set_PROVISIONING_DISABLED('False')
     return new_orgAccountObj,new_orgAccountObj.owner
 

@@ -247,6 +247,12 @@ def test_disable_provisioning_success(caplog,client,mock_email_backend,developer
         "password":DEV_TEST_PASSWORD, 
         "mfa_code":"123456"
         }
+
+    has_privs = False
+    for group in [f'PS_Developer']:
+        if the_DEV_TEST_USER().groups.filter(name=group).exists():
+            has_privs = True
+    assert(has_privs)
     #json_str = json.dumps(data)
     #logger.info(json_str)
     response = client.put(url,data=data,content_type= 'application/json', HTTP_ACCEPT= 'application/json')
