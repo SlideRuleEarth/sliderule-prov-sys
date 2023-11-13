@@ -1220,20 +1220,6 @@ def refresh_token_maintenance():
         LOG.exception('Exception caught')
         return False
 
-# def force_ad_hoc_cost_reconcile_uuid(uuid):
-#     LOG.info(f"Started -- force_ad_hoc_cost_reconcile_uuid({uuid}) ")
-#     orgObj = OrgAccount.objects.get(id=uuid)
-#     ad_hoc_cost_reconcile_for_org(orgObj)
-#     LOG.info(f"Finished -- force_ad_hoc_cost_reconcile_uuid({uuid})")
-
-
-# def force_ad_hoc_cost_reconcile():
-#     LOG.info(f"Started -- force_ad_hoc_cost_reconcile ")
-#     orgs_qs = OrgAccount.objects.all()
-#     for orgObj in orgs_qs:
-#         ad_hoc_cost_reconcile_for_org(orgObj)
-#     LOG.info(f"Finished -- force_ad_hoc_cost_reconcile ")
-
 def cost_accounting(orgObj):
     try:
         if update_ccr(orgObj):
@@ -1822,3 +1808,8 @@ def purge_old_PsCmdResultsForOrg(this_org):
     PsCmdResult.objects.filter(expiration__lte=(purge_time)).filter(org=this_org).delete()    
     LOG.info(f"ended with {PsCmdResult.objects.filter(org=this_org).count()} for {this_org.name}")
 
+def purge_old_PsCmdResultsForAllOrgs():
+    orgs_qs = OrgAccount.objects.all()
+    LOG.info("orgs_qs:%s", repr(orgs_qs))
+    for orgAccountObj in orgs_qs:
+        purge_old_PsCmdResultsForOrg(orgAccountObj)
