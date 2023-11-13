@@ -597,7 +597,7 @@ def process_num_nodes_api(name,user,desired_num_nodes,expire_time,is_owner_ps_cm
         orgAccountObj = OrgAccount.objects.get(name=name)
         clusterObj = Cluster.objects.get(org=orgAccountObj)
         if (not clusterObj.is_deployed) and (not orgAccountObj.allow_deploy_by_token):
-            msg = f"Org {orgAccountObj.name} is not configured to allow deploy by token"
+            msg = f"Org {orgAccountObj.name} is not configured to allow auto-deploy by token"
             raise ClusterDeployAuthError(msg)
         if(not clusterObj.is_deployed):
             msg = f"Deploying {orgAccountObj.name} cluster"

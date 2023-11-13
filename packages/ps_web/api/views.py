@@ -176,7 +176,7 @@ def get_token_org_active_membership(request,org_name):
                     jrsp = {'status': "FAILED","error_msg":emsg}
                     status=400
             except ClusterDeployAuthError as e:
-                msg = f"Org {orgAccountObj.name} is not configured to allow deploy by token"
+                msg = f"Org {orgAccountObj.name} is not configured to allow auto-deploy by token"
                 LOG.exception(msg)
                 jrsp = {'status': "FAILED","error_msg":msg}
                 status = 401

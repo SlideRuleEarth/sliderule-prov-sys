@@ -273,7 +273,7 @@
                                                                 <form method="POST" action="{% url 'clear-active-num-node-req' org.id %}" class="d-inline" onsubmit="handleClearSubmit(event)">
                                                                     {% csrf_token %}
                                                                     <div id="destroyWarningAlert" class="alert alert-warning d-none my-2">
-                                                                    <p>Warning: Clearing the entire table when 'destroy when no nodes' is set and min node cap is 0 will bring down the cluster. This will trigger a Destroy of the cluster. Make sure "deploy by token" is selected if you wish it to automatically redeploy when a new desire num nodes request is received.</p>
+                                                                    <p>Warning: Clearing the entire table when 'destroy when no nodes' is set and min node cap is 0 will bring down the cluster. This will trigger a Destroy of the cluster. Make sure "Allow Auto-Deploy" is selected if you wish it to automatically redeploy when a new desire num nodes request is received.</p>
                                                                     </div>
                                                                     <div id="backToMinWarningAlert" class="alert alert-warning d-none my-2">
                                                                         <p>Warning: Clearing the entire table when the 'min node cap' is > 0 will cause an update of cluster to min nodes.</p>
