@@ -264,6 +264,7 @@ def init_redis_queues():
     for orgAccountObj in orgs_qs:
         LOG.info(f"Clearing provisioning_suspended for {orgAccountObj.name}")
         orgAccountObj.provisioning_suspended = False
+        orgAccountObj.save(update_fields=['provisioning_suspended'])
         now =  datetime.now(timezone.utc)
         expired_cnt = 0
         for onn in OrgNumNode.objects.filter(org=orgAccountObj).order_by('expiration'):
