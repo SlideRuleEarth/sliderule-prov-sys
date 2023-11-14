@@ -693,7 +693,6 @@ def verify_put_org_num_nodes(  client,
 def verify_org_manage_cluster_onn( client,
                                     orgAccountObj,
                                     url_args,
-                                    access_token,
                                     data,
                                     expected_change_ps_cmd,
                                     expected_status,
@@ -709,7 +708,7 @@ def verify_org_manage_cluster_onn( client,
         #logger.critical(f"new_time is None ")
         sleep(1)
         new_time = datetime.now(timezone.utc)
-    logger.info(f"verify_org_manage_cluster_onn url_args:{url_args} access_token:{access_token} data:{data} loop_count:{orgAccountObj.loop_count} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_html_status:{expected_html_status}")
+    logger.info(f"verify_org_manage_cluster_onn url_args:{url_args} data:{data} loop_count:{orgAccountObj.loop_count} expected_change_ps_cmd:{expected_change_ps_cmd} expected_status:{expected_status} expected_html_status:{expected_html_status}")
     logger.info(f"using new_time: {new_time.strftime(FMT) if new_time is not None else 'None'}")
     expected_num_onn_change = 0
     # backwards compatibility
@@ -722,32 +721,16 @@ def verify_org_manage_cluster_onn( client,
     s_OrgNumNode_cnt = OrgNumNode.objects.count()
     s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
     logger.info(f"using s_OrgNumNode_cnt:{s_OrgNumNode_cnt} s_OwnerPSCmd_cnt:{s_OwnerPSCmd_cnt} s_orgAccountObj_num_owner_ps_cmd:{s_orgAccountObj_num_owner_ps_cmd} s_orgAccountObj_num_ps_cmd:{s_orgAccountObj_num_ps_cmd} s_orgAccountObj_num_setup_cmd:{s_orgAccountObj_num_setup_cmd} s_orgAccountObj_num_ps_cmd_successful:{s_orgAccountObj_num_ps_cmd_successful} s_orgAccountObj_num_setup_cmd_successful:{s_orgAccountObj_num_setup_cmd_successful}")
-    headers = {
-        'Authorization': f"Bearer {access_token}",
-        'Accept': 'application/json'  # Specify JSON response
-    }
+
     logger.info(f"old time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
     with time_machine.travel(new_time,tick=True):
         logger.info(f"new time now:{datetime.now(timezone.utc).strftime(FMT)} new_time:{new_time.strftime(FMT)}")
         start_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
-        if access_token is not None:
-            assert(expected_status=='QUEUED' or expected_status == 'REDUNDANT' or expected_status == 'FAILED') 
-            logger.info(f"url:{url} data:{data}")
-            response = client.post(url,headers=headers)
-            assert(response.status_code == expected_html_status) 
-            json_data = json.loads(response.content)
-            assert(json_data['status'] == expected_status)   
-            assert(json_data['msg']!='')   
-            assert(json_data['error_msg']=='')
-            if json_data['status'] == 'QUEUED':
-                expected_num_onn_change = 1
-        else:
-            if data is not None:
-                logger.info(f"url:{url} data:{data}")
-                response = client.post(url,data=data, HTTP_ACCEPT='application/json')
-                assert((response.status_code == expected_html_status) or (response.status_code == 302)) 
-                if expected_status != 'FAILED':
-                    expected_num_onn_change = 1 # if we get here we expect a change
+        logger.info(f"url:{url} data:{data}")
+        response = client.post(url,data=data, HTTP_ACCEPT='application/json')
+        assert((response.status_code == expected_html_status) or (response.status_code == 302)) 
+        if expected_status != 'FAILED':
+            expected_num_onn_change = 1 # if we get here we expect a change
         clusterObj.refresh_from_db()    # The client.post above updated the DB so we need this
         orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this       
         assert(OwnerPSCmd.objects.count() == s_OwnerPSCmd_cnt) # url was an onn api not an owner ps cmd, so no change
@@ -824,6 +807,7 @@ def verify_org_configure(  client,
     orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     s_OwnerPSCmd_cnt,s_OrgNumNode_cnt = getObjectCnts()
+    #num_owner_ps_cmd, num_ps_cmd, num_setup_cmd, num_ps_cmd_successful, num_setup_cmd_successful,
     s_orgAccountObj_num_owner_ps_cmd, s_orgAccountObj_num_ps_cmd, s_orgAccountObj_num_setup_cmd, s_orgAccountObj_num_ps_cmd_successful, s_orgAccountObj_num_setup_cmd_successful  = getOrgAccountObjCnts(orgAccountObj)
     if new_time is None:
         tm = datetime.now(timezone.utc)
@@ -834,6 +818,7 @@ def verify_org_configure(  client,
         if mock_tasks_enqueue_stubbed_out and mock_views_enqueue_stubbed_out:
             start_cnt = mock_tasks_enqueue_stubbed_out.call_count + mock_views_enqueue_stubbed_out.call_count
             response = client.post(url,data=data, HTTP_ACCEPT='application/json')
+            orgAccountObj.refresh_from_db() # The client.post above updated the DB so we need this
             logger.info(f"response.status_code:{response.status_code}")
             assert((response.status_code == 200) or (response.status_code == 302))
             logger.info(f" mock_tasks_enqueue_stubbed_out.call_count:{mock_tasks_enqueue_stubbed_out.call_count} mock_views_enqueue_stubbed_out.call_count:{mock_views_enqueue_stubbed_out.call_count} expected_change_ps_cmd:{expected_change_ps_cmd} ")
