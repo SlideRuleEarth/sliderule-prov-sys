@@ -844,96 +844,105 @@ def get_tm_now_tuple():
 def reconcile_org(orgAccountObj):
     time_now,time_now_str = get_tm_now_tuple()
     global FMT, FMT_Z, FMT_DAILY
-    with ps_client.create_client_channel("account") as channel:
-        ac = ps_server_pb2_grpc.AccountStub(channel)
-        # add any monthly credits due
-        start_of_this_month = time_now.replace( day=1,
-                                                hour=0,
-                                                minute=0,
-                                                second=0,
-                                                microsecond=0)
-        LOG.info(f"{orgAccountObj.name} now:{time_now_str} start_of_this_month:{start_of_this_month.strftime('%Y-%m-%d %H:%M:%S')} orgAccountObj.most_recent_credit_time:{orgAccountObj.most_recent_credit_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        if start_of_this_month > orgAccountObj.most_recent_credit_time:
-            # only ever give one month's credit
-            orgAccountObj.balance = orgAccountObj.balance + orgAccountObj.monthly_allowance
-            orgAccountObj.most_recent_credit_time = start_of_this_month
-            LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NEW balance:{orgAccountObj.balance:.2f} using {orgAccountObj.monthly_allowance:.2f} added")
-        else:
-            LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NO CHANGE in balance:{orgAccountObj.balance:.2f} (nothing new to credit)")
-        #
-        # For Charges:
-        # First charge every day until midnight last night, then do hourly of today
-        #
-        # truncating to start of day (i.e. uncharged days)
-        start_of_today = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        LOG.info(f"{orgAccountObj.name} now:{time_now_str} orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} start_of_today:{start_of_today.strftime('%Y-%m-%d %H:%M:%S')}")
-        if orgAccountObj.most_recent_charge_time < start_of_today:
-            # check if there are charges posted yet 
-            start_tm_str    = datetime.strftime(orgAccountObj.most_recent_charge_time, FMT_Z)
-            end_tm_str      = time_now_str
-            #
-            #  These are the Daily charges until midnight last night
-            #  below is the Hourly for today
-            #
-            LOG.info(f"{orgAccountObj.name} now:{time_now_str} start_tm_str:{start_tm_str} end_tm_str:{end_tm_str}")
-            rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(name=orgAccountObj.name, start_tm=start_tm_str, end_tm=end_tm_str))
-            if rsp.server_error:
-                LOG.error(f"{orgAccountObj.name} DailyHistCost got this error:{rsp.error_msg}")
-                raise Exception(f"ps server error caught:{rsp.error_msg}")            
-            if len(rsp.tm) > 0:
-                new_balance,new_fytd_accrued_cost,new_mrct = calculate_account_bal_and_fytd_bal(orgAccountObj,rsp)
-                #LOG.info(f"orgAccountObj.balance:{orgAccountObj.balance} new_balance:{new_balance}")
-                if orgAccountObj.balance != new_balance:
-                    orgAccountObj.balance = new_balance
-                #LOG.info(f"orgAccountObj.fytd_accrued_cost:{orgAccountObj.fytd_accrued_cost} new_fytd_accrued_cost:{new_fytd_accrued_cost}")
-                if orgAccountObj.fytd_accrued_cost != new_fytd_accrued_cost:
-                    orgAccountObj.fytd_accrued_cost = new_fytd_accrued_cost
-                #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} new_mrct:{new_mrct}")
-                if orgAccountObj.most_recent_charge_time != new_mrct:
-                    LOG.info(f"####### {orgAccountObj.name} updating orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')}-->{new_mrct.strftime('%Y-%m-%d %H:%M:%S')} from DailyHistCost")
-                    orgAccountObj.most_recent_charge_time = new_mrct
-                orgAccountObj.save(update_fields=['balance','most_recent_charge_time','fytd_accrued_cost'])
+    try:
+        with ps_client.create_client_channel("account") as channel:
+            ac = ps_server_pb2_grpc.AccountStub(channel)
+            # add any monthly credits due
+            start_of_this_month = time_now.replace( day=1,
+                                                    hour=0,
+                                                    minute=0,
+                                                    second=0,
+                                                    microsecond=0)
+            LOG.info(f"{orgAccountObj.name} now:{time_now_str} start_of_this_month:{start_of_this_month.strftime('%Y-%m-%d %H:%M:%S')} orgAccountObj.most_recent_credit_time:{orgAccountObj.most_recent_credit_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            if start_of_this_month > orgAccountObj.most_recent_credit_time:
+                # only ever give one month's credit
+                orgAccountObj.balance = orgAccountObj.balance + orgAccountObj.monthly_allowance
+                orgAccountObj.most_recent_credit_time = start_of_this_month
+                LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NEW balance:{orgAccountObj.balance:.2f} using {orgAccountObj.monthly_allowance:.2f} added")
             else:
-                LOG.info(f"{orgAccountObj.name} DID NOT change because there were no charges between  orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} and beginning of today:{datetime.strftime(start_of_today,FMT)} it is debited up to {datetime.strftime(orgAccountObj.most_recent_charge_time,FMT)} NO CHANGE balance:{orgAccountObj.balance:.2f} (Cost Explorer report came back empty?)")
-        else:
-            LOG.info(f"{orgAccountObj.name} is ALREADY debited daily mrct:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} up to start_of_today:{start_of_today.strftime('%Y-%m-%d %H:%M:%S')} NO CHANGE balance:%f (No new daily amounts to debit)")
-        #
-        #  Now do hourly 
-        #
-        start_of_this_hour = time_now.replace(minute=0, second=0, microsecond=0)
-        #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} start_of_this_hour:{start_of_this_hour}")
-        if orgAccountObj.most_recent_charge_time < start_of_this_hour:
-            LOG.info(f"calling TodaysCost with {orgAccountObj.name} time_now_str:{time_now_str}")
-            rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(name=orgAccountObj.name,tm=time_now_str))
-            if rsp.server_error:
-                LOG.error(f"{orgAccountObj.name} TodaysCost got this error:{rsp.error_msg}")
-                raise Exception(f"ps server error caught:{rsp.error_msg}")            
-            LOG.info(f"len(rsp.tm):{len(rsp.tm)}")
-            if len(rsp.tm) > 0:
-                new_balance,new_fytd_accrued_cost,new_mrct = calculate_account_bal_and_fytd_bal(orgAccountObj,rsp)
-                #LOG.info(f"orgAccountObj.balance:{orgAccountObj.balance} new_balance:{new_balance}")
-                if orgAccountObj.balance != new_balance:
-                    orgAccountObj.balance = new_balance
-                #LOG.info(f"orgAccountObj.fytd_accrued_cost:{orgAccountObj.fytd_accrued_cost} new_fytd_accrued_cost:{new_fytd_accrued_cost}")
-                if orgAccountObj.fytd_accrued_cost != new_fytd_accrued_cost:
-                    orgAccountObj.fytd_accrued_cost = new_fytd_accrued_cost
-                #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} new_mrct:{new_mrct}")
-                if orgAccountObj.most_recent_charge_time != new_mrct:
-                    orgAccountObj.most_recent_charge_time = new_mrct
-                    LOG.info(f"####### {orgAccountObj.name} updating mrct:{orgAccountObj.most_recent_charge_time} from TodaysCost")
-                orgAccountObj.save(update_fields=['balance','most_recent_charge_time','fytd_accrued_cost'])
+                LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NO CHANGE in balance:{orgAccountObj.balance:.2f} (nothing new to credit)")
+            #
+            # For Charges:
+            # First charge every day until midnight last night, then do hourly of today
+            #
+            # truncating to start of day (i.e. uncharged days)
+            start_of_today = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            LOG.info(f"{orgAccountObj.name} now:{time_now_str} orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} start_of_today:{start_of_today.strftime('%Y-%m-%d %H:%M:%S')}")
+            if orgAccountObj.most_recent_charge_time < start_of_today:
+                # aws cost explorer only goes back 12 months, otherwise we get an exception
+                twelve_months_ago = time_now - timedelta(days=364,hours=23) # because an idle org can go a year without charges
+                if orgAccountObj.most_recent_charge_time < twelve_months_ago:
+                    LOG.info(f"{orgAccountObj.name} is resetting most_recent_charge_time to {twelve_months_ago.strftime('%Y-%m-%d %H:%M:%S')} from {orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    #orgAccountObj.most_recent_charge_time = twelve_months_ago
+                # check if there are charges posted yet 
+                start_tm_str    = datetime.strftime(orgAccountObj.most_recent_charge_time, FMT_Z)
+                end_tm_str      = time_now_str
+                #
+                #  These are the Daily charges until midnight last night
+                #  below is the Hourly for today
+                #
+                LOG.info(f"{orgAccountObj.name} now:{time_now_str} start_tm_str:{start_tm_str} end_tm_str:{end_tm_str}")
+                rsp = ac.DailyHistCost(ps_server_pb2.DailyHistCostReq(name=orgAccountObj.name, start_tm=start_tm_str, end_tm=end_tm_str))
+                if rsp.server_error:
+                    LOG.error(f"{orgAccountObj.name} DailyHistCost got this error:{rsp.error_msg}")
+                    raise Exception(f"ps server error caught:{rsp.error_msg}")            
+                if len(rsp.tm) > 0:
+                    new_balance,new_fytd_accrued_cost,new_mrct = calculate_account_bal_and_fytd_bal(orgAccountObj,rsp)
+                    #LOG.info(f"orgAccountObj.balance:{orgAccountObj.balance} new_balance:{new_balance}")
+                    if orgAccountObj.balance != new_balance:
+                        orgAccountObj.balance = new_balance
+                    #LOG.info(f"orgAccountObj.fytd_accrued_cost:{orgAccountObj.fytd_accrued_cost} new_fytd_accrued_cost:{new_fytd_accrued_cost}")
+                    if orgAccountObj.fytd_accrued_cost != new_fytd_accrued_cost:
+                        orgAccountObj.fytd_accrued_cost = new_fytd_accrued_cost
+                    #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} new_mrct:{new_mrct}")
+                    if orgAccountObj.most_recent_charge_time != new_mrct:
+                        LOG.info(f"####### {orgAccountObj.name} updating orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')}-->{new_mrct.strftime('%Y-%m-%d %H:%M:%S')} from DailyHistCost")
+                        orgAccountObj.most_recent_charge_time = new_mrct
+                    orgAccountObj.save(update_fields=['balance','most_recent_charge_time','fytd_accrued_cost'])
+                else:
+                    LOG.info(f"{orgAccountObj.name} DID NOT change because there were no charges between  orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} and beginning of today:{datetime.strftime(start_of_today,FMT)} it is debited up to {datetime.strftime(orgAccountObj.most_recent_charge_time,FMT)} NO CHANGE balance:{orgAccountObj.balance:.2f} (Cost Explorer report came back empty?)")
             else:
-                LOG.info(f"{orgAccountObj.name} is debited hourly up to {datetime.strftime(orgAccountObj.most_recent_charge_time, FMT)} NO CHANGE balance:{orgAccountObj.balance:.2f}")
-        else:
-            LOG.info(f"{orgAccountObj.name} is ALREADY debited hourly mrct:{orgAccountObj.most_recent_credit_time} up to {datetime.strftime(start_of_this_hour,FMT)} NO CHANGE balance:{orgAccountObj.balance:.2f} (No new hourly amounts to debit)")
-        #
-        # Truncate to max allowed balance
-        #
-        if orgAccountObj.balance > orgAccountObj.max_allowance:
-            orgAccountObj.balance = orgAccountObj.max_allowance
-            orgAccountObj.save(update_fields=['balance'])
-            LOG.info(f"{orgAccountObj.name} truncating balance to max_allowance:{orgAccountObj.max_allowance:.2f}")
-    LOG.info("---done---")
+                LOG.info(f"{orgAccountObj.name} is ALREADY debited daily mrct:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} up to start_of_today:{start_of_today.strftime('%Y-%m-%d %H:%M:%S')} NO CHANGE balance:%f (No new daily amounts to debit)")
+            #
+            #  Now do hourly 
+            #
+            start_of_this_hour = time_now.replace(minute=0, second=0, microsecond=0)
+            #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} start_of_this_hour:{start_of_this_hour}")
+            if orgAccountObj.most_recent_charge_time < start_of_this_hour:
+                LOG.info(f"calling TodaysCost with {orgAccountObj.name} time_now_str:{time_now_str}")
+                rsp = ac.TodaysCost(ps_server_pb2.TodaysCostReq(name=orgAccountObj.name,tm=time_now_str))
+                if rsp.server_error:
+                    LOG.error(f"{orgAccountObj.name} TodaysCost got this error:{rsp.error_msg}")
+                    raise Exception(f"ps server error caught:{rsp.error_msg}")            
+                LOG.info(f"len(rsp.tm):{len(rsp.tm)}")
+                if len(rsp.tm) > 0:
+                    new_balance,new_fytd_accrued_cost,new_mrct = calculate_account_bal_and_fytd_bal(orgAccountObj,rsp)
+                    #LOG.info(f"orgAccountObj.balance:{orgAccountObj.balance} new_balance:{new_balance}")
+                    if orgAccountObj.balance != new_balance:
+                        orgAccountObj.balance = new_balance
+                    #LOG.info(f"orgAccountObj.fytd_accrued_cost:{orgAccountObj.fytd_accrued_cost} new_fytd_accrued_cost:{new_fytd_accrued_cost}")
+                    if orgAccountObj.fytd_accrued_cost != new_fytd_accrued_cost:
+                        orgAccountObj.fytd_accrued_cost = new_fytd_accrued_cost
+                    #LOG.info(f"orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time} new_mrct:{new_mrct}")
+                    if orgAccountObj.most_recent_charge_time != new_mrct:
+                        orgAccountObj.most_recent_charge_time = new_mrct
+                        LOG.info(f"####### {orgAccountObj.name} updating mrct:{orgAccountObj.most_recent_charge_time} from TodaysCost")
+                    orgAccountObj.save(update_fields=['balance','most_recent_charge_time','fytd_accrued_cost'])
+                else:
+                    LOG.info(f"{orgAccountObj.name} is debited hourly up to {datetime.strftime(orgAccountObj.most_recent_charge_time, FMT)} NO CHANGE balance:{orgAccountObj.balance:.2f}")
+            else:
+                LOG.info(f"{orgAccountObj.name} is ALREADY debited hourly mrct:{orgAccountObj.most_recent_credit_time} up to {datetime.strftime(start_of_this_hour,FMT)} NO CHANGE balance:{orgAccountObj.balance:.2f} (No new hourly amounts to debit)")
+            #
+            # Truncate to max allowed balance
+            #
+            if orgAccountObj.balance > orgAccountObj.max_allowance:
+                orgAccountObj.balance = orgAccountObj.max_allowance
+                orgAccountObj.save(update_fields=['balance'])
+                LOG.info(f"{orgAccountObj.name} truncating balance to max_allowance:{orgAccountObj.max_allowance:.2f}")
+    except Exception as e:
+        LOG.exception(f"{orgAccountObj} caught exception:")
+    finally:   
+        LOG.info(f"{orgAccountObj} ---done---")
 
 def is_org_broke(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
