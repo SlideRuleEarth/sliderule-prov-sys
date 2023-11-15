@@ -304,7 +304,7 @@ def test_org_ONN_redundant(caplog,client,mock_tasks_enqueue_stubbed_out,mock_vie
     task_idle, loop_count = process_state_change(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    assert(orgAccountObj.num_ps_cmd==1)
+    assert(orgAccountObj.num_ps_cmd==2)
      # only process one of the entries
      # only process one here, wait for expire
     
@@ -471,8 +471,8 @@ def test_org_ONN_redundant_2(caplog,client,mock_email_backend,initialize_test_en
     task_idle, loop_count = process_state_change(orgAccountObj.name)
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
-    assert(orgAccountObj.num_ps_cmd==1) # onn triggered a deploy
-    assert(orgAccountObj.num_ps_cmd_successful==1) # onn triggered a deploy
+    assert(orgAccountObj.num_ps_cmd==2) # onn triggered a deploy i.e. SetUp Update
+    assert(orgAccountObj.num_ps_cmd_successful==2) # onn triggered a deploy i.e. SetUp Update
      # only process one of the entries
      # only process one here, wait for expire
 
@@ -507,7 +507,7 @@ def test_sort_ONN_by_nn_exp(caplog,client,mock_email_backend,initialize_test_env
                                                         orgAccountObj=orgAccountObj,
                                                         url_args=[orgAccountObj.name,3,17],
                                                         access_token=access_token,
-                                                        expected_change_ps_cmd=1, 
+                                                        expected_change_ps_cmd=2,  #SetUp Update
                                                         expected_status='QUEUED',
                                                         mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                         mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
@@ -670,7 +670,7 @@ def verify_new_entries_in_ONN(orgAccountObj,client,mock_tasks_enqueue_stubbed_ou
                                     password=OWNER_PASSWORD,
                                     desired_num_nodes=2,
                                     ttl_minutes=15,
-                                    expected_change_ps_cmd=1,
+                                    expected_change_ps_cmd=2, # SetUp Update
                                     mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                     mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) 
     m = create_active_membership(orgAccountObj,the_DEV_TEST_USER())
@@ -921,7 +921,7 @@ def test_sum_of_highest_nodes_for_each_user(caplog,client, mock_tasks_enqueue_st
                                     password=OWNER_PASSWORD,
                                     desired_num_nodes=LARGE_REQ,
                                     ttl_minutes=15,
-                                    expected_change_ps_cmd=1,
+                                    expected_change_ps_cmd=1, # Update
                                     mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                     mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
