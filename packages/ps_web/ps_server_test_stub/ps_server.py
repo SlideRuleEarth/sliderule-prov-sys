@@ -445,6 +445,10 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             LOG.critical(f"todaysCostReq:{todaysCostReq}")
             rsp_tm = []
             rsp_cost = []
+            if 'test_recon_all_update_time' in todaysCostReq.name:
+                retRsp.error_msg='' # 
+                retRsp.server_error=False
+
             if todaysCostReq.name=="test_reconcileOrg:Req1:2020-01-28 11:00:00+00:00":
                 fake_now1 = datetime.now(timezone.utc)
                 LOG.critical(f"fake now1:{fake_now1}")
@@ -556,6 +560,10 @@ class Account(ps_server_pb2_grpc.AccountServicer):
                     unit="",
                     server_error=False,
                     error_msg="")
+            if 'test_recon_all_update_time' in dailyHistCostReq.name:
+                retRsp.error_msg='' # 
+                retRsp.server_error=False
+
             if dailyHistCostReq.name=="test_reconcileOrg:Req1:2020-01-28 11:00:00+00:00":
                 rsp_tm= [
                     datetime.strftime(datetime(year=2020,month=1,day=25),FMT_DAILY),

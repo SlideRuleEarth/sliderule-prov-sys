@@ -1,7 +1,8 @@
 import unittest
 import pytest
+import inspect
 from users.tests.global_test import GlobalTestCase
-from users.tasks import getGranChoice,getFiscalStartDate,reconcile_org,get_org_cost_data,create_forecast
+from users.tasks import getGranChoice,getFiscalStartDate,reconcile_org,get_org_cost_data,create_forecast,reconcile_all_orgs
 from users.models import OrgAccount,OrgCost,GranChoice
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from users.tests.utilities_for_unit_tests import init_test_environ
@@ -334,3 +335,31 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
                                                     most_recent_recon_time=inputs['most_recent_recon_time_to_use'])
             updated = get_org_cost_data(orgAccountObj,'HOURLY',orgCostObj=orgCostObj)
 
+
+@pytest.mark.dev
+@pytest.mark.ps_server_stubbed
+@pytest.mark.django_db
+def test_recon_all_update_time(setup_logging,client,s3,test_name,mock_email_backend,initialize_test_environ):
+    logger = logging.getLogger('django')
+    time_now = datetime.now(timezone.utc)
+    twelve_months_ago = time_now - timedelta(days=365) # because an idle org can go a year without charges
+    more_than_twelve_months_ago = time_now - timedelta(days=367) # because an idle org can go a year without charges
+    orgs_qs = OrgAccount.objects.all()
+    logger.info("orgs_qs:%s", repr(orgs_qs))
+    assert orgs_qs.count() >= 1
+    for orgAccountObj in orgs_qs:
+        # set it too old for Cost Explorer to return any charges
+        orgAccountObj.most_recent_charge_time=more_than_twelve_months_ago
+        # append the file and name of this function to the orgAccountObj.name for the stubbed ps_server to key on
+        orgAccountObj.name = orgAccountObj.name + f":{__name__}:{inspect.currentframe().f_code.co_name}" # Hack for ps_server_test_stub to key on
+        logger.info(f"Now using hacked name--> orgAccountObj.name:{orgAccountObj.name} more_than_twelve_months_ago:{more_than_twelve_months_ago} twelve_months_ago:{twelve_months_ago}")
+        orgAccountObj.save()
+    reconcile_all_orgs()
+    for orgAccountObj in orgs_qs:
+        orgAccountObj.refresh_from_db()
+        # Log the types of the objects being compared
+        logger.info("Type of orgAccountObj.most_recent_charge_time: %s", type(orgAccountObj.most_recent_charge_time))
+        logger.info("Type of twelve_months_ago: %s", type(twelve_months_ago))
+        # verify that the most_recent_charge_time was updated
+        assert orgAccountObj.most_recent_charge_time >= twelve_months_ago
+    

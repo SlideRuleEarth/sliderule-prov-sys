@@ -870,10 +870,13 @@ def reconcile_org(orgAccountObj):
             LOG.info(f"{orgAccountObj.name} now:{time_now_str} orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')} start_of_today:{start_of_today.strftime('%Y-%m-%d %H:%M:%S')}")
             if orgAccountObj.most_recent_charge_time < start_of_today:
                 # aws cost explorer only goes back 12 months, otherwise we get an exception
-                twelve_months_ago = time_now - timedelta(days=364,hours=23) # because an idle org can go a year without charges
-                if orgAccountObj.most_recent_charge_time < twelve_months_ago:
-                    LOG.info(f"{orgAccountObj.name} is resetting most_recent_charge_time to {twelve_months_ago.strftime('%Y-%m-%d %H:%M:%S')} from {orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')}")
-                    #orgAccountObj.most_recent_charge_time = twelve_months_ago
+                less_than_twelve_months_ago = time_now - timedelta(days=364,hours=23) # because an idle org can go a year without charges
+                #LOG.critical(f"Types of time_now:{type(time_now)} twelve_months_ago:{type(twelve_months_ago)}")
+                if orgAccountObj.most_recent_charge_time < less_than_twelve_months_ago:
+                    LOG.info(f"{orgAccountObj.name} is resetting most_recent_charge_time to {less_than_twelve_months_ago.strftime('%Y-%m-%d %H:%M:%S')} from {orgAccountObj.most_recent_charge_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    orgAccountObj.most_recent_charge_time = less_than_twelve_months_ago
+                    orgAccountObj.save(update_fields=['most_recent_charge_time'])
+                    LOG.info(f"{orgAccountObj.name} most_recent_charge_time:{orgAccountObj.most_recent_charge_time} type of most_recent_charge_time:{type(orgAccountObj.most_recent_charge_time)}")
                 # check if there are charges posted yet 
                 start_tm_str    = datetime.strftime(orgAccountObj.most_recent_charge_time, FMT_Z)
                 end_tm_str      = time_now_str
