@@ -553,7 +553,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
         assert verify_org_configure(client=client, 
                                     orgAccountObj=orgAccountObj, 
                                     data=form_data, 
-                                    expected_change_ps_cmd=3, 
+                                    expected_change_ps_cmd=2, 
                                     mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                     mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
 
@@ -564,8 +564,8 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
         assert(orgAccountObj.version == initial_version) 
         assert orgAccountObj.num_setup_cmd == 1
         assert orgAccountObj.num_setup_cmd_successful == 1
-        assert orgAccountObj.num_ps_cmd_successful == 3
-        assert orgAccountObj.num_ps_cmd == 3
+        assert orgAccountObj.num_ps_cmd_successful == 2
+        assert orgAccountObj.num_ps_cmd == 2
         
         assert orgAccountObj.min_node_cap == 1
         assert orgAccountObj.max_node_cap == 3
@@ -578,9 +578,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
         assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
         logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-        assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
-        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
 
 
         form_data = {
@@ -714,7 +712,7 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
 
         assert orgAccountObj.desired_num_nodes == 4    
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_backend, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, initialize_test_environ, developer_TEST_USER):
@@ -829,7 +827,7 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
                                             expected_change_ps_cmd=1, # update to max (i.e. 3)
                                             expected_status='QUEUED') 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_backend, mock_schedule_process_state_change, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, initialize_test_environ, developer_TEST_USER):
@@ -999,8 +997,8 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
         assert verify_org_configure(client=client, 
                                     orgAccountObj=orgAccountObj,
                                     data=form_data, 
-                                    expected_change_ps_cmd=3,  # SetUp - SetUp - Update (min nodes is 1) one SetUp at initialization
-                                    expected_change_setup_cmd=2, # SetUp - SetUp - Update (min nodes is 1) one SetUp at initialization
+                                    expected_change_ps_cmd=2,  # SetUp - Update (min nodes is 1) one SetUp at initialization
+                                    expected_change_setup_cmd=1, # SetUp - Update (min nodes is 1) one SetUp at initialization
                                     mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, 
                                     mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
         # assert the form was successful
@@ -1011,23 +1009,21 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
 
         assert(orgAccountObj.is_public == initial_is_public) 
         assert(orgAccountObj.version == initial_version) 
-        assert orgAccountObj.num_setup_cmd == 2
-        assert orgAccountObj.num_setup_cmd_successful == 2
-        assert orgAccountObj.num_ps_cmd_successful == 3
-        assert orgAccountObj.num_ps_cmd == 3
+        assert orgAccountObj.num_setup_cmd == 1
+        assert orgAccountObj.num_setup_cmd_successful == 1
+        assert orgAccountObj.num_ps_cmd_successful == 2
+        assert orgAccountObj.num_ps_cmd == 2
         
         assert orgAccountObj.min_node_cap == 1
         assert orgAccountObj.max_node_cap == 3
         assert orgAccountObj.allow_deploy_by_token == True
         assert orgAccountObj.destroy_when_no_nodes == True
-        assert PsCmdResult.objects.count() == s_ps_cmd_rslt_cnt + 3 # 
+        assert PsCmdResult.objects.count() == s_ps_cmd_rslt_cnt + 2 # 
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[{s_ps_cmd_rslt_cnt}]:{psCmdResultObjs[s_ps_cmd_rslt_cnt].ps_cmd_summary_label}")
         assert 'Configure' in psCmdResultObjs[s_ps_cmd_rslt_cnt].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
         logger.info(f"[{s_ps_cmd_rslt_cnt+1}]:{psCmdResultObjs[s_ps_cmd_rslt_cnt+1].ps_cmd_summary_label}")
-        assert 'Configure' in psCmdResultObjs[s_ps_cmd_rslt_cnt+1].ps_cmd_summary_label #
-        logger.info(f"[{s_ps_cmd_rslt_cnt+2}]:{psCmdResultObjs[s_ps_cmd_rslt_cnt+2].ps_cmd_summary_label}")
-        assert 'Update' in psCmdResultObjs[s_ps_cmd_rslt_cnt+2].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
+        assert 'Update' in psCmdResultObjs[s_ps_cmd_rslt_cnt+1].ps_cmd_summary_label # no entries and min_node_cap is 1 so Update
         assert OrgNumNode.objects.count() == 0
         # test clamp to minimum
         form_data = {

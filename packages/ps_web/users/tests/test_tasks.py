@@ -884,19 +884,28 @@ def test_process_process_num_node_table_when_LOW_BALANCE_exception_occurs_ON_Upd
     if ONN_IS_EMPTY:
         if DESTROY_WHEN_NO_NODES and MIN_NODE_CAP == 0:
             if IS_DEPLOYED:
-                psCmdResultObj = PsCmdResult.objects.first()
-                logger.info(f"ps_cmd_summary_label:{psCmdResultObj.ps_cmd_summary_label}")
-                assert 'Destroy' in psCmdResultObj.ps_cmd_summary_label
+                assert PsCmdResult.objects.count() == 1 
+                psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+                logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+                assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
                 assert orgAccountObj.destroy_when_no_nodes == DESTROY_WHEN_NO_NODES # we don't throw an exception when destroying for low balance
                 assert orgAccountObj.min_node_cap == MIN_NODE_CAP # on exception we set min to zero
         else:
             if MIN_NODE_CAP != orgAccountObj.desired_num_nodes:
-                psCmdResultObj = PsCmdResult.objects.first()
-                assert 'Update' in psCmdResultObj.ps_cmd_summary_label
-                assert orgAccountObj.desired_num_nodes == 0 # on exception we set desired to zero to match min to stop loop
-                assert orgAccountObj.min_node_cap == 0 # on exception we set min to zero
-                assert orgAccountObj.min_node_cap == 0 # on exception we set min to zero
-                assert orgAccountObj.desired_num_nodes == 0 # on exception we set desired to zero to match min to stop loop
+                if not IS_DEPLOYED:
+                    assert orgAccountObj.num_ps_cmd == 2  
+                    logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+                    assert PsCmdResult.objects.count() == 2
+                    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+                    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+                    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+                    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+                    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+                else:
+                    assert PsCmdResult.objects.count() == 1 #  Update (min_node_cap is 1)
+                    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+                    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+                    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
     else:
         # assume onnTop.desired_num_nodes != orgAccountObj.desired_num_nodes
         # Note: here we just remove the entry that got the exception
