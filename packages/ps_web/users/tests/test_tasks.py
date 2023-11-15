@@ -276,8 +276,8 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
     verify_org_configure(client=client,
                          data=form_data,
                          orgAccountObj=orgAccountObj,
-                         expected_change_ps_cmd=3, # SetUp SetUp Update
-                         expected_change_setup_cmd=2,
+                         expected_change_ps_cmd=2, # SetUp Update
+                         expected_change_setup_cmd=1,
                          mock_tasks_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                          mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
@@ -287,27 +287,25 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
     assert orgAccountObj.desired_num_nodes == 1
     
     assert OrgNumNode.objects.count() == 0
-    assert orgAccountObj.num_ps_cmd == 3
-    assert PsCmdResult.objects.count() == 3
+    assert orgAccountObj.num_ps_cmd == 2
+    assert PsCmdResult.objects.count() == 2
     
     orgAccountObj.refresh_from_db()
     logger.info(f"orgAccountObj: num_ps_cmd={orgAccountObj.num_ps_cmd} desired_num_nodes={orgAccountObj.desired_num_nodes} cnt:{PsCmdResult.objects.count()}")
      
     assert OwnerPSCmd.objects.count() == 0
-    assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
-    assert orgAccountObj.num_ps_cmd == 3 # SetUp, SetUp, Update
-    assert orgAccountObj.num_setup_cmd_successful == 2
-    assert orgAccountObj.num_ps_cmd_successful == 3 # SetUp, SetUp, Update 
+    assert orgAccountObj.num_setup_cmd == 1 
+    assert orgAccountObj.num_ps_cmd == 2 #  SetUp, Update
+    assert orgAccountObj.num_setup_cmd_successful == 1
+    assert orgAccountObj.num_ps_cmd_successful == 2 # SetUp, Update 
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
-    assert PsCmdResult.objects.count() == 3
+    assert PsCmdResult.objects.count() == 2
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[1].ps_cmd_summary_label
-    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
 
     form_data = {
         'is_public': initial_is_public,
@@ -321,30 +319,28 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
     verify_org_configure(client=client,
                          data=form_data,
                          orgAccountObj=orgAccountObj,
-                         expected_change_ps_cmd=3, # 
+                         expected_change_ps_cmd=3, # ... SetUp, Destroy, Update,
                          expected_change_setup_cmd=1,
                          mock_tasks_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
                          mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
-    assert orgAccountObj.num_setup_cmd == 3 # handled in fixture and here
-    assert orgAccountObj.num_ps_cmd == 6 # SetUp, SetUp, Update, SetUp, Destroy, Update
-    assert orgAccountObj.num_setup_cmd_successful == 3
-    assert orgAccountObj.num_ps_cmd_successful == 6 # SetUp, SetUp, Update, SetUp, Destroy, Update
+    assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
+    assert orgAccountObj.num_ps_cmd == 5 # SetUp, Update, Destroy, SetUp, Update
+    assert orgAccountObj.num_setup_cmd_successful == 2
+    assert orgAccountObj.num_ps_cmd_successful == 5 #  SetUp, Update, SetUp, Destroy, Update
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
-    assert PsCmdResult.objects.count() == 6
+    assert PsCmdResult.objects.count() == 5
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[1].ps_cmd_summary_label
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
     logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    assert 'Configure' in psCmdResultObjs[2].ps_cmd_summary_label
     logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+    assert 'Destroy' in psCmdResultObjs[3].ps_cmd_summary_label
     logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-    assert 'Destroy' in psCmdResultObjs[4].ps_cmd_summary_label
-    logger.info(f"[5]:{psCmdResultObjs[5].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[5].ps_cmd_summary_label
+    assert 'Update' in psCmdResultObjs[4].ps_cmd_summary_label
 
     form_data = {
         'form_submit': 'add_onn',
@@ -360,28 +356,24 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
                                                 mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                 mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
     assert OwnerPSCmd.objects.count() == 0
-    assert orgAccountObj.num_setup_cmd == 3 # handled in fixture and here
-    assert orgAccountObj.num_ps_cmd == 6 # SetUp, SetUp, Update, SetUp Destroy, Update
-    assert orgAccountObj.num_setup_cmd_successful == 3
-    assert orgAccountObj.num_ps_cmd_successful == 6 # SetUp, SetUp, Update, SetUp, Destroy, Update
+    assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
+    assert orgAccountObj.num_ps_cmd == 5 # SetUp, Update, SetUp Destroy, Update
+    assert orgAccountObj.num_setup_cmd_successful == 2
+    assert orgAccountObj.num_ps_cmd_successful == 5 #  SetUp, Update, SetUp, Destroy, Update
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
-    assert PsCmdResult.objects.count() == 6
+    assert PsCmdResult.objects.count() == 5
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[1].ps_cmd_summary_label
+    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
     logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[2].ps_cmd_summary_label
+    assert 'Configure' in psCmdResultObjs[2].ps_cmd_summary_label
     logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+    assert 'Destroy' in psCmdResultObjs[3].ps_cmd_summary_label
     logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-    assert 'Destroy' in psCmdResultObjs[4].ps_cmd_summary_label
-    logger.info(f"[5]:{psCmdResultObjs[5].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[5].ps_cmd_summary_label
-
-
+    assert 'Update' in psCmdResultObjs[4].ps_cmd_summary_label
 
 #@pytest.mark.dev
 @pytest.mark.django_db
