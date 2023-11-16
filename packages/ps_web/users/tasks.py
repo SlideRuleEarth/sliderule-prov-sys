@@ -559,10 +559,10 @@ def perform_cost_accounting_for_all_orgs():
 def get_current_cost_report(name, gran, time_now):
     now_str = datetime.strftime(time_now, FMT_Z)
     LOG.info(f"{name} {gran} {now_str}")
+    rsp = ps_server_pb2.CurrentCostRsp()
     with ps_client.create_client_channel("account") as channel:
         ac = ps_server_pb2_grpc.AccountStub(channel)
-        rsp = ac.CurrentCost(
-            ps_server_pb2.CurrentCostReq(name=name, granularity=gran, tm=now_str))
+        rsp = ac.CurrentCost(ps_server_pb2.CurrentCostReq(name=name, granularity=gran, tm=now_str))
     #LOG.info("Sending rsp...")
     return MessageToJson(rsp), rsp
 
@@ -573,8 +573,8 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
     time_stale = time_now - orgCostObj.cost_refresh_time
     LOG.info(f"{orgAccountObj.name} {granObj.granularity,} now:{datetime.now(timezone.utc)}/{datetime.now()} orgCostObj.cost_refresh_time:{orgCostObj.cost_refresh_time} time_stale:{ time_stale} > {timedelta(hours=8)} ?")
     if time_stale > timedelta(hours=8) or str(orgCostObj.ccr) == "{}" or str(orgCostObj.ccr) == NULL_CCR:
-        #LOG.info("Calling get_current_cost_report <<<<<<<<<<<-------------->>>>>>>>>>>")
         ccr, rsp = get_current_cost_report(orgAccountObj.name, granObj.granularity, time_now)
+        LOG.info(f"Called get_current_cost_report rsp.server_error:{rsp.server_error}")
         if rsp.server_error == False:
             orgCostObj.cost_refresh_time = time_now
             orgAccountObj.most_recent_recon_time = time_now 
@@ -658,7 +658,7 @@ def update_orgCost(orgAccountObj, gran):
 
 def update_ccr(org):
     updated = (update_orgCost(org, "HOURLY") or update_orgCost(org, "DAILY") or update_orgCost(org, "MONTHLY"))
-    LOG.info("updated:%s",updated)
+    LOG.info(f"updated:{updated}")
     return updated
 
 def update_cur_num_nodes(orgAccountObj):
@@ -844,6 +844,7 @@ def reconcile_org(orgAccountObj):
     time_now,time_now_str = get_tm_now_tuple()
     global FMT, FMT_Z, FMT_DAILY
     try:
+        update_ccr(orgAccountObj)
         with ps_client.create_client_channel("account") as channel:
             ac = ps_server_pb2_grpc.AccountStub(channel)
             # add any monthly credits due
@@ -1090,14 +1091,6 @@ def create_all_forecasts_for_all_orgs():
     for o in orgs_qs:
         create_all_forecasts(o)
 
-def ad_hoc_cost_reconcile_for_org(orgObj):
-    update_ccr(orgObj)
-    update_burn_rates(orgObj)
-    update_ddt(orgObj)
-    reconcile_org(orgObj)
-    create_all_forecasts(orgObj)
-
-
 def hourly_processing():
     LOG.info(f"hourly_processing started")
     try:
@@ -1127,10 +1120,10 @@ def refresh_token_maintenance():
 
 def cost_accounting(orgObj):
     try:
-        if update_ccr(orgObj):
-            update_burn_rates(orgObj) # auto scaling changes num_nodes
-            update_ddt(orgObj)
-            create_all_forecasts(orgObj)
+        update_ccr(orgObj)
+        update_burn_rates(orgObj) # auto scaling changes num_nodes
+        update_ddt(orgObj)
+        create_all_forecasts(orgObj)
     except Exception as e:
         LOG.exception("Error in cost_accounting: %s", repr(e))
 
