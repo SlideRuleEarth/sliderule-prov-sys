@@ -571,14 +571,14 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
     updated = False
     time_now = datetime.now(timezone.utc)
     time_stale = time_now - orgCostObj.cost_refresh_time
-    LOG.info("%s %s now:%s/%s orgCostObj.cost_refresh_time:%s time_stale:%s > %s ?", orgAccountObj.name,
-             granObj.granularity, datetime.now(timezone.utc), datetime.now(), orgCostObj.cost_refresh_time, time_stale, timedelta(hours=8))
+    LOG.info(f"{orgAccountObj.name} {granObj.granularity,} now:{datetime.now(timezone.utc)}/{datetime.now()} orgCostObj.cost_refresh_time:{orgCostObj.cost_refresh_time} time_stale:{ time_stale} > {timedelta(hours=8)} ?")
     if time_stale > timedelta(hours=8) or str(orgCostObj.ccr) == "{}" or str(orgCostObj.ccr) == NULL_CCR:
         #LOG.info("Calling get_current_cost_report <<<<<<<<<<<-------------->>>>>>>>>>>")
         ccr, rsp = get_current_cost_report(orgAccountObj.name, granObj.granularity, time_now)
         if rsp.server_error == False:
             orgCostObj.cost_refresh_time = time_now
             orgAccountObj.most_recent_recon_time = time_now 
+            orgAccountObj.save(update_fields=['most_recent_recon_time'])
             if len(rsp.tm) > 0:
                 if(orgCostObj.gran.granularity == 'HOURLY'):
                     THIS_FMT = FMT_Z
@@ -594,10 +594,9 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
                 updated = True
                 #LOG.info("Saved %s orgCostObj for:%s tm:%s ccr=%s",
                 #         orgCostObj.gran.granularity,  orgCostObj.org.name, orgCostObj.tm, ccr)
-                LOG.info("Saved %s orgCostObj for:%s tm:%s",
-                        orgCostObj.gran.granularity,  orgCostObj.org.name, orgCostObj.tm)
+                LOG.info(f"Saved {orgCostObj.gran.granularity} orgCostObj for:{orgCostObj.org.name} tm:{orgCostObj.tm}")
             else:
-                LOG.info("No cost data for %s %s",orgAccountObj.name, granObj.granularity)
+                LOG.info(f"No cost data for {orgAccountObj.name} {granObj.granularity}")
                 if str(orgCostObj.ccr) == "{}":
                     orgCostObj.ccr = "{ }" # so keep from reading null CCRs
             orgCostObj.save() # this only saves the updated orgCostObj.cost_refresh_time
@@ -625,7 +624,7 @@ def update_orgCost(orgAccountObj, gran):
     except ObjectDoesNotExist as e:
         LOG.warning(f"no orgCostObj for {orgAccountObj.name} {granObj.granularity}")
         orgCostObj = OrgCost(org=orgAccountObj, gran=granObj, cost_refresh_time=datetime.now(timezone.utc)-timedelta(weeks=52),tm=datetime.now(timezone.utc))
-        LOG.info("%s %s %s New orgCostObj created", orgCostObj.org.name,orgCostObj.gran.granularity, orgCostObj.tm)
+        LOG.info(f"{orgCostObj.org.name} {orgCostObj.gran.granularity} {orgCostObj.tm} New orgCostObj created")
         get_data = True
     if orgCostObj is not None:
         #LOG.info(datetime.now(timezone.utc))
@@ -633,26 +632,26 @@ def update_orgCost(orgAccountObj, gran):
         #LOG.info("%s %s %s - %s = %s", orgAccountObj.name, gran,datetime.now(timezone.utc), orgCostObj.tm, diff_tm)
         if str(orgCostObj.ccr) == "{}" or str(orgCostObj.ccr) == NULL_CCR:
             get_data = True
-            LOG.info("Triggered by empty set")
+            LOG.info(f"{orgCostObj.tm} {gran} Triggered by empty set")
         else:
             # the aws cost explorer updates 3x a day
             if diff_tm > timedelta(hours=8):
-                LOG.info("Triggered by stale ccr > 8 hrs")
+                LOG.info(f"{orgCostObj.tm} {gran} Triggered by stale ccr > 8 hrs")
                 get_data = True
     else:
-        LOG.error("FAILED to create orgCostObj for %s %s",orgAccountObj.name, granObj.granularity)
+        LOG.error(f"FAILED to create orgCostObj for {orgAccountObj.name} {granObj.granularity}")
         get_data = False
     updated = False
     if get_data:
         # will create orgCostObj if needed
-        LOG.info("calling get_org_cost_data for %s %s",orgAccountObj.name, granObj.granularity)
+        LOG.info(f"calling get_org_cost_data for {orgAccountObj.name} {granObj.granularity}")
         updated = get_org_cost_data(orgAccountObj, granObj, orgCostObj)
 
     next_refresh_time = orgCostObj.cost_refresh_time +  timedelta(hours=8)
     if updated:
-        LOG.info("%s CCR DID     update. Last refresh was: %s next refresh will be: %s",gran,orgCostObj.cost_refresh_time , next_refresh_time )
+        LOG.info(f"{orgAccountObj.name} {gran} CCR DID     update. Last refresh was: {orgCostObj.cost_refresh_time} next refresh will be: {next_refresh_time}")
     else:
-        LOG.info("%s CCR did not update. Last refresh was: %s next refresh will be: %s",gran,orgCostObj.cost_refresh_time , next_refresh_time )
+        LOG.info(f"{orgAccountObj.name} {gran} CCR did not update. Last refresh was: %s next refresh will be: {next_refresh_time}")
 
     return updated
 
@@ -858,6 +857,7 @@ def reconcile_org(orgAccountObj):
                 # only ever give one month's credit
                 orgAccountObj.balance = orgAccountObj.balance + orgAccountObj.monthly_allowance
                 orgAccountObj.most_recent_credit_time = start_of_this_month
+                orgAccountObj.save(update_fields=['balance','most_recent_credit_time'])
                 LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NEW balance:{orgAccountObj.balance:.2f} using {orgAccountObj.monthly_allowance:.2f} added")
             else:
                 LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NO CHANGE in balance:{orgAccountObj.balance:.2f} (nothing new to credit)")

@@ -31,6 +31,7 @@ urlpatterns = [
      path('org_configure/<str:pk>/', views.orgConfigure, name="org-configure"),
      path('org_refresh_cluster/<str:pk>/', views.orgRefreshCluster, name="org-refresh-cluster"),
      path('org_destroy_cluster/<str:pk>/', views.orgDestroyCluster, name="org-destroy-cluster"),
+     path('org_reconcile/<str:pk>/', views.orgReconcile, name="org-reconcile"),
      path('req_new_membership/<str:pk>/', views.reqNewMembership,name="req-new-membership-account"),
      path('accounts/profile/', views.userProfile, name="user-profile"),
      path('prov_sys_admin/', views.provSysAdmin, name="prov-sys-admin"),
