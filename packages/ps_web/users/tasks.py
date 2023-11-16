@@ -559,7 +559,7 @@ def perform_cost_accounting_for_all_orgs():
 def get_current_cost_report(name, gran, time_now):
     now_str = datetime.strftime(time_now, FMT_Z)
     LOG.info(f"{name} {gran} {now_str}")
-    rsp = ps_server_pb2.CurrentCostRsp()
+    rsp = ps_server_pb2.CostAndUsageRsp(name=name, granularity=gran)
     with ps_client.create_client_channel("account") as channel:
         ac = ps_server_pb2_grpc.AccountStub(channel)
         rsp = ac.CurrentCost(ps_server_pb2.CurrentCostReq(name=name, granularity=gran, tm=now_str))
@@ -568,17 +568,18 @@ def get_current_cost_report(name, gran, time_now):
 
 def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
     THIS_FMT = FMT_DAILY
-    updated = False
     time_now = datetime.now(timezone.utc)
     time_stale = time_now - orgCostObj.cost_refresh_time
     LOG.info(f"{orgAccountObj.name} {granObj.granularity,} now:{datetime.now(timezone.utc)}/{datetime.now()} orgCostObj.cost_refresh_time:{orgCostObj.cost_refresh_time} time_stale:{ time_stale} > {timedelta(hours=8)} ?")
+    num_values_returned = 0
     if time_stale > timedelta(hours=8) or str(orgCostObj.ccr) == "{}" or str(orgCostObj.ccr) == NULL_CCR:
         ccr, rsp = get_current_cost_report(orgAccountObj.name, granObj.granularity, time_now)
         LOG.info(f"Called get_current_cost_report rsp.server_error:{rsp.server_error}")
         if rsp.server_error == False:
             orgCostObj.cost_refresh_time = time_now
-            orgAccountObj.most_recent_recon_time = time_now 
+            orgAccountObj.most_recent_recon_time = time_now # most_recent_recon_time is really most recent data fetch
             orgAccountObj.save(update_fields=['most_recent_recon_time'])
+            num_values_returned = len(rsp.tm)
             if len(rsp.tm) > 0:
                 if(orgCostObj.gran.granularity == 'HOURLY'):
                     THIS_FMT = FMT_Z
@@ -591,10 +592,13 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
                 orgCostObj.max = rsp.stats.max
                 orgCostObj.std = rsp.stats.std
                 orgCostObj.ccr = ccr
-                updated = True
                 #LOG.info("Saved %s orgCostObj for:%s tm:%s ccr=%s",
                 #         orgCostObj.gran.granularity,  orgCostObj.org.name, orgCostObj.tm, ccr)
-                LOG.info(f"Saved {orgCostObj.gran.granularity} orgCostObj for:{orgCostObj.org.name} tm:{orgCostObj.tm}")
+                LOG.info(f"Saved {orgCostObj.gran.granularity} orgCostObj for:{orgCostObj.org.name} tm:{orgCostObj.tm}  len(rsp.tm):{len(rsp.tm)}")
+                # for tm in rsp.tm:
+                #     LOG.info(f"tm:{tm}")
+                # for cost in rsp.cost:
+                #     LOG.info(f"cost:{cost}")
             else:
                 LOG.info(f"No cost data for {orgAccountObj.name} {granObj.granularity}")
                 if str(orgCostObj.ccr) == "{}":
@@ -602,10 +606,11 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
             orgCostObj.save() # this only saves the updated orgCostObj.cost_refresh_time
         else:
             LOG.error(f"received error from ps_server:{rsp.error_msg}")
-    return updated
+    return orgCostObj,num_values_returned
 
 def getGranChoice(granularity):
     try:
+        LOG.info(f"getGranChoice({granularity})")
         granObj = GranChoice.objects.get(granularity=granularity)
     except GranChoice.DoesNotExist as e:
         LOG.warning(f"no GranChoice for {granularity} creating one")
@@ -641,25 +646,31 @@ def update_orgCost(orgAccountObj, gran):
     else:
         LOG.error(f"FAILED to create orgCostObj for {orgAccountObj.name} {granObj.granularity}")
         get_data = False
-    updated = False
+    num_values_returned = 0
     if get_data:
         # will create orgCostObj if needed
         LOG.info(f"calling get_org_cost_data for {orgAccountObj.name} {granObj.granularity}")
-        updated = get_org_cost_data(orgAccountObj, granObj, orgCostObj)
+        orgCostObj,num_values_returned = get_org_cost_data(orgAccountObj, granObj, orgCostObj)
 
     next_refresh_time = orgCostObj.cost_refresh_time +  timedelta(hours=8)
-    if updated:
-        LOG.info(f"{orgAccountObj.name} {gran} CCR DID     update. Last refresh was: {orgCostObj.cost_refresh_time} next refresh will be: {next_refresh_time}")
+    if num_values_returned>0:
+        LOG.info(f"{orgAccountObj.name} {gran} CCR DID     update. Last refresh was: {orgCostObj.cost_refresh_time} next refresh will be: {next_refresh_time} num_values_returned:{num_values_returned}")
     else:
-        LOG.info(f"{orgAccountObj.name} {gran} CCR did not update. Last refresh was: %s next refresh will be: {next_refresh_time}")
+        LOG.info(f"{orgAccountObj.name} {gran} CCR did not update. Last refresh was: {orgCostObj.cost_refresh_time} next refresh will be: {next_refresh_time} num_values_returned:{num_values_returned}")
 
-    return updated
+    return orgCostObj,num_values_returned
 
 
 def update_ccr(org):
-    updated = (update_orgCost(org, "HOURLY") or update_orgCost(org, "DAILY") or update_orgCost(org, "MONTHLY"))
-    LOG.info(f"updated:{updated}")
-    return updated
+    total_num_vals_returned = 0
+    orgConstObj,num_vals_returned = update_orgCost(org, "HOURLY")
+    total_num_vals_returned += num_vals_returned
+    orgConstObj,num_vals_returned = update_orgCost(org, "DAILY")
+    total_num_vals_returned += num_vals_returned
+    orgConstObj,num_vals_returned = update_orgCost(org, "MONTHLY")
+    total_num_vals_returned += num_vals_returned
+    LOG.info(f"num:{total_num_vals_returned}")
+    return (total_num_vals_returned > 0)
 
 def update_cur_num_nodes(orgAccountObj):
     #LOG.info(f"update_cur_num_nodes:{orgAccountObj.name}")
@@ -776,14 +787,70 @@ def reconcile_all_orgs():
     for o in orgs_qs:
         reconcile_org(o)
 
+def get_db_org_cost(gran, orgAccountObj):
+    granObj = getGranChoice(granularity=gran)
+    LOG.info(f"{orgAccountObj.name} {granObj.granularity}")
+    try:
+        orgCost_qs = OrgCost.objects.filter(org=orgAccountObj)
+        for orgCost in orgCost_qs: # there are three: HOURLY/DAILY/MONTHLY
+            LOG.info(f'Org ID: {orgCost.org.id}, Org Name: {orgCost.org.name}, Time: {orgCost.tm}, Granularity: {orgCost.gran}, Cost: {orgCost.ccr}')
+        orgCostObj = orgCost_qs.get(gran=granObj.granularity)
+        LOG.info(repr(orgCostObj))
+        return True, orgCostObj
+    except ObjectDoesNotExist as e:
+        emsg = orgAccountObj.name + " " + gran+" report does not exist?"
+        LOG.error(str(e))
+        LOG.error(emsg)
+        return False, None
+    except Exception as e:
+        emsg = orgAccountObj.name + " " + gran+" report does not exist?"
+        LOG.error(str(e))
+        LOG.exception(emsg)
+        return False, None
+
 def getFiscalStartDate():
     now = datetime.now(timezone.utc)
     thisYearFSD = now.replace(month=10,day=1,hour=0,minute=0,second=0,microsecond=0) # i.e. October 1
     if now < thisYearFSD:
-        return thisYearFSD.replace(year=now.year-1) 
+        thisYearFSD = thisYearFSD.replace(year=now.year-1) 
     else:
-        return thisYearFSD
+        thisYearFSD = thisYearFSD
+    LOG.info(f"getFiscalStartDate:{thisYearFSD}")
+    return thisYearFSD
 
+def get_fytd_cost(orgAccountObj):
+    got_data, orgCostObj = get_db_org_cost(gran=GranChoice.DAY, orgAccountObj=orgAccountObj)
+    LOG.info(f"{orgAccountObj.name} got_data:{got_data}")
+    if got_data:
+        LOG.info(f"{orgAccountObj.name} crt:{orgCostObj.cost_refresh_time}")
+        fytd_start_date = getFiscalStartDate()
+        # Parse the JSON data
+        parsed_data = json.loads(orgCostObj.ccr)
+        # Ensure 'tm' and 'cost' are in the data
+        if 'tm' in parsed_data and 'cost' in parsed_data:
+            # Loop through the 'tm' and 'cost' arrays
+            new_fytd_accrued_cost = Decimal(0.00)
+            for tm, cost in zip(parsed_data['tm'], parsed_data['cost']):
+                # Log the tm and cost
+                LOG.info(f"Date: {tm}, Cost: {cost}")
+                # Convert tm to a datetime object for comparison
+                tm_date = datetime.strptime(tm, '%Y-%m-%d')
+                if tm_date >= fytd_start_date:
+                    LOG.info(f"{orgAccountObj.name} adding {cost} to new_fytd_accrued_cost")
+                    new_fytd_accrued_cost += Decimal(cost)
+                else:
+                    LOG.info(f"{orgAccountObj.name} skipping {cost} because {tm_date} < {fytd_start_date}")
+        else:
+            LOG.info("Missing 'tm' or 'cost' in the data")
+            new_fytd_accrued_cost = Decimal(0.00)
+        orgAccountObj.fytd_accrued_cost = new_fytd_accrued_cost
+        orgAccountObj.save(update_fields=['fytd_accrued_cost'])
+        LOG.info(f"{orgAccountObj.name} new_fytd_accrued_cost:{new_fytd_accrued_cost}")
+        return new_fytd_accrued_cost
+    else:
+        LOG.info(f"{orgAccountObj.name} has no cost data stored in DB")
+        return Decimal(0.00)
+    
 def get_utc_tm(tm,tm_fmt_to_use):
     return pytz.utc.localize(datetime.strptime(tm, tm_fmt_to_use)) #localize handles daylight savings time
 
@@ -845,6 +912,7 @@ def reconcile_org(orgAccountObj):
     global FMT, FMT_Z, FMT_DAILY
     try:
         update_ccr(orgAccountObj)
+        get_fytd_cost(orgAccountObj)
         with ps_client.create_client_channel("account") as channel:
             ac = ps_server_pb2_grpc.AccountStub(channel)
             # add any monthly credits due
@@ -973,14 +1041,14 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
     #LOG.info("%s %2g", orgAccountObj.name, hrlyRate)
     global FMT_HOURLY, FMT_DAILY
     hrlyRate = float(hourlyRate)
-    days_of_week,num_days_in_month = calendar.monthrange(orgAccountObj.most_recent_recon_time.year, orgAccountObj.most_recent_recon_time.month)
+    days_of_week,num_days_in_month = calendar.monthrange(orgAccountObj.most_recent_recon_time.year, orgAccountObj.most_recent_recon_time.month) # most_recent_recon_time is really most recent data fetch
     ############# HOURLY #############
     tms = []
     bals = []
     tm_bal_tuple = []
-    fraction_of_hr = (59.0-orgAccountObj.most_recent_recon_time.minute)/60.0 # mins are 0-59
+    fraction_of_hr = (59.0-orgAccountObj.most_recent_recon_time.minute)/60.0 # mins are 0-59 # most_recent_recon_time is really most recent data fetch
     partial_hr_mins_charge = hourlyRate*(fraction_of_hr)
-    hr_to_start = (orgAccountObj.most_recent_recon_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0) 
+    hr_to_start = (orgAccountObj.most_recent_recon_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0) # most_recent_recon_time is really most recent data fetch
     tm = hr_to_start
     bal = float(orgAccountObj.balance)-partial_hr_mins_charge
     # tbd fraction of first hour?
@@ -1002,8 +1070,10 @@ def create_forecast(orgAccountObj, hourlyRate, daily_days_to_forecast=None, hour
     tms = []
     bals = []
     tm_bal_tuple = []
+    # most_recent_recon_time is really most recent data fetch
     partial_day_hrly_charge = (23-orgAccountObj.most_recent_recon_time.hour)*hrlyRate # hrs are 0-23
     # day_to_start is begining of first whole day
+    # most_recent_recon_time is really most recent data fetch
     day_to_start = orgAccountObj.most_recent_recon_time.replace(hour=0,minute=0,second=0,microsecond=0) + timedelta(days=1)    
     tm = day_to_start
     bal = float(orgAccountObj.balance) - partial_day_hrly_charge

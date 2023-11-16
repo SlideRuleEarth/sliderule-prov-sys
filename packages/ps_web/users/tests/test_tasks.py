@@ -20,9 +20,9 @@ from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server,verify_org_manage_cluster_onn,the_OWNER_USER,check_for_scheduled_jobs,clear_enqueue_process_state_change,verify_org_configure,verify_post_org_num_nodes_ttl
-from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult
+from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult,GranChoice,OrgCost
 from users.forms import OrgAccountForm
-from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes,remove_PsCmdResultsWithNoExpirationAndOldCreationDate
+from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes,remove_PsCmdResultsWithNoExpirationAndOldCreationDate,getGranChoice,update_orgCost,get_db_org_cost,get_fytd_cost
 from time import sleep
 from django.contrib import messages
 from allauth.account.decorators import verified_email_required
@@ -1032,3 +1032,170 @@ def test_remove_PsCmdResultsWithNoExpirationAndOldCreationDate(setup_logging,cli
     logger.info(f"expiration:{first.expiration} create_date:{first.creation_date}")
     remove_PsCmdResultsWithNoExpirationAndOldCreationDate(orgAccountObj)
     assert PsCmdResult.objects.count() == 0
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_update_org_cost(setup_logging,tasks_module,initialize_test_environ):
+    '''
+        This procedure will test the update_org_cost routine
+    '''
+    logger = setup_logging
+    orgAccountObj = get_test_org()
+    granObj = getGranChoice(granularity=GranChoice.DAY)
+    assert granObj.granularity == 'DAILY'
+    assert granObj.granularity == GranChoice.DAY
+    assert GranChoice.DAY == 'DAILY'
+    assert GranChoice.objects.count() == 3
+    assert OrgCost.objects.count() == 3
+    for gc in GranChoice.objects.all():
+        logger.info(f"gc:{gc} gc.granularity:{gc.granularity}")
+    for oc in OrgCost.objects.filter(org=orgAccountObj):
+        logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
+    orgCostObj,num_values_returned = update_orgCost(orgAccountObj,granObj.granularity)
+    assert orgCostObj is not None # fetched data from Stubbed ps_server that has 3
+    assert num_values_returned == 3
+
+#@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_get_db_org_cost(setup_logging,tasks_module,initialize_test_environ):
+    '''
+        This procedure will test the get_db_org_cost routine
+    '''
+    logger = setup_logging
+    orgAccountObj = get_test_org()
+    granObj = getGranChoice(granularity=GranChoice.DAY)
+    assert granObj.granularity == 'DAILY'
+    assert granObj.granularity == GranChoice.DAY
+    assert GranChoice.DAY == 'DAILY'
+    assert GranChoice.objects.count() == 3
+    assert OrgCost.objects.count() == 3
+    for gc in GranChoice.objects.all():
+        logger.info(f"gc:{gc} gc.granularity:{gc.granularity}")
+    for oc in OrgCost.objects.filter(org=orgAccountObj):
+        logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
+    got_data,orgCostObj = get_db_org_cost(granObj.granularity,orgAccountObj)
+    assert orgCostObj is not None # fetched data from STUBBED ps_server, it has 3
+    assert got_data
+    data = {
+        "name": "unit-test-org",
+        "granularity": "DAILY",
+        "total": 222.1645490317,
+        "unit": "USD",
+        "tm": [
+            "2023-09-01", "2023-09-02", "2023-09-03", "2023-09-04", "2023-09-05", 
+            "2023-09-06", "2023-09-07", "2023-09-08", "2023-09-09", "2023-09-10", 
+            "2023-09-11", "2023-09-12", "2023-09-13", "2023-09-14", "2023-09-15", 
+            "2023-09-16", "2023-09-17", "2023-09-18", "2023-09-19", "2023-09-20", 
+            "2023-09-21", "2023-09-22", "2023-09-23", "2023-09-24", "2023-09-25", 
+            "2023-09-26", "2023-09-27", "2023-09-28", "2023-09-29", "2023-09-30",
+            "2023-10-01", "2023-10-02", "2023-10-03", "2023-10-04", "2023-10-05", 
+            "2023-10-06", "2023-10-07", "2023-10-08", "2023-10-09", "2023-10-10", 
+            "2023-10-11", "2023-10-12", "2023-10-13", "2023-10-14", "2023-10-15", 
+            "2023-10-16", "2023-10-17", "2023-10-18", "2023-10-19", "2023-10-20", 
+            "2023-10-21", "2023-10-22", "2023-10-23", "2023-10-24", "2023-10-25", 
+            "2023-10-26", "2023-10-27", "2023-10-28", "2023-10-29", "2023-10-30", 
+            "2023-10-31"
+        ],
+        "cost": [
+            0.2538695764, 0.0, 0.2273658695, 0.0, 0.0, 
+            0.0, 3.6303886334, 14.0256756802, 14.0244330885, 8.8623750766, 
+            0.0, 0.0, 4.154894857, 6.8782239081, 0.0, 
+            0.0, 0.0, 0.0, 0.0, 0.0, 
+            0.0, 0.0, 0.0, 0.0, 0.0, 
+            0.0, 0.0, 0.0, 0.0, 0.0, 
+            0.0, 0.0, 2.6428320146, 9.0113056544, 0.1253392361, 
+            0.0, 0.0, 0.0, 0.0, 0.0, 
+            0.0, 0.0, 0.0, 0.0, 0.0, 
+            0.0, 3.7097725334, 5.0209568953, 0.0, 0.0, 
+            0.0, 0.0, 0.0, 0.1152943085, 0.0, 
+            0.0, 0.3536871076, 0.0, 0.0, 0.0, 
+            0.0
+        ],
+        "stats": {
+            "avg": 0.3043349986735617,
+            "max": 18.4394250495,
+            "std": 1.4515730380085299
+        }
+    }
+    json_data = json.dumps(data)    
+    oc = OrgCost.objects.get(org=orgAccountObj,gran=granObj)
+    oc.ccr = json_data
+    oc.save()
+    got_data,orgCostObj = get_db_org_cost(granObj.granularity,orgAccountObj)
+    assert orgCostObj is not None # fetched data from STUBBED ps_server, it has 3
+    assert got_data
+    assert orgCostObj.ccr == json_data
+
+@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
+    '''
+        This procedure will test the get_fytd_cost routine
+    '''
+    logger = setup_logging
+    orgAccountObj = get_test_org()
+    granObj = getGranChoice(granularity=GranChoice.DAY)
+    assert granObj.granularity == 'DAILY'
+    assert granObj.granularity == GranChoice.DAY
+    assert GranChoice.DAY == 'DAILY'
+    assert GranChoice.objects.count() == 3
+    assert OrgCost.objects.count() == 3
+    for gc in GranChoice.objects.all():
+        logger.info(f"gc:{gc} gc.granularity:{gc.granularity}")
+    for oc in OrgCost.objects.filter(org=orgAccountObj):
+        logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
+    fytd_cost = get_fytd_cost(orgAccountObj)
+    assert fytd_cost == Decimal('0') 
+
+    with time_machine.travel(datetime(2023, 11, 1, tzinfo=timezone.utc)):
+        data = {
+            "name": "unit-test-org",
+            "granularity": "DAILY",
+            "total": 222.1645490317,
+            "unit": "USD",
+            "tm": [
+                "2023-09-01", "2023-09-02", "2023-09-03", "2023-09-04", "2023-09-05", 
+                "2023-09-06", "2023-09-07", "2023-09-08", "2023-09-09", "2023-09-10", 
+                "2023-09-11", "2023-09-12", "2023-09-13", "2023-09-14", "2023-09-15", 
+                "2023-09-16", "2023-09-17", "2023-09-18", "2023-09-19", "2023-09-20", 
+                "2023-09-21", "2023-09-22", "2023-09-23", "2023-09-24", "2023-09-25", 
+                "2023-09-26", "2023-09-27", "2023-09-28", "2023-09-29", "2023-09-30",
+                "2023-10-01", "2023-10-02", "2023-10-03", "2023-10-04", "2023-10-05", 
+                "2023-10-06", "2023-10-07", "2023-10-08", "2023-10-09", "2023-10-10", 
+                "2023-10-11", "2023-10-12", "2023-10-13", "2023-10-14", "2023-10-15", 
+                "2023-10-16", "2023-10-17", "2023-10-18", "2023-10-19", "2023-10-20", 
+                "2023-10-21", "2023-10-22", "2023-10-23", "2023-10-24", "2023-10-25", 
+                "2023-10-26", "2023-10-27", "2023-10-28", "2023-10-29", "2023-10-30", 
+                "2023-10-31"
+            ],
+            "cost": [
+                0.2538695764, 0.0, 0.2273658695, 0.0, 0.0, 
+                0.0, 3.6303886334, 14.0256756802, 14.0244330885, 8.8623750766, 
+                0.0, 0.0, 4.154894857, 6.8782239081, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 2.60, 9.01, 0.12, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 3.70, 5.02, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.11, 0.0, 
+                0.0, 0.35, 0.0, 0.0, 0.0, 
+                0.0
+            ],
+            "stats": {
+                "avg": 0.3043349986735617,
+                "max": 18.4394250495,
+                "std": 1.4515730380085299
+            }
+        }
+        json_data = json.dumps(data)    
+        oc = OrgCost.objects.get(org=orgAccountObj,gran=granObj)
+        oc.ccr = json_data
+        oc.save()
+        fytd_cost = get_fytd_cost(orgAccountObj)
+        assert fytd_cost == 20.91 # sum of the values after October 1st
+ 
