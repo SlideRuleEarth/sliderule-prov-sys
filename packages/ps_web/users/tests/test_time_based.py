@@ -333,10 +333,10 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
                                                     balance=2000,
                                                     fytd_accrued_cost=100, 
                                                     most_recent_recon_time=inputs['most_recent_recon_time_to_use'])
-            updated = get_org_cost_data(orgAccountObj,'HOURLY',orgCostObj=orgCostObj)
+            orgCostObj,num_values_returned = get_org_cost_data(orgAccountObj,'HOURLY',orgCostObj=orgCostObj)
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.ps_server_stubbed
 @pytest.mark.django_db
 def test_recon_all_update_time(setup_logging,client,s3,test_name,mock_email_backend,initialize_test_environ):

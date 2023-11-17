@@ -90,30 +90,6 @@ def searchMemberships(request):
 
     return objs, search_query
 
-def get_db_org_cost(gran, orgAccountObj):
-    granObj = getGranChoice(granularity=gran)
-    LOG.info("%s %s", orgAccountObj.name,granObj.granularity)
-    try:
-        orgCost_qs0 = OrgCost.objects.filter(org=orgAccountObj)
-        # LOG.info(repr(orgCost_qs0))
-        # LOG.info(orgCost_qs0[0].org.id)
-        # LOG.info(orgCost_qs0[0].org.name)
-        # LOG.info(orgCost_qs0[0].tm)
-        # LOG.info(orgCost_qs0[0].gran)
-        # LOG.info(granObj.granularity)
-        orgCostObj = orgCost_qs0.get(gran=granObj.granularity)
-        #LOG.info(repr(orgCostObj))
-        return True, orgCostObj
-    except ObjectDoesNotExist as e:
-        emsg = orgAccountObj.name + " " + gran+" report does not exist?"
-        LOG.error(emsg)
-        return False, None
-    except Exception as e:
-        emsg = orgAccountObj.name + " " + gran+" report does not exist?"
-        LOG.exception(emsg)
-        return False, None
-
-
 def check_MFA_code(mfa_code,orgAccountObj):
     return (mfa_code == orgAccountObj.mfa_code) # TBD add two factor device stuff
 

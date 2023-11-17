@@ -19,8 +19,8 @@ from django.contrib import messages
 from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
-from .utils import get_db_org_cost,has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
-from .tasks import get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs
+from .utils import has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
+from .tasks import get_db_org_cost,get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs,reconcile_org
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -124,7 +124,7 @@ def send_activation_email(request, orgname, user):
 @verified_email_required
 def orgManageMembers(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
-    LOG.info("%s %s",request.method,orgAccountObj.name)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
     if has_admin_privilege(request.user, orgAccountObj):
         memberships = get_Memberships(orgAccountObj)
         formset_initial = []
@@ -259,7 +259,7 @@ def orgManageCluster(request, pk):
 @verified_email_required
 def orgRefreshCluster(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
-    LOG.info("%s %s",request.method,orgAccountObj.name)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             status = 200
@@ -294,7 +294,7 @@ def orgRefreshCluster(request, pk):
 @verified_email_required
 def orgDestroyCluster(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
-    LOG.info("%s %s",request.method,orgAccountObj.name)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         if request.method == 'POST':
             orgAccountObj = OrgAccount.objects.get(id=orgAccountObj.id)
@@ -333,6 +333,30 @@ def orgDestroyCluster(request, pk):
                 status = 500
                 LOG.exception("caught exception:")
                 messages.error(request, 'Error destroying cluster')
+        # GET just displays org_manage_cluster
+        LOG.info("redirect to org-manage-cluster")
+        for handler in LOG.handlers:
+            handler.flush()
+        return redirect('org-manage-cluster',pk=orgAccountObj.id)
+    else:
+        messages.error(request,"Unauthorized access")
+        return HttpResponse('Unauthorized', status=401)
+
+
+@login_required(login_url='account_login')
+@verified_email_required
+def orgReconcile(request, pk):
+    orgAccountObj = get_orgAccountObj(pk)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
+    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
+        if request.method == 'POST':
+            orgAccountObj = OrgAccount.objects.get(id=orgAccountObj.id)
+            try:
+                reconcile_org(orgAccountObj)
+            except Exception as e:
+                status = 500
+                LOG.exception("caught exception:")
+                messages.error(request, f'Error Reconciling org {orgAccountObj.name}')
         # GET just displays org_manage_cluster
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
@@ -440,7 +464,7 @@ def orgConfigure(request, pk):
 @verified_email_required
 def orgAccountHistory(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
-    LOG.info("%s %s",request.method,orgAccountObj.name)
+    LOG.info(f"{request.method} {orgAccountObj.name}")
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
         cost_accounting(orgAccountObj)
         context = {'org': orgAccountObj,'today': datetime.now()} # TBD do we need tz=timezone.utc ?
