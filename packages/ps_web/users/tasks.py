@@ -792,8 +792,8 @@ def get_db_org_cost(gran, orgAccountObj):
     LOG.info(f"{orgAccountObj.name} {granObj.granularity}")
     try:
         orgCost_qs = OrgCost.objects.filter(org=orgAccountObj)
-        for orgCost in orgCost_qs: # there are three: HOURLY/DAILY/MONTHLY
-            LOG.info(f'Org ID: {orgCost.org.id}, Org Name: {orgCost.org.name}, Time: {orgCost.tm}, Granularity: {orgCost.gran}, Cost: {orgCost.ccr}')
+        # for orgCost in orgCost_qs: # there are three: HOURLY/DAILY/MONTHLY
+        #     LOG.info(f'Org ID: {orgCost.org.id}, Org Name: {orgCost.org.name}, Time: {orgCost.tm}, Granularity: {orgCost.gran}, Cost: {orgCost.ccr}')
         orgCostObj = orgCost_qs.get(gran=granObj.granularity)
         return True, orgCostObj
     except ObjectDoesNotExist as e:
@@ -847,11 +847,11 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
                     time_format = FMT_MONTHLY
                 tm_date = datetime.strptime(tm,time_format).replace(tzinfo=pytz.utc)
                 if tm_date >= start_tm:
-                    LOG.info(f"{orgAccountObj.name} adding {tm_date} {cost} to new_accrued_cost")
+                    #LOG.info(f"{orgAccountObj.name} adding {tm_date} {cost} to new_accrued_cost")
                     new_accrued_cost += Decimal(cost)
                     final_tm = tm_date
-                else:
-                    LOG.info(f"{orgAccountObj.name} skipping {tm_date} {cost} because it is before start_tm:{start_tm}")
+                # else:
+                #     LOG.info(f"{orgAccountObj.name} skipping {tm_date} {cost} because it is before start_tm:{start_tm}")
         else:
             LOG.warning(f"Missing 'tm' or 'cost' in the data  orgCostObj.ccr:{orgCostObj.ccr}")
             new_accrued_cost = Decimal(0.00)
