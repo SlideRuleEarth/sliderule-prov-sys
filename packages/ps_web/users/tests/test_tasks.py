@@ -22,7 +22,7 @@ from django.urls import reverse
 from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server,verify_org_manage_cluster_onn,the_OWNER_USER,check_for_scheduled_jobs,clear_enqueue_process_state_change,verify_org_configure,verify_post_org_num_nodes_ttl
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult,GranChoice,OrgCost
 from users.forms import OrgAccountForm
-from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes,remove_PsCmdResultsWithNoExpirationAndOldCreationDate,getGranChoice,update_orgCost,get_db_org_cost,get_fytd_cost
+from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes,remove_PsCmdResultsWithNoExpirationAndOldCreationDate,getGranChoice,update_orgCost,get_db_org_cost,get_fytd_cost,debit_charges
 from time import sleep
 from django.contrib import messages
 from allauth.account.decorators import verified_email_required
@@ -1148,7 +1148,8 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
     for oc in OrgCost.objects.filter(org=orgAccountObj):
         logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
     fytd_cost = get_fytd_cost(orgAccountObj)
-    assert fytd_cost == Decimal('0') 
+    # Stubbed ps_server is hard coded to return this: rsp_cost=[float("2.51"), float("10.80"), float("2.40")] == 15.71   
+    assert fytd_cost == Decimal('15.71') 
 
     data = {
         "name": "unit-test-org",
@@ -1209,3 +1210,32 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
         fytd_cost = get_fytd_cost(orgAccountObj)
         assert fytd_cost == Decimal('20.91') # sum of the values after October 1st
  
+@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_debit_charges(setup_logging,tasks_module,initialize_test_environ):
+    '''
+        This procedure will test the debit_charges routine
+    '''
+    logger = setup_logging
+    orgAccountObj = get_test_org()
+    granObj = getGranChoice(granularity=GranChoice.DAY)
+    assert granObj.granularity == 'DAILY'
+    assert granObj.granularity == GranChoice.DAY
+    assert GranChoice.DAY == 'DAILY'
+    assert GranChoice.objects.count() == 3
+    assert OrgCost.objects.count() == 3
+    for gc in GranChoice.objects.all():
+        logger.info(f"gc:{gc} gc.granularity:{gc.granularity}")
+    for oc in OrgCost.objects.filter(org=orgAccountObj):
+        logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
+    assert orgAccountObj.balance == Decimal('2000.00')
+    time_now = datetime.now(timezone.utc)
+    start_tm = time_now - timedelta(days=4)
+    start_of_today = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    accrued_cost,final_tm = debit_charges(orgAccountObj,start_tm,GranChoice.DAY)
+    assert accrued_cost == Decimal('15.71')
+    # Stubbed ps_server is hard coded to return this: rsp_cost=[float("2.51"), float("10.80"), float("2.40")] == 15.71 
+    # with relative time stamps of 1,2,3 days ago  
+    assert orgAccountObj.balance == Decimal('1984.29') 
+    assert final_tm == start_of_today
