@@ -361,11 +361,11 @@
                             <div id="collapse_{{org.name}}_account" class="accordion-collapse collapse my-1" aria-labelledby="mc_hd_{{org.name}}_account">
                                 <div class="accordion-body">
                                     <div class="container-fluid overflow-auto">
-                                        <div class="row py-2 justify-content-center">
+                                        <div class="row py-1 justify-content-center">
                                             <div class="col-auto">
-                                                <div class="card shadow mx-auto my-1">
+                                                <div class="card border-0 mx-auto mt-1 mb-0">
                                                     <div class="card-body d-flex flex-column my-2 mx-2">
-                                                        <dl>
+                                                        <dl class = fs-5>
                                                             <dt>Owner</dt>
                                                             <dd>{{org.owner.first_name}} {{org.owner.last_name}}</dd>
                                                             <dt>Allowance</dt>
@@ -374,16 +374,17 @@
                                                             <dd>{{org.balance}} - [Max:{{org.max_allowance}}]</dd>
                                                             <dt>Fiscal YTD accrued cost</dt>
                                                             <dd>{{org.fytd_accrued_cost}}</dd>
-                                                            <dt></dt>
+                                                            <dt>Last Cost Update (every 8 hrs)</dt>
                                                             <dd>
-                                                                <div class="card mt-3 mb-1 mx-1">
-                                                                    <h5 class="card-title mx-2 my-2">
-                                                                        Low-Budget Auto-Shutdown
-                                                                    </h5>
-                                                                    <div class="card-body d-flex flex-column mx-0 mt-2 mb-0">
-                                                                        <dl>
+                                                                <p class="utc-time mx-1 my-1" data-utc-time="{{ org.most_recent_charge_time.isoformat }}">Loading...</p>
+                                                            </dd>
+                                                            <dt>Low-Budget Auto-Shutdown</dt>
+                                                            <dd>
+                                                                <div class=" card mx-0 my-0">
+                                                                    <div class="card-body d-flex flex-column mx-0 my-0">
+                                                                        <dl class="mb-0 fs-6">
                                                                             <dd>
-                                                                                <dl>
+                                                                                <dl class="mb-0">
                                                                                     <dt>Min Nodes ({{org.min_node_cap}})</dt>
                                                                                         {% if org.min_node_cap == 0 %}
                                                                                             <dd>No Shutdown</dd>
@@ -408,11 +409,14 @@
                                                                     </div>
                                                                 </div>
                                                             </dd>
+                                                            <dt></dt>
+                                                            <dd>
+                                                                <div class="mt-auto d-flex justify-content-center ">
+                                                                    <!-- issue #33 ad-hoc recon for org !-->
+                                                                    <button class="btn btn-primary mt-1 me-1" type="button" id="recon_modal_btn" data-bs-toggle="modal" data-bs-target="#psReconModal" data-bs-url="{% url 'org-reconcile' org.id %}" data-bs-action="Ad-Hoc Reconcile">Ad-Hoc Reconcile</button>
+                                                                </div>
+                                                            </dd>
                                                         </dl>
-                                                        <div class="mt-auto d-flex justify-content-center ">
-                                                            <!-- issue #33 ad-hoc recon for org !-->
-                                                            <button class="btn btn-primary mt-1 me-1" type="button" id="recon_modal_btn" data-bs-toggle="modal" data-bs-target="#psReconModal" data-bs-url="{% url 'org-reconcile' org.id %}" data-bs-action="Ad-Hoc Reconcile">Ad-Hoc Reconcile</button>
-                                                        </div>
                                                     </div>
                                                     <div class="modal fade" id="psReconModal" tabindex="-1" aria-labelledby="psReconModalLabel" aria-hidden="true">
                                                         <div class="modal-dialog modal-dialog-scrollable">
