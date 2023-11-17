@@ -610,7 +610,7 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
 
 def getGranChoice(granularity):
     try:
-        LOG.info(f"getGranChoice({granularity})")
+        #LOG.info(f"getGranChoice({granularity})")
         granObj = GranChoice.objects.get(granularity=granularity)
     except GranChoice.DoesNotExist as e:
         LOG.warning(f"no GranChoice for {granularity} creating one")
@@ -795,7 +795,6 @@ def get_db_org_cost(gran, orgAccountObj):
         for orgCost in orgCost_qs: # there are three: HOURLY/DAILY/MONTHLY
             LOG.info(f'Org ID: {orgCost.org.id}, Org Name: {orgCost.org.name}, Time: {orgCost.tm}, Granularity: {orgCost.gran}, Cost: {orgCost.ccr}')
         orgCostObj = orgCost_qs.get(gran=granObj.granularity)
-        LOG.info(repr(orgCostObj))
         return True, orgCostObj
     except ObjectDoesNotExist as e:
         emsg = orgAccountObj.name + " " + gran+" report does not exist?"
@@ -822,31 +821,29 @@ def get_fytd_cost(orgAccountObj):
     got_data, orgCostObj = get_db_org_cost(gran=GranChoice.DAY, orgAccountObj=orgAccountObj)
     LOG.info(f"{orgAccountObj.name} got_data:{got_data}")
     if got_data:
-        LOG.info(f"{orgAccountObj.name} crt:{orgCostObj.cost_refresh_time}")
+        LOG.info(f"{orgAccountObj.name} crt:{orgCostObj.cost_refresh_time} {orgCostObj.gran} {orgCostObj.ccr}")
         fytd_start_date = getFiscalStartDate()
-        # Parse the JSON data
-        parsed_data = json.loads(orgCostObj.ccr)
         # Ensure 'tm' and 'cost' are in the data
-        if 'tm' in parsed_data and 'cost' in parsed_data:
+        if 'tm' in orgCostObj.ccr and 'cost' in orgCostObj.ccr:
             # Loop through the 'tm' and 'cost' arrays
             new_fytd_accrued_cost = Decimal(0.00)
-            for tm, cost in zip(parsed_data['tm'], parsed_data['cost']):
+            ccr_dict = json.loads(orgCostObj.ccr)
+            for tm, cost in zip(ccr_dict['tm'], ccr_dict['cost']):
                 # Log the tm and cost
-                LOG.info(f"Date: {tm}, Cost: {cost}")
+                #LOG.info(f"Date: {tm}, Cost: {cost}")
                 # Convert tm to a datetime object for comparison
-                tm_date = datetime.strptime(tm, '%Y-%m-%d')
+                tm_date = datetime.strptime(tm, '%Y-%m-%d').replace(tzinfo=pytz.utc)
                 if tm_date >= fytd_start_date:
-                    LOG.info(f"{orgAccountObj.name} adding {cost} to new_fytd_accrued_cost")
+                    #LOG.info(f"{orgAccountObj.name} adding {tm_date} {cost} to new_fytd_accrued_cost")
                     new_fytd_accrued_cost += Decimal(cost)
-                else:
-                    LOG.info(f"{orgAccountObj.name} skipping {cost} because {tm_date} < {fytd_start_date}")
         else:
-            LOG.info("Missing 'tm' or 'cost' in the data")
+            LOG.info(f"Missing 'tm' or 'cost' in the data  orgCostObj.ccr:{orgCostObj.ccr}")
             new_fytd_accrued_cost = Decimal(0.00)
         orgAccountObj.fytd_accrued_cost = new_fytd_accrued_cost
         orgAccountObj.save(update_fields=['fytd_accrued_cost'])
         LOG.info(f"{orgAccountObj.name} new_fytd_accrued_cost:{new_fytd_accrued_cost}")
-        return new_fytd_accrued_cost
+        fytd_cost = Decimal(new_fytd_accrued_cost).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return fytd_cost
     else:
         LOG.info(f"{orgAccountObj.name} has no cost data stored in DB")
         return Decimal(0.00)
