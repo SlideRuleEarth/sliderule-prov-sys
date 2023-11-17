@@ -1128,7 +1128,7 @@ def test_get_db_org_cost(setup_logging,tasks_module,initialize_test_environ):
     assert got_data
     assert orgCostObj.ccr == json_data
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
