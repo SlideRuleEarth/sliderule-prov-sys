@@ -824,6 +824,7 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
     uses it to calculate the accumulated cost since 
     start_tm from that object
     '''
+    #LOG.info(f"{orgAccountObj.name} {gran} {start_tm.strftime(FMT_Z)}")
     update_ccr(orgAccountObj) # Fetch new Data from Cost Explorer. only makes request if it is stale or blank
     orgCostObj = get_db_org_cost(gran=gran, orgAccountObj=orgAccountObj)
     #LOG.info(f"{orgAccountObj.name} got_data:{got_data}")
@@ -856,7 +857,10 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
             LOG.warning(f"Missing 'tm' or 'cost' in the data  orgCostObj.ccr:{orgCostObj.ccr}")
             new_accrued_cost = Decimal(0.00)
         accrued_cost = Decimal(new_accrued_cost).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        LOG.info(f"{orgAccountObj.name} {gran} {start_tm.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}   accrued_cost:  ${accrued_cost}")
+        if start_tm == final_tm:
+            LOG.info(f"{orgAccountObj.name} No {gran} cost from {start_tm.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
+        else:
+            LOG.info(f"{orgAccountObj.name} {gran} {start_tm.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}   accrued_cost:  ${accrued_cost}")
         return accrued_cost,final_tm
     else:
         LOG.info(f"{orgAccountObj.name} has no cost data stored in DB")
@@ -921,9 +925,9 @@ def reconcile_org(orgAccountObj):
         start_of_today = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
         st = orgAccountObj.most_recent_charge_time # the call to debit_charges will update this
         LOG.info(f"{orgAccountObj.name} now:{time_now_str} most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime(FMT_Z)} start_of_today:{start_of_today.strftime(FMT_Z)}")
-        if orgAccountObj.most_recent_charge_time < start_of_today:
-            accrued_cost,final_tm = debit_charges(orgAccountObj, start_of_today, GranChoice.DAY)
-            if final_tm == start_of_today:
+        if st < start_of_today:
+            accrued_cost,final_tm = debit_charges(orgAccountObj, st, GranChoice.DAY)
+            if final_tm == st:
                 LOG.info(f"{orgAccountObj.name} No {GranChoice.DAY} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
             else:
                 LOG.info(f"{orgAccountObj.name} accrued {GranChoice.DAY} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
@@ -934,7 +938,7 @@ def reconcile_org(orgAccountObj):
         #
         st = orgAccountObj.most_recent_charge_time # the call to debit_charges will update this
         LOG.info(f"{orgAccountObj.name} most_recent_charge_time:{st.strftime(FMT_Z)} time_now:{time_now.strftime(FMT_Z)}")
-        accrued_cost,final_tm = debit_charges(orgAccountObj, time_now, GranChoice.HOUR)
+        accrued_cost,final_tm = debit_charges(orgAccountObj, st, GranChoice.HOUR)
         if final_tm == time_now:
             LOG.info(f"{orgAccountObj.name} No {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
         else:
