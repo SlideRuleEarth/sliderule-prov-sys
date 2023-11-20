@@ -483,11 +483,10 @@ def ajaxOrgAccountHistory(request):
             gran = request.GET.get("granularity", "undefined")
             LOG.info("%s %s %s", orgAccountObj.name,request.method, request.GET.get("granularity", "undefined"))
             orgCostObj = get_db_org_cost(gran, orgAccountObj)
-            LOG.info("%s crt:%s", orgAccountObj.name, orgCostObj.cost_refresh_time)
+            LOG.info(f"{orgAccountObj.name} {gran} cost refresh tm:{orgCostObj.cost_refresh_time}")
             if orgCostObj is not None:
                 status = 200
-                context = {'ccr': orgCostObj.ccr,
-                        'crt':  datetime.strftime(orgCostObj.cost_refresh_time, FMT_TZ)}
+                context = {'ccr': orgCostObj.ccr,'crt':  datetime.strftime(orgCostObj.cost_refresh_time, FMT_TZ)}
             else:
                 status = 500
                 context = {'ccr': {}}
