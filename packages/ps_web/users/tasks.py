@@ -795,17 +795,17 @@ def get_db_org_cost(gran, orgAccountObj):
         # for orgCost in orgCost_qs: # there are three: HOURLY/DAILY/MONTHLY
         #     LOG.info(f'Org ID: {orgCost.org.id}, Org Name: {orgCost.org.name}, Time: {orgCost.tm}, Granularity: {orgCost.gran}, Cost: {orgCost.ccr}')
         orgCostObj = orgCost_qs.get(gran=granObj.granularity)
-        return True, orgCostObj
+        return orgCostObj
     except ObjectDoesNotExist as e:
         emsg = orgAccountObj.name + " " + gran+" report does not exist?"
         LOG.error(str(e))
         LOG.error(emsg)
-        return False, None
+        return None
     except Exception as e:
         emsg = orgAccountObj.name + " " + gran+" report does not exist?"
         LOG.error(str(e))
         LOG.exception(emsg)
-        return False, None
+        return None
 
 def getFiscalStartDate():
     now = datetime.now(timezone.utc)
@@ -825,10 +825,10 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
     start_tm from that object
     '''
     update_ccr(orgAccountObj) # Fetch new Data from Cost Explorer. only makes request if it is stale or blank
-    got_data, orgCostObj = get_db_org_cost(gran=gran, orgAccountObj=orgAccountObj)
+    orgCostObj = get_db_org_cost(gran=gran, orgAccountObj=orgAccountObj)
     #LOG.info(f"{orgAccountObj.name} got_data:{got_data}")
     final_tm = start_tm
-    if got_data:
+    if orgCostObj is not None:
         #LOG.info(f"{orgAccountObj.name} crt:{orgCostObj.cost_refresh_time} {orgCostObj.gran} {orgCostObj.ccr}")
         # Ensure 'tm' and 'cost' are in the data
         if 'tm' in orgCostObj.ccr and 'cost' in orgCostObj.ccr:
@@ -925,13 +925,12 @@ def reconcile_org(orgAccountObj):
         #
         #  Now do hourly for today
         #
-        start_of_this_hour = time_now.replace(minute=0, second=0, microsecond=0)
-        LOG.info(f"{orgAccountObj.name} now:{start_of_this_hour} orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime(FMT_z)} start_of_this_hour:{start_of_this_hour.strftime(FMT_z)}")
-        if orgAccountObj.most_recent_charge_time < start_of_this_hour:
-            accrued_cost,final_tm = debit_charges(orgAccountObj, start_of_this_hour, GranChoice.HOUR)
-            LOG.info(f"{orgAccountObj.name} accrued cost since {start_of_this_hour}-{final_tm}:{accrued_cost}")
+        LOG.info(f"{orgAccountObj.name} now:{time_now} orgAccountObj.most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime(FMT_z)} start_of_this_hour:{start_of_this_hour.strftime(FMT_z)}")
+        if orgAccountObj.most_recent_charge_time < time_now:
+            accrued_cost,final_tm = debit_charges(orgAccountObj, time_now, GranChoice.HOUR)
+            LOG.info(f"{orgAccountObj.name} accrued cost since {time_now}-{final_tm}:{accrued_cost}")
         else:
-            LOG.info(f"{orgAccountObj.name} is ALREADY debited to start_of_this_hour mrct:{orgAccountObj.most_recent_charge_time.strftime(FMT_z)}  start_of_this_hour:{start_of_this_hour.strftime(FMT_z)} NO CHANGE balance:{orgAccountObj.balance} (No new hourly amounts to debit)")
+            LOG.info(f"{orgAccountObj.name} is ALREADY debited to time_now with most_recent_charge_time:{orgAccountObj.most_recent_charge_time.strftime(FMT_z)}  start_of_this_hour:{start_of_this_hour.strftime(FMT_z)} NO CHANGE balance:{orgAccountObj.balance} (No new hourly amounts to debit)")
         #
         # Truncate to max allowed balance
         #

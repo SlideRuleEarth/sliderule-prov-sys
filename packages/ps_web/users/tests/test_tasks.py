@@ -1075,9 +1075,8 @@ def test_get_db_org_cost(setup_logging,tasks_module,initialize_test_environ):
         logger.info(f"gc:{gc} gc.granularity:{gc.granularity}")
     for oc in OrgCost.objects.filter(org=orgAccountObj):
         logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
-    got_data,orgCostObj = get_db_org_cost(granObj.granularity,orgAccountObj)
+    orgCostObj = get_db_org_cost(granObj.granularity,orgAccountObj)
     assert orgCostObj is not None # fetched data from STUBBED ps_server, it has 3
-    assert got_data
     data = {
         "name": "unit-test-org",
         "granularity": "DAILY",
@@ -1123,9 +1122,8 @@ def test_get_db_org_cost(setup_logging,tasks_module,initialize_test_environ):
     oc = OrgCost.objects.get(org=orgAccountObj,gran=granObj)
     oc.ccr = json_data
     oc.save()
-    got_data,orgCostObj = get_db_org_cost(granObj.granularity,orgAccountObj)
+    orgCostObj = get_db_org_cost(granObj.granularity,orgAccountObj)
     assert orgCostObj is not None # fetched data from STUBBED ps_server, it has 3
-    assert got_data
     assert orgCostObj.ccr == json_data
 
 #@pytest.mark.dev
