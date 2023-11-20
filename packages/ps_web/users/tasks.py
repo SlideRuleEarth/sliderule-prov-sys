@@ -877,7 +877,7 @@ def debit_charges(orgAccountObj,start_tm,gran):
     accrued_cost,final_tm = get_accrued_cost(orgAccountObj, start_tm, gran)
     LOG.info(f"{orgAccountObj.name} accrued {gran} cost since {start_tm}:{accrued_cost}")
     orgAccountObj.balance = orgAccountObj.balance - accrued_cost
-    orgAccountObj.most_recent_charge_time = start_tm
+    orgAccountObj.most_recent_charge_time = final_tm
     orgAccountObj.save(update_fields=['balance','most_recent_charge_time'])
     return accrued_cost,final_tm
 
