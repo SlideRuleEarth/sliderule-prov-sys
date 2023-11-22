@@ -482,12 +482,11 @@ def ajaxOrgAccountHistory(request):
         if(request.headers.get('x-requested-with') == 'XMLHttpRequest') and (request.method == 'GET'):
             gran = request.GET.get("granularity", "undefined")
             LOG.info("%s %s %s", orgAccountObj.name,request.method, request.GET.get("granularity", "undefined"))
-            got_data, orgCostObj = get_db_org_cost(gran, orgAccountObj)
-            LOG.info("%s crt:%s", orgAccountObj.name, orgCostObj.cost_refresh_time)
-            if got_data:
+            orgCostObj = get_db_org_cost(gran, orgAccountObj)
+            LOG.info(f"{orgAccountObj.name} {gran} cost refresh tm:{orgCostObj.cost_refresh_time}")
+            if orgCostObj is not None:
                 status = 200
-                context = {'ccr': orgCostObj.ccr,
-                        'crt':  datetime.strftime(orgCostObj.cost_refresh_time, FMT_TZ)}
+                context = {'ccr': orgCostObj.ccr,'crt':  datetime.strftime(orgCostObj.cost_refresh_time, FMT_TZ)}
             else:
                 status = 500
                 context = {'ccr': {}}
@@ -533,7 +532,7 @@ def ajaxOrgAccountForecast(request):
             br_min = orgAccountObj.min_hrly
             br_cur = orgAccountObj.cur_hrly
             br_max = orgAccountObj.max_hrly
-            got_data, orgCostObj  = get_db_org_cost("HOURLY", orgAccountObj)
+            orgCostObj  = get_db_org_cost("HOURLY", orgAccountObj)
         elif gran == 'DAILY':
             fc_min = orgAccountObj.fc_min_daily
             fc_cur = orgAccountObj.fc_cur_daily
@@ -541,7 +540,7 @@ def ajaxOrgAccountForecast(request):
             br_min = orgAccountObj.min_hrly*24
             br_cur = orgAccountObj.cur_hrly*24
             br_max = orgAccountObj.max_hrly*24
-            got_data, orgCostObj  = get_db_org_cost("DAILY", orgAccountObj)
+            orgCostObj  = get_db_org_cost("DAILY", orgAccountObj)
         elif gran == 'MONTHLY':
             fc_min = orgAccountObj.fc_min_monthly
             fc_cur = orgAccountObj.fc_cur_monthly
@@ -549,11 +548,11 @@ def ajaxOrgAccountForecast(request):
             br_min = orgAccountObj.min_hrly*24*30
             br_cur = orgAccountObj.cur_hrly*24*30
             br_max = orgAccountObj.max_hrly*24*30
-            got_data, orgCostObj  = get_db_org_cost("MONTHLY", orgAccountObj)
-        if got_data:
+            orgCostObj  = get_db_org_cost("MONTHLY", orgAccountObj)
+        if orgCostObj is not None:
             cost_refresh_time = orgCostObj.cost_refresh_time
             cost_refresh_time_str = datetime.strftime(cost_refresh_time,"%Y-%m-%d %H:%M:%S %Z")
-        #LOG.info("%s %s %s %s",gran,got_data,cost_refresh_time,cost_refresh_time_str)
+        #LOG.info("%s %s %s %s",gran,cost_refresh_time,cost_refresh_time_str)
         #LOG.info("gran:%s br_min:%2g br_cur:%2g br_max:%2g", gran, br_min, br_cur, br_max)
         context = {'br_min': br_min, 'br_cur': br_cur, 'br_max': br_max, 'gran': gran, 'fc_min': fc_min,
                    'fc_cur': fc_cur, 'fc_max': fc_max, 'cost_refresh_time': cost_refresh_time, 'cost_refresh_time_str': cost_refresh_time_str}

@@ -368,60 +368,64 @@ class Account(ps_server_pb2_grpc.AccountServicer):
             LOG.info(f"{currentCostReq}")
             rsp_tm = []
             rsp_cost = []
-            now = datetime.now(timezone.utc)
-            retRsp = ps_server_pb2.CostAndUsageRsp(
-                name=currentCostReq.name,
-                granularity=currentCostReq.granularity,
-                total=0.0,
-                unit="",
-                tm = rsp_tm,
-                cost = rsp_cost,
-                server_error=False,
-                error_msg="")
-            if currentCostReq.granularity == 'HOURLY':
-                st = now.replace(hour=0,minute=0,second=0,microsecond=0) # begin of day
-                hrs = int((now - st).total_seconds() / 3600)
-                LOG.info(f"now:{now}")
-                
-                for h in range(0,hrs):
-                    tm = st + timedelta(hours=h)
-                    rsp_tm.append(tm.strftime(FMT_Z))
-                    rsp_cost.append(float("0.45"))
+            fake_now = datetime.strptime(currentCostReq.tm,FMT_Z)
+            LOG.info(f"request now:{fake_now}")
+            with time_machine.travel(fake_now,tick=False):
 
-            elif currentCostReq.granularity == 'DAILY':
-                st = now.replace(hour=0,minute=0,second=0,microsecond=0) - timedelta(days=3) # begin of day
-                days = int((now - st).total_seconds() / 3600)
-                rsp_tm= [
-                    (st+timedelta(days=1)).strftime(FMT_DAILY),
-                    (st+timedelta(days=2)).strftime(FMT_DAILY),
-                    (st+timedelta(days=3)).strftime(FMT_DAILY),
-                    ]
-                rsp_cost=[
-                    float("2.51"),
-                    float("10.80"),
-                    float("2.40")
-                    ]        
-            elif currentCostReq.granularity == 'MONTHLY':
-                rsp_tm= [
-                    datetime(year=2023,month=1,day=1).strftime(FMT_DAILY), # uses DAILY
-                    datetime(year=2023,month=2,day=1).strftime(FMT_DAILY),
-                    datetime(year=2023,month=3,day=1).strftime(FMT_DAILY),
-                    ]
-                rsp_cost=[
-                    float("50.51"),
-                    float("100.80"),
-                    float("233.40")
-                    ]        
+                retRsp = ps_server_pb2.CostAndUsageRsp(
+                    name=currentCostReq.name,
+                    granularity=currentCostReq.granularity,
+                    total=0.0,
+                    unit="",
+                    tm = rsp_tm,
+                    cost = rsp_cost,
+                    server_error=False,
+                    error_msg="")
+                if currentCostReq.granularity == 'HOURLY':
+                    st = fake_now.replace(hour=0,minute=0,second=0,microsecond=0) # begin of day
+                    hrs = int((fake_now - st).total_seconds() / 3600)
+                    LOG.info(f"fake_now:{fake_now} hrs:{hrs} st:{st} ")
+                    
+                    for h in range(0,hrs):
+                        tm = st + timedelta(hours=h)
+                        rsp_tm.append(tm.strftime(FMT_Z))
+                        rsp_cost.append(float("0.45"))
+                        LOG.info(f"rsp_tm:{rsp_tm[-1]} rsp_cost:{rsp_cost[-1]}")
 
-            retRsp = ps_server_pb2.CostAndUsageRsp(
-                name=currentCostReq.name,
-                granularity=currentCostReq.granularity,
-                total=0.0,
-                unit="",
-                tm = rsp_tm,
-                cost = rsp_cost,
-                server_error=False,
-                error_msg="")
+                elif currentCostReq.granularity == 'DAILY':
+                    st = fake_now.replace(hour=0,minute=0,second=0,microsecond=0) - timedelta(days=3) # begin of day
+                    days = int((fake_now - st).total_seconds() / 3600)
+                    rsp_tm= [
+                        (st+timedelta(days=1)).strftime(FMT_DAILY),
+                        (st+timedelta(days=2)).strftime(FMT_DAILY),
+                        (st+timedelta(days=3)).strftime(FMT_DAILY),
+                        ]
+                    rsp_cost=[
+                        float("2.51"),
+                        float("10.80"),
+                        float("2.40")
+                        ]        
+                elif currentCostReq.granularity == 'MONTHLY':
+                    rsp_tm= [
+                        datetime(year=2023,month=1,day=1).strftime(FMT_DAILY), # uses DAILY
+                        datetime(year=2023,month=2,day=1).strftime(FMT_DAILY),
+                        datetime(year=2023,month=3,day=1).strftime(FMT_DAILY),
+                        ]
+                    rsp_cost=[
+                        float("50.51"),
+                        float("100.80"),
+                        float("233.40")
+                        ]        
+
+                retRsp = ps_server_pb2.CostAndUsageRsp(
+                    name=currentCostReq.name,
+                    granularity=currentCostReq.granularity,
+                    total=0.0,
+                    unit="",
+                    tm = rsp_tm,
+                    cost = rsp_cost,
+                    server_error=False,
+                    error_msg="")
 
         except Exception as e:
             emsg = (f" Processing for org: {currentCostReq.name} cluster caught this exception {e}")

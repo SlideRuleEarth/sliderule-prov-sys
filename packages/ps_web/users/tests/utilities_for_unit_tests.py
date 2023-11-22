@@ -8,14 +8,15 @@ from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core import mail
 from users.forms import OrgAccountForm
-from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster
+from users.models import OrgAccount,Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,OrgCost,GranChoice
 from users.views import add_org_cluster_orgcost
 from datetime import timezone,datetime
 from datetime import date, datetime, timedelta, timezone, tzinfo
 import django.utils.timezone
 from django.contrib.messages import get_messages
+from google.protobuf.json_format import MessageToJson
 
-from users.tasks import init_new_org_memberships,process_state_change,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED,get_scheduler,get_scheduled_jobs,log_scheduled_jobs
+from users.tasks import init_new_org_memberships,process_state_change,sort_ONN_by_nn_exp,need_destroy_for_changed_version_or_is_public,sum_of_highest_nodes_for_each_user,check_redis,set_PROVISIONING_DISABLED,get_scheduler,get_scheduled_jobs,log_scheduled_jobs,getGranChoice
 from django.core import serializers
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -475,6 +476,21 @@ def get_org_dict(name):
         logger.exception("Caught:")
     return model_org_d,model_org_json
 
+def get_org_cost_dict(name, gran):
+    try:
+        granObj = getGranChoice(gran)
+        orgAccountObj = OrgAccount.objects.get(name=name)
+        model_org_cost_json = serializers.serialize('json', OrgCost.objects.filter(org=orgAccountObj, gran=granObj) , indent=4)
+        logger.info(f"type(model_org_cost_json):{type(model_org_cost_json)}  model_org_cost_json:{model_org_cost_json}")
+        model_org_cost_d = json.loads(model_org_cost_json)[0]['fields']
+        logger.info(f"type(model_org_d):{type(model_org_cost_d)}  model_org_cost_d:{model_org_cost_d}")
+    except Exception as e:
+        logger.info(f"name:<{orgAccountObj.name}> orgs:{OrgAccount.objects.values_list('name', flat=True)}")
+        logger.exception("Caught:")
+        model_org_cost_d = None
+        model_org_cost_json = None
+    return model_org_cost_d,model_org_cost_json
+
 def dump_org_account(name,banner=None,level=None):
     org_dict,org_json = get_org_dict(name)
     fake_now = datetime.now(timezone.utc)
@@ -485,6 +501,18 @@ def dump_org_account(name,banner=None,level=None):
     elif level == 'info':
         logger.info(f"{banner}\n{org_json}\n{bottom}")
     return org_dict
+
+def dump_org_cost(name, gran, banner=None,level=None):
+    org_dict,org_json = get_org_cost_dict(name=name, gran=gran)
+    fake_now = datetime.now(timezone.utc)
+    banner = banner or f"************** {fake_now} **************"
+    bottom =           "***************************************************"
+    if level == 'critical':
+        logger.critical(f"{banner}\n{org_json}\n{bottom}")
+    elif level == 'info':
+        logger.info(f"{banner}\n{org_json}\n{bottom}")
+    return org_dict
+   
 
 def pytest_approx(val1,val2):
     return pytest.approx(val1,abs=1e-9)==pytest.approx(val2,abs=1e-9)
@@ -1050,3 +1078,40 @@ def verify_upload(s3_client, s3_bucket, s3_key, original_json_string):
         logger.error(f"Failed to verify JSON at {s3_key} in bucket {s3_bucket}. Error: {e}")
         return False
     
+def set_ObjCost(orgAccountObj,gran,data):
+    rsp = ps_server_pb2.CostAndUsageRsp(name=orgAccountObj.name, 
+                                        granularity=gran,
+                                        tm = data['tm'],
+                                        cost = data['cost'],)
+    rsp.ClearField('tm')
+    rsp.tm.extend(data['tm'])
+    rsp.ClearField('cost')
+    rsp.cost.extend(data['cost'])
+    oc = OrgCost.objects.get(org=orgAccountObj,gran=gran)
+    json_data = MessageToJson(rsp)
+    oc.ccr =json_data
+    # set cost_refresh_time to now so it does not get updated for being stale
+    oc.cost_refresh_time = datetime.now(timezone.utc)
+    oc.save()
+    logger.info(f"oc.ccr:{oc.ccr}")
+    assert oc.ccr == json_data
+
+def extend_ObjCost(orgAccountObj, gran, tm_data, cost_data):
+    oc = OrgCost.objects.get(org=orgAccountObj, gran=gran)
+
+    # Deserialize the JSON string into a Python dictionary
+    ccr_dict = json.loads(oc.ccr) if oc.ccr else {}
+
+    # Extend the 'tm' and 'cost' lists in the dictionary
+    ccr_dict.setdefault('tm', []).extend(tm_data)
+    ccr_dict.setdefault('cost', []).extend(cost_data)
+
+    # Serialize the dictionary back into a JSON string
+    oc.ccr = json.dumps(ccr_dict)
+
+    # Set the cost refresh time and save the object
+    oc.cost_refresh_time = datetime.now(timezone.utc)
+    oc.save()
+
+    # Logging
+    logger.info(f"oc.ccr:{oc.ccr}")
