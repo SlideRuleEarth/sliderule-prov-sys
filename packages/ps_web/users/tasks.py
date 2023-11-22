@@ -847,7 +847,7 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
                 elif gran == GranChoice.MONTH:
                     time_format = FMT_MONTHLY
                 tm_date = datetime.strptime(tm,time_format).replace(tzinfo=pytz.utc)
-                if tm_date >= start_tm:
+                if tm_date > start_tm:
                     #LOG.info(f"{orgAccountObj.name} adding {tm_date} {cost} to new_accrued_cost")
                     new_accrued_cost += Decimal(cost)
                     final_tm = tm_date
@@ -867,10 +867,25 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
         return Decimal(0.00),final_tm
 
 def get_fytd_cost(orgAccountObj):
-    accrued_cost,final_tm = get_accrued_cost(orgAccountObj, getFiscalStartDate(), GranChoice.DAY)
-    orgAccountObj.fytd_accrued_cost = accrued_cost
+    time_now = datetime.now(timezone.utc)
+    daily_accrued_cost,final_tm = get_accrued_cost(orgAccountObj, getFiscalStartDate(), GranChoice.DAY)
+    if final_tm == getFiscalStartDate():
+        LOG.info(f"{orgAccountObj.name} {GranChoice.DAY} accrued No cost from {getFiscalStartDate().strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${daily_accrued_cost}")
+    else:
+        LOG.info(f"{orgAccountObj.name} {GranChoice.DAY} accrued cost from {getFiscalStartDate().strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${daily_accrued_cost}")
+    if final_tm < time_now.replace(hour=0, minute=0, second=0, microsecond=0): # start of today
+        st = final_tm + timedelta(days=1)
+    else:
+        st = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    hrly_accrued_cost,final_tm = get_accrued_cost(orgAccountObj, st, GranChoice.HOUR)
+    if final_tm == st:
+        LOG.info(f"{orgAccountObj.name} No {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${hrly_accrued_cost}")
+    else:
+        LOG.info(f"{orgAccountObj.name} accrued {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${hrly_accrued_cost}")
+    orgAccountObj.fytd_accrued_cost = daily_accrued_cost + hrly_accrued_cost
     orgAccountObj.save(update_fields=['fytd_accrued_cost'])
-    return accrued_cost
+    LOG.info(f"{orgAccountObj.name} fytd_accrued_cost:{orgAccountObj.fytd_accrued_cost}")
+    return orgAccountObj.fytd_accrued_cost
 
 def debit_charges(orgAccountObj,start_tm,gran):
     '''

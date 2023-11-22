@@ -19,7 +19,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from django.urls import reverse
-from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server,verify_org_manage_cluster_onn,the_OWNER_USER,check_for_scheduled_jobs,clear_enqueue_process_state_change,verify_org_configure,verify_post_org_num_nodes_ttl
+from users.tests.utilities_for_unit_tests import init_test_environ,get_test_org,OWNER_USER,OWNER_EMAIL,OWNER_PASSWORD,random_test_user,pytest_approx,the_TEST_USER,init_mock_ps_server,verify_org_manage_cluster_onn,the_OWNER_USER,check_for_scheduled_jobs,clear_enqueue_process_state_change,verify_org_configure,verify_post_org_num_nodes_ttl,set_ObjCost
 from users.models import Membership,OwnerPSCmd,OrgAccount,OrgNumNode,Cluster,PsCmdResult,GranChoice,OrgCost
 from users.forms import OrgAccountForm
 from users.tasks import update_burn_rates,purge_old_PsCmdResultsForOrg,process_num_node_table,process_owner_ps_cmds_table,process_Update_cmd,process_Destroy_cmd,process_Refresh_cmd,cost_accounting,check_provision_env_ready,sort_ONN_by_nn_exp,remove_num_node_requests,get_scheduled_jobs,log_scheduled_jobs,process_state_change,process_num_nodes_api,delete_onn_and_its_scheduled_job,get_scheduler,enqueue_process_state_change,get_or_create_OrgNumNodes,remove_PsCmdResultsWithNoExpirationAndOldCreationDate,getGranChoice,update_orgCost,get_db_org_cost,get_fytd_cost,debit_charges
@@ -1145,70 +1145,92 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
         logger.info(f"gc:{gc} gc.granularity:{gc.granularity}")
     for oc in OrgCost.objects.filter(org=orgAccountObj):
         logger.info(f"oc.gran:{oc.gran} oc.gran.granularity:{oc.gran.granularity}")
-    fytd_cost = get_fytd_cost(orgAccountObj)
-    # Stubbed ps_server is hard coded to return this: rsp_cost=[float("2.51"), float("10.80"), float("2.40")] == 15.71   
-    assert fytd_cost == Decimal('15.71') 
 
-    data = {
-        "name": "unit-test-org",
-        "granularity": "DAILY",
-        "total": 222.1645490317,
-        "unit": "USD",
-        "tm": [
-            "2023-09-01", "2023-09-02", "2023-09-03", "2023-09-04", "2023-09-05", 
-            "2023-09-06", "2023-09-07", "2023-09-08", "2023-09-09", "2023-09-10", 
-            "2023-09-11", "2023-09-12", "2023-09-13", "2023-09-14", "2023-09-15", 
-            "2023-09-16", "2023-09-17", "2023-09-18", "2023-09-19", "2023-09-20", 
-            "2023-09-21", "2023-09-22", "2023-09-23", "2023-09-24", "2023-09-25", 
-            "2023-09-26", "2023-09-27", "2023-09-28", "2023-09-29", "2023-09-30",
-            "2023-10-01", "2023-10-02", "2023-10-03", "2023-10-04", "2023-10-05", 
-            "2023-10-06", "2023-10-07", "2023-10-08", "2023-10-09", "2023-10-10", 
-            "2023-10-11", "2023-10-12", "2023-10-13", "2023-10-14", "2023-10-15", 
-            "2023-10-16", "2023-10-17", "2023-10-18", "2023-10-19", "2023-10-20", 
-            "2023-10-21", "2023-10-22", "2023-10-23", "2023-10-24", "2023-10-25", 
-            "2023-10-26", "2023-10-27", "2023-10-28", "2023-10-29", "2023-10-30", 
-            "2023-10-31"
-        ],
-        "cost": [
-            0.2538695764, 0.0, 0.2273658695, 0.0, 0.0, 
-            0.0, 3.6303886334, 14.0256756802, 14.0244330885, 8.8623750766, 
-            0.0, 0.0, 4.154894857, 6.8782239081, 0.0, 
-            0.0, 0.0, 0.0, 0.0, 0.0, 
-            0.0, 0.0, 0.0, 0.0, 0.0, 
-            0.0, 0.0, 0.0, 0.0, 0.0, 
-            0.0, 0.0, 2.60, 9.01, 0.12, 
-            0.0, 0.0, 0.0, 0.0, 0.0, 
-            0.0, 0.0, 0.0, 0.0, 0.0, 
-            0.0, 3.70, 5.02, 0.0, 0.0, 
-            0.0, 0.0, 0.0, 0.11, 0.0, 
-            0.0, 0.35, 0.0, 0.0, 0.0, 
-            0.0
-        ],
-        "stats": {
-            "avg": 0.3043349986735617,
-            "max": 18.4394250495,
-            "std": 1.4515730380085299
+    with time_machine.travel(datetime(year=2023, month=11, day=2, hour=11, tzinfo=timezone.utc)):
+        daily_data = {
+            "name": "unit-test-org",
+            "granularity": "DAILY",
+            "total": 0.0, # we don't care about this value
+            "unit": "USD",
+            "tm": [
+                "2023-09-01", "2023-09-02", "2023-09-03", "2023-09-04", "2023-09-05", 
+                "2023-09-06", "2023-09-07", "2023-09-08", "2023-09-09", "2023-09-10", 
+                "2023-09-11", "2023-09-12", "2023-09-13", "2023-09-14", "2023-09-15", 
+                "2023-09-16", "2023-09-17", "2023-09-18", "2023-09-19", "2023-09-20", 
+                "2023-09-21", "2023-09-22", "2023-09-23", "2023-09-24", "2023-09-25", 
+                "2023-09-26", "2023-09-27", "2023-09-28", "2023-09-29", "2023-09-30",
+                "2023-10-01", "2023-10-02", "2023-10-03", "2023-10-04", "2023-10-05", 
+                "2023-10-06", "2023-10-07", "2023-10-08", "2023-10-09", "2023-10-10", 
+                "2023-10-11", "2023-10-12", "2023-10-13", "2023-10-14", "2023-10-15", 
+                "2023-10-16", "2023-10-17", "2023-10-18", "2023-10-19", "2023-10-20", 
+                "2023-10-21", "2023-10-22", "2023-10-23", "2023-10-24", "2023-10-25", 
+                "2023-10-26", "2023-10-27", "2023-10-28", "2023-10-29", "2023-10-30", 
+                "2023-10-31"
+            ],
+            "cost": [
+                0.25, 0.0, 0.22, 0.0, 0.0, 
+                0.0, 3.63, 14.02, 14.02, 8.86, 
+                0.0, 0.0, 4.15, 6.87, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 2.60, 9.01, 0.12, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.0, 0.0, 
+                0.0, 3.70, 5.02, 0.0, 0.0, 
+                0.0, 0.0, 0.0, 0.11, 0.0, 
+                0.0, 0.35, 0.0, 0.0, 0.0, 
+                0.0
+            ],
+            "stats": {
+                "avg": 0.3043349986735617,
+                "max": 18.4394250495,
+                "std": 1.4515730380085299
+            }
         }
-    }
-    rsp = ps_server_pb2.CostAndUsageRsp(name=orgAccountObj.name, 
-                                        granularity=GranChoice.DAY,
-                                        tm = data['tm'],
-                                        cost = data['cost'],)
-    rsp.ClearField('tm')
-    rsp.tm.extend(data['tm'])
-    rsp.ClearField('cost')
-    rsp.cost.extend(data['cost'])
-    oc = OrgCost.objects.get(org=orgAccountObj,gran=granObj)
-    json_data = MessageToJson(rsp)
-    oc.ccr =json_data
-    oc.save()
-    logger.info(f"oc.ccr:{oc.ccr}")
-    assert oc.ccr == json_data
-    with time_machine.travel(datetime(2023, 11, 1, tzinfo=timezone.utc)):
+        set_ObjCost(orgAccountObj,GranChoice.DAY,daily_data)
+
+        hrly_data = {
+            "name": "unit-test-org",
+            "granularity": "HOURLY",
+            "total": 0, # we don't care about this value
+            "unit": "USD",
+            "tm": [
+                "2023-11-01T00:00:00Z",
+                "2023-11-01T01:00:00Z",
+                "2023-11-01T02:00:00Z",
+                "2023-11-01T03:00:00Z",
+                "2023-11-01T04:00:00Z",
+                "2023-11-01T05:00:00Z",
+                "2023-11-01T06:00:00Z",
+                "2023-11-01T07:00:00Z",
+                "2023-11-01T08:00:00Z",
+                "2023-11-01T09:00:00Z",
+            ],
+            "cost": [
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+                0.11,
+            ],
+            "stats": {
+                "avg": 0.0,
+                "max": 0.0,
+                "std": 0.0
+            }
+        }
+        set_ObjCost(orgAccountObj,GranChoice.HOUR,hrly_data)
+
         fytd_cost = get_fytd_cost(orgAccountObj)
-        assert fytd_cost == Decimal('20.91') # sum of the values after October 1st
+        assert fytd_cost == Decimal('22.01') # sum of the values after October 1st
  
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_debit_charges(setup_logging,tasks_module,initialize_test_environ):
