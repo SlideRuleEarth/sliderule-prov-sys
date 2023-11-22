@@ -1150,8 +1150,6 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
         daily_data = {
             "name": "unit-test-org",
             "granularity": "DAILY",
-            "total": 0.0, # we don't care about this value
-            "unit": "USD",
             "tm": [
                 "2023-09-01", "2023-09-02", "2023-09-03", "2023-09-04", "2023-09-05", 
                 "2023-09-06", "2023-09-07", "2023-09-08", "2023-09-09", "2023-09-10", 
@@ -1181,20 +1179,13 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
                 0.0, 0.0, 0.0, 0.11, 0.0, 
                 0.0, 0.35, 0.0, 0.0, 0.0, 
                 0.0
-            ],
-            "stats": {
-                "avg": 0.3043349986735617,
-                "max": 18.4394250495,
-                "std": 1.4515730380085299
-            }
+            ]
         }
         set_ObjCost(orgAccountObj,GranChoice.DAY,daily_data)
 
         hrly_data = {
             "name": "unit-test-org",
             "granularity": "HOURLY",
-            "total": 0, # we don't care about this value
-            "unit": "USD",
             "tm": [
                 "2023-11-01T00:00:00Z",
                 "2023-11-01T01:00:00Z",
@@ -1208,6 +1199,7 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
                 "2023-11-01T09:00:00Z",
             ],
             "cost": [
+                0.11, # ignored this because it is already included in daily_data
                 0.11,
                 0.11,
                 0.11,
@@ -1217,18 +1209,12 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
                 0.11,
                 0.11,
                 0.11,
-                0.11,
-            ],
-            "stats": {
-                "avg": 0.0,
-                "max": 0.0,
-                "std": 0.0
-            }
+            ]
         }
         set_ObjCost(orgAccountObj,GranChoice.HOUR,hrly_data)
 
         fytd_cost = get_fytd_cost(orgAccountObj)
-        assert fytd_cost == Decimal('22.01') # sum of the values after October 1st
+        assert fytd_cost == Decimal('21.90') # sum of the values after October 1st
  
 #@pytest.mark.dev
 @pytest.mark.django_db
