@@ -1214,7 +1214,7 @@ def test_get_fytd_cost(setup_logging,tasks_module,initialize_test_environ):
         set_ObjCost(orgAccountObj,GranChoice.HOUR,hrly_data)
 
         fytd_cost = get_fytd_cost(orgAccountObj)
-        assert fytd_cost == Decimal('21.90') # sum of the values after October 1st
+        assert fytd_cost == Decimal('20.91') # sum of the DAILY values after October 1st 
  
 #@pytest.mark.dev
 @pytest.mark.django_db

@@ -434,7 +434,7 @@ RQ_QUEUES = {
         'PORT': os.environ.get("REDIS_PORT", "6379"),
         'DB': os.environ.get("REDIS_DB", "0"),
         'USE_REDIS_CACHE': 'default',
-        'DEFAULT_TIMEOUT': 3600,
+        'DEFAULT_TIMEOUT': 172800,
     }
 }
 RQ_SHOW_ADMIN_LINK = True
