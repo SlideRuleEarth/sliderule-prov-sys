@@ -361,17 +361,17 @@ ecs-ps-svr-shell-slideruleearth: ## login to the remote ps-server aws container 
 		--interactive \
 		--command "/bin/sh" 
 
-ecs-ps-redis-shell-testsliderule: ## login to the remote ps-web aws container on testsliderule.org using TASK_ARN for testsliderule-ps-web-srvc task
+ecs-ps-redis-shell-testsliderule: ## login to the remote ps-redis aws container on testsliderule.org using TASK_ARN for testsliderule-ps-web-srvc task
 	aws ecs execute-command \
-		--cluster testsliderule-ps-web-clstr \
+		--cluster testsliderule-ps-clstr \
 		--task $(TASK_ARN_testsliderule_prov-sys) \
 		--container redis \
 		--interactive \
 		--command "/bin/sh" 
 
-ecs-ps-redis-shell-slideruleearth: ## login to the remote ps-web aws container on testsliderule.org using TASK_ARN for testsliderule-ps-web-srvc task
+ecs-ps-redis-shell-slideruleearth: ## login to the remote ps-redis aws container on testsliderule.org using TASK_ARN for testsliderule-ps-web-srvc task
 	aws ecs execute-command \
-		--cluster slideruleearth-ps-web-clstr \
+		--cluster slideruleearth-ps-clstr \
 		--task $(TASK_ARN_slideruleearth_prov-sys) \
 		--container redis \
 		--interactive \

@@ -240,11 +240,12 @@ def delete_onn_and_its_scheduled_job(onn):
     try:
         for job,tm in get_scheduler().get_jobs(with_times=True):
             tm_aware = tm.astimezone(timezone.utc)
-            LOG.info(f"job.func_name:{job.func_name} job.tm:{tm_aware}  onn.expiration:{ onn.expiration}")
             if tm_aware == onn.expiration and job.func_name == 'users.tasks.enqueue_process_state_change':
                 LOG.info(f"canceling job {job.func_name} at {tm_aware} for {format_onn(onn)}")
                 get_scheduler().cancel(job.id)
                 break
+            else:
+                LOG.info(f"NOT canceling job {job.func_name} at {tm_aware} for {format_onn(onn)}")
         onn.delete()
     except Exception as e:
         LOG.exception(f"Caught an exception: {e}")
@@ -824,7 +825,7 @@ def get_accrued_cost(orgAccountObj, start_tm, gran):
     uses it to calculate the accumulated cost since 
     start_tm from that object
     '''
-    #LOG.info(f"{orgAccountObj.name} {gran} {start_tm.strftime(FMT_Z)}")
+    LOG.info(f"{orgAccountObj.name} {gran} {start_tm.strftime(FMT_Z)}")
     update_ccr(orgAccountObj) # Fetch new Data from Cost Explorer. only makes request if it is stale or blank
     orgCostObj = get_db_org_cost(gran=gran, orgAccountObj=orgAccountObj)
     #LOG.info(f"{orgAccountObj.name} got_data:{got_data}")
@@ -873,16 +874,7 @@ def get_fytd_cost(orgAccountObj):
         LOG.info(f"{orgAccountObj.name} {GranChoice.DAY} accrued No cost from {getFiscalStartDate().strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${daily_accrued_cost}")
     else:
         LOG.info(f"{orgAccountObj.name} {GranChoice.DAY} accrued cost from {getFiscalStartDate().strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${daily_accrued_cost}")
-    if final_tm < time_now.replace(hour=0, minute=0, second=0, microsecond=0): # start of today
-        st = final_tm + timedelta(days=1)
-    else:
-        st = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    hrly_accrued_cost,final_tm = get_accrued_cost(orgAccountObj, st, GranChoice.HOUR)
-    if final_tm == st:
-        LOG.info(f"{orgAccountObj.name} No {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${hrly_accrued_cost}")
-    else:
-        LOG.info(f"{orgAccountObj.name} accrued {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${hrly_accrued_cost}")
-    orgAccountObj.fytd_accrued_cost = daily_accrued_cost + hrly_accrued_cost
+    orgAccountObj.fytd_accrued_cost = daily_accrued_cost 
     orgAccountObj.save(update_fields=['fytd_accrued_cost'])
     LOG.info(f"{orgAccountObj.name} fytd_accrued_cost:{orgAccountObj.fytd_accrued_cost}")
     return orgAccountObj.fytd_accrued_cost
@@ -934,7 +926,7 @@ def reconcile_org(orgAccountObj):
             LOG.info(f"{orgAccountObj.name} is credited up to {datetime.strftime(orgAccountObj.most_recent_credit_time, FMT)} with NO CHANGE in balance:{orgAccountObj.balance:.2f} (nothing new to credit)")
         #
         # For Charges:
-        # First charge every day until midnight last night, then do hourly of today
+        # Charge every day until midnight last night
         #
         # truncating to start of day (i.e. uncharged days)
         start_of_today = time_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -948,16 +940,6 @@ def reconcile_org(orgAccountObj):
                 LOG.info(f"{orgAccountObj.name} accrued {GranChoice.DAY} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
         else:
             LOG.info(f"{orgAccountObj.name} is ALREADY debited most_recent_charge_time:{st.strftime(FMT_Z)} is after start_of_today:{start_of_today.strftime(FMT_Z)} NO CHANGE balance:{orgAccountObj.balance} (No new daily amounts to debit)")
-        #
-        #  Now do hourly for today up until now
-        #
-        st = orgAccountObj.most_recent_charge_time # the call to debit_charges will update this
-        LOG.info(f"{orgAccountObj.name} most_recent_charge_time:{st.strftime(FMT_Z)} time_now:{time_now.strftime(FMT_Z)}")
-        accrued_cost,final_tm = debit_charges(orgAccountObj, st, GranChoice.HOUR)
-        if final_tm == time_now:
-            LOG.info(f"{orgAccountObj.name} No {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
-        else:
-            LOG.info(f"{orgAccountObj.name} accrued {GranChoice.HOUR} cost from {st.strftime(FMT_Z)}  --  {final_tm.strftime(FMT_Z)}:   ${accrued_cost}")
         #
         # Truncate to max allowed balance
         #
@@ -1532,6 +1514,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
             LOG.info(f"Update {orgAccountObj.name}")
             psCmdResultObj.expiration = expire_time
             if psCmdResultObj.expiration is None or psCmdResultObj.expiration > datetime.now(timezone.utc):
+                reconcile_org(orgAccountObj)
                 update_ddt(orgAccountObj) ## update DDT to check for broke orgs
                 LOG.info(f"Update {orgAccountObj.name} test times min_ddt:{orgAccountObj.min_ddt} max_ddt:{orgAccountObj.max_ddt} now:{datetime.now(timezone.utc)} MIN_HRS_TO_LIVE_TO_START:{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
                 if (orgAccountObj.max_ddt - datetime.now(timezone.utc)) < timedelta(hours=MIN_HRS_TO_LIVE_TO_START):

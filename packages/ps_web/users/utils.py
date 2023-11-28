@@ -182,25 +182,25 @@ def init_redis_queues():
     # Create the RQ get_scheduler(). It uses the defined cached connection
 
     get_scheduler().cron(
-        cron_string="30 * * * *",   # A cron string 
+        cron_string="30 * * * *",   # every hour half past: A cron string 
         func=hourly_processing,     # Function to be queued
         repeat=None,                # Repeat this number of times (None means repeat forever)
-        result_ttl=3600,             # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
+        result_ttl=7200,            # 2 hrs: Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
     )
 
     get_scheduler().cron(
-        cron_string="15 * * * *",       # A cron string 
+        cron_string="15 * * * *",       # every hour quarter past: A cron string 
         func=refresh_token_maintenance, # Function to be queued
         repeat=None,                    # Repeat this number of times (None means repeat forever)
-        result_ttl=3600,                 # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
+        result_ttl=7200,                # 2 hrs: Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
     )
 
     purge_old_PsCmdResultsForAllOrgs() # call this once to purge old results then schedule
     get_scheduler().cron(
-        cron_string="0 0 * * *",       # A cron string 
+        cron_string="0 0 * * *",        # every midnight: A cron string 
         func=purge_old_PsCmdResultsForAllOrgs, # Function to be queued
         repeat=None,                    # Repeat this number of times (None means repeat forever)
-        result_ttl=3600,                 # Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
+        result_ttl=93600,               # 26 hrs: Specify how long (in seconds) successful jobs and their results are kept. Defaults to -1 (forever)
     )
     LOG.info("Running the RQ scheduler")
     # uses the default queue

@@ -80,13 +80,14 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
         with time_machine.travel(datetime(year=2019, month=1, day=28,hour=11),tick=False):
             fake_now1 = datetime.now(timezone.utc)
             LOG.info(f"fake now1:{fake_now1}")        
+            start_of_today = fake_now1.replace(hour=0, minute=0, second=0, microsecond=0)
             orgAccountObj,owner = init_test_environ(name=TimeBasedTasksTest.test_reconcileOrg.__name__,
                                                     org_owner=None,
                                                     max_allowance=20000, 
                                                     monthly_allowance=1000,
                                                     balance=2000,
                                                     fytd_accrued_cost=100, 
-                                                    most_recent_recon_time=datetime.now(timezone.utc))
+                                                    most_recent_charge_time=start_of_today)
             name_prefix = orgAccountObj.name
             assert orgAccountObj.balance == 2000
 
@@ -118,52 +119,30 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
             reconcile_org(orgAccountObj)
             orgAccountObj.refresh_from_db()
             # adds monthly allowance of 1000 and subtracts fake charges from stubbed ps_server
-            assert orgAccountObj.balance == Decimal('2992.00')
+            assert orgAccountObj.balance == Decimal('3000.00')
             # this should be the last timestamp used in the hourly cost data or daily cost data
-            assert orgAccountObj.most_recent_charge_time == datetime(year=2020, month=1, day=28,hour=2,tzinfo=timezone.utc)
+            assert orgAccountObj.most_recent_charge_time == datetime(year=2019, month=1, day=28,hour=0,tzinfo=timezone.utc)
 
         with time_machine.travel(datetime(year=2020, month=1, day=29,hour=11),tick=False):
             fake_now = datetime.now(timezone.utc)
             LOG.info(f"fake now:{fake_now}")
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2020-1-28"], [8.0])
-            extend_ObjCost(orgAccountObj,GranChoice.HOUR,
-                [
-                    "2020-1-29T00:00:00Z",
-                    "2020-1-29T01:00:00Z",
-                    "2020-1-29T02:00:00Z",
-                ],
-                [
-                    4.0,
-                    3.0,
-                    2.0, # 4+3+2 = 9.0
-                ])
-            assert orgAccountObj.balance == Decimal('2992.00')
+            assert orgAccountObj.balance == Decimal('3000.00')
             reconcile_org(orgAccountObj) 
             orgAccountObj.refresh_from_db()
-            assert orgAccountObj.balance == Decimal('2992.00') - Decimal('9.0')
-            assert orgAccountObj.most_recent_charge_time == datetime(year=2020, month=1, day=29,hour=2,tzinfo=timezone.utc)
+            assert orgAccountObj.balance == Decimal('3000.00') - Decimal('8.0') 
+            assert orgAccountObj.most_recent_charge_time == datetime(year=2020, month=1, day=28,hour=0,tzinfo=timezone.utc)
 
         with time_machine.travel(datetime(year=2020, month=1, day=30,hour=20),tick=False):
             fake_now = datetime.now(timezone.utc)
             LOG.info(f"fake now:{fake_now}")
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2020-1-29"], [9.0])
-            extend_ObjCost(orgAccountObj,GranChoice.HOUR,
-                [
-                    "2020-1-30T10:00:00Z",
-                    "2020-1-30T11:00:00Z",
-                    "2020-1-30T12:00:00Z",
-                ],
-                [
-                    11.0,
-                    0.75,
-                    6.0, # total=17.75
-                ])
-            assert orgAccountObj.balance == Decimal('2983.00')
+            assert orgAccountObj.balance == Decimal('2992.00')
             reconcile_org(orgAccountObj) 
             orgAccountObj.refresh_from_db()
-            assert orgAccountObj.balance == Decimal('2983.00') - Decimal('17.75')
-            assert orgAccountObj.balance == Decimal('2965.25')
-            assert orgAccountObj.most_recent_charge_time == datetime(year=2020, month=1, day=30,hour=12,tzinfo=timezone.utc)
+            assert orgAccountObj.balance == Decimal('2992.00') - Decimal('9.0')
+            assert orgAccountObj.balance == Decimal('2983.00')
+            assert orgAccountObj.most_recent_charge_time == datetime(year=2020, month=1, day=29,hour=0,tzinfo=timezone.utc)
 
         # now go a year (we only ever give one months credit but debit based on objCost populated from cost explorer report)
         with time_machine.travel(datetime(year=2021, month=1, day=30,hour=11),tick=False):
@@ -176,26 +155,15 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2020-6-29"], [9.0])
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2020-7-29"], [8.5])
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2021-1-29"], [10.0]) # total = 63.5
-            extend_ObjCost(orgAccountObj,GranChoice.HOUR,
-                [
-                    "2021-1-30T10:00:00Z",
-                    "2021-1-30T11:00:00Z",
-                    "2021-1-30T12:00:00Z",
-                ],
-                [
-                    2.0,
-                    1.75,
-                    5.0, # total=8.75
-                ])
-            assert orgAccountObj.balance == Decimal('2965.25')
+            assert orgAccountObj.balance == Decimal('2983.00')
             reconcile_org(orgAccountObj) # adds only one monthly allowance of 1000 and subtracts objCost
             orgAccountObj.refresh_from_db()
-            assert orgAccountObj.balance == Decimal('3965.25') - Decimal('72.25') # 63.5 + 8.75
-            assert orgAccountObj.balance == Decimal('3893.00')
-            assert orgAccountObj.most_recent_charge_time == datetime(year=2021, month=1, day=30,hour=12,tzinfo=timezone.utc)
+            assert orgAccountObj.balance == Decimal('3983.00') - Decimal('63.50') # 63.5 
+            assert orgAccountObj.balance == Decimal('3919.50')
             assert orgAccountObj.max_allowance == Decimal('20000.00')
             assert orgAccountObj.monthly_allowance == Decimal('1000.00')
-            assert orgAccountObj.fytd_accrued_cost == Decimal('18.75') # from oct 1 2020 to jan 30 2021
+            assert orgAccountObj.fytd_accrued_cost == Decimal('10.00') # from oct 1 2020 to jan 30 2021
+            assert orgAccountObj.most_recent_charge_time == datetime(year=2021, month=1, day=29,hour=0,tzinfo=timezone.utc)
 
         with time_machine.travel(datetime(year=2021, month=3, day=3,hour=20),tick=False):
             fake_now = datetime.now(timezone.utc)
@@ -204,26 +172,15 @@ class TimeBasedTasksTest(TimeTestCaseMixin,TestCase):
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2021-2-1"], [5.0])
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2021-2-2"], [5.0])
             extend_ObjCost(orgAccountObj,GranChoice.DAY,["2021-2-3"], [5.0])
-            extend_ObjCost(orgAccountObj,GranChoice.HOUR,
-                [
-                    "2021-3-3T10:00:00Z",
-                    "2021-3-3T11:00:00Z",
-                    "2021-3-3T12:00:00Z",
-                ],
-                [
-                    4.0,
-                    1.75,
-                    2.0, # total=7.75
-                ])
-            assert orgAccountObj.balance == Decimal('3893.00')
+            assert orgAccountObj.balance == Decimal('3919.50')
             orgAccountObj.max_allowance = Decimal('4000.00') # test it gets capped at max_allowance
             orgAccountObj.save()
             reconcile_org(orgAccountObj) 
             orgAccountObj.refresh_from_db()
             assert orgAccountObj.balance == Decimal('4000.00')
-            assert orgAccountObj.fytd_accrued_cost ==  Decimal('18.75') + Decimal('15.00') + Decimal('7.75') # from oct 1 2020 to mar 3 2021
-            assert orgAccountObj.most_recent_charge_time == datetime(year=2021, month=3, day=3, hour=12,tzinfo=timezone.utc)
-            assert orgAccountObj.most_recent_credit_time == datetime(year=2021, month=3, day=1, hour=00,tzinfo=timezone.utc)
+            assert orgAccountObj.fytd_accrued_cost ==  Decimal('18.75') + Decimal('15.00') # from oct 1 2020 to mar 3 2021
+            assert orgAccountObj.most_recent_charge_time == datetime(year=2021, month=2, day=3, hour=0,tzinfo=timezone.utc)
+            assert orgAccountObj.most_recent_credit_time == datetime(year=2021, month=3, day=1, hour=0,tzinfo=timezone.utc)
 
     def verify_create_forecast_with_time_of_day(self,inputs,expected):
         recon_tm_offset = inputs['recon_tm_offset']
