@@ -578,7 +578,6 @@ def get_org_cost_data(orgAccountObj, granObj, orgCostObj):
         LOG.info(f"Called get_current_cost_report rsp.server_error:{rsp.server_error}")
         if rsp.server_error == False:
             orgCostObj.cost_refresh_time = time_now
-            orgAccountObj.most_recent_recon_time = time_now # most_recent_recon_time is really most recent data fetch
             orgAccountObj.save(update_fields=['most_recent_recon_time'])
             num_values_returned = len(rsp.tm)
             if len(rsp.tm) > 0:
@@ -947,6 +946,8 @@ def reconcile_org(orgAccountObj):
             orgAccountObj.balance = orgAccountObj.max_allowance
             orgAccountObj.save(update_fields=['balance'])
             LOG.info(f"{orgAccountObj.name} truncating balance to max_allowance:{orgAccountObj.max_allowance:.2f}")
+        orgAccountObj.most_recent_recon_time = time_now # most_recent_recon_time is really most recent data fetch
+        orgAccountObj.save(update_fields=['most_recent_recon_time'])
     except Exception as e:
         LOG.exception(f"{orgAccountObj} caught exception:")
     finally:   
