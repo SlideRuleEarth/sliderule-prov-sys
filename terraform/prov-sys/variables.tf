@@ -73,7 +73,7 @@ variable "ps_web_task_count" {
   description = "Number of web tasks to run"
   default     = 1
 }
-variable "django_allowed_hosts" {
+variable "django_settings_allowed_hosts" {
   description = "Domain name for allowed hosts"
   default     = ".testsliderule.org .slideruleearth.io" # the leading dot acts as a wildcard
 }

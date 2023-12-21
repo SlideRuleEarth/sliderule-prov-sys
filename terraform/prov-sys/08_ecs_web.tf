@@ -37,7 +37,7 @@ data "template_file" "prov-sys" {
     rds_password                  = local.provsys_creds.rds_password
     rds_port                      = local.provsys_creds.rds_port
     rds_hostname                  = aws_db_instance.prov-sys.address
-    django_settings_allowed_hosts = var.django_allowed_hosts
+    django_settings_allowed_hosts = var.django_settings_allowed_hosts
     django_csrf_trusted_origins   = var.django_csrf_trusted_origins
     django_secret_key             = local.provsys_creds.django_secret_key
     ps_server_host                = var.ps_server_host
