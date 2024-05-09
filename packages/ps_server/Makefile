@@ -70,6 +70,10 @@ upload-s3-files-to-localstack: ## upload test s3 files to localstack
 bld-and-run-unit-tests: down  # run the ps_server unit tests then exit
 	make update-s3-files-for-tests && \
 	make docker-test && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export DOCKER_REPO=$(DOCKER_REPO) && \
+	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest --log-cli-level=ERROR && \
@@ -78,6 +82,10 @@ bld-and-run-unit-tests: down  # run the ps_server unit tests then exit
 bld-and-run-unit-test-dev: down  # run the ps_server unit tests then exit 
 	make update-s3-files-for-tests && \
 	make docker-test && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export DOCKER_REPO=$(DOCKER_REPO) && \
+	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest -m "dev" --log-cli-level=ERROR && \
@@ -90,6 +98,8 @@ unit-tests-dev: ## build and run ps-server with the dev marker
 	DOCKER_EXEC_OPTS=-it make bld-and-run-unit-test-dev
 
 down:
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose down --timeout 1
 
 .PHONY : ps-server-clean-stage

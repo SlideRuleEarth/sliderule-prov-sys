@@ -940,7 +940,7 @@ def verify_rsp_gen(rrsp_gen, name, ps_cmd,  logger):
         try:
             cnt += 1
             rrsp = next(rrsp_gen)  # grab the next one and process it
-            logger.info(f"name:{name} ps_cmd:{ps_cmd} CNT:{cnt} {json_format.MessageToJson(rrsp, including_default_value_fields=True)}")
+            logger.info(f"name:{name} ps_cmd:{ps_cmd} CNT:{cnt} {json_format.MessageToJson(rrsp, always_print_fields_with_no_presence=True)}")
             logger.info(f'rrsp.cli.valid: {rrsp.cli.valid}')
             logger.info(f'rrsp.cli.updating: {rrsp.cli.updating}')
             logger.info(f'rrsp.cli.cmd_args: {rrsp.cli.cmd_args}')
