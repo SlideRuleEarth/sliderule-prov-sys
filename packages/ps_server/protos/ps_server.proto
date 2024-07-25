@@ -94,7 +94,9 @@ message SetUpReq {
   string  name  = 1; // terraform namespaced directory to use
   string  version   = 2; // version of terraform files to use
   bool    is_public = 3;
-  string  now       = 4; 
+  string  now       = 4;
+  string  spot_allocation_strategy = 5;
+  double  spot_max_price = 6; 
 }
 
 // The TearDown Request message 

@@ -984,7 +984,7 @@ def call_SetUp(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.provision_env_ready = False
     clusterObj.save()
-    setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
+    setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT),spot_allocation_strategy=orgAccountObj.spot_allocation_strategy,spot_max_price=orgAccountObj.spot_max_price)
     logger.info(f"SetUp setup_req:{setup_req}")
     rsp = None
     with ps_client.create_client_channel("control") as channel:
@@ -1006,6 +1006,8 @@ def call_SetUp(orgAccountObj):
     assert(rsp.setup_cfg.version == setup_req.version)
     assert(rsp.setup_cfg.is_public == setup_req.is_public)
     assert(rsp.setup_cfg.now == setup_req.now)
+    assert(rsp.setup_cfg.spot_allocation_strategy == setup_req.spot_allocation_strategy)
+    assert(rsp.setup_cfg.spot_max_price == setup_req.spot_max_price)
     return True
 
 def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):

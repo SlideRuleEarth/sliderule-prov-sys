@@ -104,7 +104,7 @@ def test_org_token_refresh(caplog, client, mock_tasks_enqueue_stubbed_out, mock_
     
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_org_token_github_refresh(caplog,client, social_user, social_user_membership, github_social_account, mock_email_backend,initialize_test_environ):

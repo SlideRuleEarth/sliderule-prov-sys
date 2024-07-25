@@ -117,6 +117,7 @@ class OrgAccountForm(ModelForm):
 class OrgAccountCfgForm(ModelForm):
     version = forms.ChoiceField(widget=forms.Select(attrs={'id': 'version'}))
     is_public = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'id': 'is_public'}))
+    spot_allocation_strategy = forms.ChoiceField(widget=forms.Select(attrs={'id': 'spot_allocation_strategy'}))
     def __init__(self, *args, **kwargs):
         available_versions = kwargs.pop('available_versions', None)
         super().__init__(*args, **kwargs)
@@ -127,10 +128,15 @@ class OrgAccountCfgForm(ModelForm):
         width = len(str(max_value))
         self.fields['min_node_cap'].widget = NumberInput(attrs={'style': f'width: {width}em'})
         self.fields['max_node_cap'].widget = NumberInput(attrs={'style': f'width: {width}em'})
-
+        self.fields['spot_allocation_strategy'].choices = [
+            ('lowest-price','lowest-price'), 
+            ('capacity-optimized','capacity-optimized'), 
+            ('capacity-optimized-prioritized','capacity-optimized-prioritized'), 
+            ('price-capacity-optimized','price-capacity-optimized'),
+        ]   
     class Meta:
         model = OrgAccount
-        fields = ['provisioning_suspended','is_public', 'version', 'min_node_cap', 'max_node_cap', 'allow_deploy_by_token', 'destroy_when_no_nodes' ]
+        fields = ['provisioning_suspended','is_public', 'version', 'min_node_cap', 'max_node_cap', 'allow_deploy_by_token', 'destroy_when_no_nodes','spot_max_price', 'spot_allocation_strategy' ]
 
 
 class OrgProfileForm(ModelForm):

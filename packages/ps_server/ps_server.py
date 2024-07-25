@@ -725,7 +725,7 @@ def write_SetUpCfg(name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(name,version,is_public,now):
+def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price):
     LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
@@ -734,6 +734,8 @@ def update_SetUpCfg(name,version,is_public,now):
         setup_cfg.version = version
         setup_cfg.is_public = is_public
         setup_cfg.now = now
+        setup_cfg.spot_allocation_strategy = spot_allocation_strategy
+        setup_cfg.spot_max_price = spot_max_price
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
         write_SetUpCfg(name, setup_cfg)
     except Exception as e:
@@ -1332,7 +1334,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             LOG.exception(f'Exception:{e}')
             raise e
 
-    def setup_terraform_env(self, s3_client, name, version, is_public, now):
+    def setup_terraform_env(self, s3_client, name, version, is_public, now, spot_allocation_strategy, spot_max_price):
         LOG.info(f"Start SetUp of provision environment for org:{name} version:{version}")
         st = datetime.now(timezone.utc)
         try:
@@ -1355,6 +1357,8 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     setup_cfg.version = version
                     setup_cfg.is_public = is_public
                     setup_cfg.now = now
+                    setup_cfg.spot_allocation_strategy = spot_allocation_strategy
+                    setup_cfg.spot_max_price = spot_max_price
                 except Exception as e:
                     emsg = (f" Processing SetUp {name} cluster caught this exception creating tf_dir: ")
                     LOG.exception(emsg)
@@ -1366,7 +1370,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     LOG.info(f"terraform folder {tf_dir} do not exist expect to see this--> 'ls: cannot access {tf_dir}: No such file or directory' in e:{e}")
             yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
             self.get_specific_tf_version_files_from_s3(s3_client, name, version)       
-            update_SetUpCfg(name, version, is_public, now)
+            update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price)
             yield from self.execute_cmd          (name=name, ps_cmd='SetUp',    cmd_args=["ls", '-al', tf_dir])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["init"])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["validate"])
@@ -1649,7 +1653,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def SetUp(self, request, context):
         LOG.info(f"SetUp request:{MessageToString(request)} ")
         s3_client = get_s3_client()
-        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now)
+        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now, spot_allocation_strategy=request.spot_allocation_strategy, spot_max_price=request.spot_max_price)
 
     def TearDown(self, request, context):
         s3_client = get_s3_client()

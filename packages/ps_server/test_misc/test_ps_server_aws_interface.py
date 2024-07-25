@@ -173,7 +173,7 @@ def test_download_dir_when_deployed(setup_logging, s3, get_S3_BUCKET, test_name,
     # must leave terraform env as we found it so other tests don't fail because of this test
     assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, name=test_name, logger=setup_logging)
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.parametrize("version", ['v3', 'latest'])
 def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_name, control_instance, version):
     s3_client = s3
@@ -182,7 +182,7 @@ def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_nam
     assert bucket_exists(s3_client, s3_bucket)  
     assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{test_name}') 
     
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.setup_terraform_env(s3_client, test_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z") ),test_name,'SetUp',logger)
+    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.setup_terraform_env(s3_client, test_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"),spot_allocation_strategy='lowest-price',spot_max_price=0.16 ),test_name,'SetUp',logger)
     logger.info(f'done with setup_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
     # normal exit shows this message
     assert 'unit-test-org SetUp Completed' in stdout

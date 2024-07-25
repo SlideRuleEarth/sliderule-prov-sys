@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   ps-server: # stubbed out ps-server
     command: python ps_server.py 

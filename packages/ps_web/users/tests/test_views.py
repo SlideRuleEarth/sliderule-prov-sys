@@ -195,6 +195,8 @@ def test_org_account_cfg_success(caplog, client, mock_tasks_enqueue_stubbed_out,
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
     }
     start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
     # get the url
@@ -355,6 +357,8 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
     }
 
     assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=2, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Update (min nodes is 1)
@@ -413,6 +417,8 @@ def test_change_version_with_user_view(setup_logging, mock_tasks_enqueue_stubbed
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
     }
     assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=3,mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
 
@@ -548,6 +554,8 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'allow_deploy_by_token': True,
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
+            'spot_max_price': 0.15,
+            'spot_allocation_strategy': 'lowest-price',
         }
 
         assert verify_org_configure(client=client, 
@@ -614,6 +622,8 @@ def test_change_is_public_with_user_view_with_onns(setup_logging, client,initial
             'allow_deploy_by_token': True,
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
+            'spot_max_price': 0.15,
+            'spot_allocation_strategy': 'lowest-price',
         }
         assert verify_org_configure(client=client, orgAccountObj=orgAccountObj, data=form_data, expected_change_ps_cmd=3, mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out) # SetUp - Refresh (min nodes is 1)
         logger.info(f"finished verify_org_configure")
@@ -751,6 +761,8 @@ def test_web_user_desired_num_nodes(caplog, setup_logging, client, mock_email_ba
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
     }
     assert verify_org_configure(client=client, 
                                 orgAccountObj=orgAccountObj, 
@@ -864,6 +876,8 @@ def test_web_user_clear_num_nodes(caplog, setup_logging, client, mock_email_back
             'allow_deploy_by_token': True,
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
+            'spot_max_price': 0.15,
+            'spot_allocation_strategy': 'lowest-price',
         }
 
         assert verify_org_configure(client=client, 
@@ -992,6 +1006,8 @@ def test_web_user_clear_num_nodes_multiple_users(caplog, setup_logging, client, 
             'allow_deploy_by_token': True,
             'destroy_when_no_nodes': True,
             'provisioning_suspended': False,
+            'spot_max_price': 0.15,
+            'spot_allocation_strategy': 'lowest-price',
         }
 
         assert verify_org_configure(client=client, 

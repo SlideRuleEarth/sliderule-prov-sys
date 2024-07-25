@@ -36,9 +36,9 @@
                             <div id="collapse_{{org.name}}_state" class="accordion-collapse collapse show my-1" aria-labelledby="mc_hd_{{org.name}}_state">
                                 <div class="accordion-body">
                                     <div class="container-fluid" style="width: fit-content;">
-                                        <div class="row py-2 d-flex align-items-stretch justify-content-center" style="width: fit-content;">
+                                        <div class="row py-2 d-flex align-items-stretch justify-content-center">
                                             <div class="col">
-                                                <div class="card shadow mx-auto my-1 h-100">
+                                                <div class="card shadow mx-auto my-1 h-100" style="width: fit-content;">
                                                     <h5 class="card-title mt-2">
                                                         Current Cluster State
                                                     </h5>
@@ -157,8 +157,8 @@
                                                     </div>                                                    
                                                 </div>                                        
                                             </div>
-                                            <div class="col">
-                                                <div class="card shadow mx-auto my-1 h-100">
+                                            <div class="col-auto">
+                                                <div class="card shadow mx-auto my-1 h-100" style="width: fit-content;">
                                                     <h5 class="card-title mt-2">
                                                         Current Configuration
                                                     </h5>
@@ -192,9 +192,10 @@
                                                             {% else %}
                                                                 <dd>{{ org.provisioning_suspended }}</dd>
                                                             {% endif %}
-                                                            {% if not cluster.provision_env_ready %}                                                
-                                                                <dt class="text-warning">Configuring</dt> 
-                                                            {% endif %}
+                                                            <dt>Allocation Strategy</dt>
+                                                            <dd>{{ org.spot_allocation_strategy }}</dd>
+                                                            <dt>Max Price</dt>
+                                                            <dd>{{ org.spot_max_price }}</dd>
                                                         </dl>
                                                         <div class="mt-auto d-flex justify-content-center ">
                                                             <button type="button" id="config_modal_btn"  class="btn btn-primary mt-1 me-1" data-bs-toggle="modal" data-bs-target="#psConfigModal"  data-bs-url="{% url 'org-configure' org.id %}"  data-bs-action="Configure">Configure</button>

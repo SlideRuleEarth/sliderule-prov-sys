@@ -272,6 +272,8 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
     }
     verify_org_configure(client=client,
                          data=form_data,
@@ -315,6 +317,8 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
     }
     verify_org_configure(client=client,
                          data=form_data,
