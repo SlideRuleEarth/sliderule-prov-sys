@@ -168,6 +168,7 @@ resource "aws_iam_policy" "prov_sys" {
             "acm:ListCertificates",
             "acm:DescribeCertificate",
             "acm:ListTagsForCertificate"
+            "iam:CreateServiceLinkedRole"
         ],
         "Resource": "*"
     },
