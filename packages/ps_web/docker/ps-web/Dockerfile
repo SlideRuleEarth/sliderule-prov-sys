@@ -5,7 +5,7 @@ FROM python:3.11
 ENV PYTHONUNBUFFERED=1
 
 # prevent Python from writing pyc files to disc 
-ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 # upgrade PIP as root user
 RUN pip install --upgrade pip

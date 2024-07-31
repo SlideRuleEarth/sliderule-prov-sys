@@ -143,24 +143,35 @@ message CurrentCostReq{
   string tm           = 3; 
 }
 
-message GetVersionsReq{
+message AsgCfgsReq{
+}
+
+message AsgCfg {
+  string version = 1;
+  repeated string asg_cfg_options = 2;
+}
+
+message AsgCfgsRsp{
+  repeated AsgCfg asg_cfg = 1;
+}
+
+message VersionsReq{
   string name = 1; // can be empty
 }
 
-message GetVersionsRsp{
+message VersionsRsp{
   repeated string versions = 1;
 }
-
-message GetCurrentSetUpCfgReq{
+message CurrentSetUpCfgReq{
   string name = 1;
 }
 
-message GetCurrentSetUpCfgRsp{
+message CurrentSetUpCfgRsp{
   SetUpReq setup_cfg = 1; // this is an exact replica of the one used
 }
 
-message GetPSVersionsReq{}
-message GetPSVersionsRsp{
+message PSVersionsReq{}
+message PSVersionsRsp{
   string ps_versions = 1;
 }
 
@@ -189,9 +200,10 @@ message NumNodesRsp{
 
 service Control {
   rpc Init(InitReq) returns (InitRsp); // testing only
-  rpc GetVersions(GetVersionsReq) returns (GetVersionsRsp);
-  rpc GetCurrentSetUpCfg(GetCurrentSetUpCfgReq) returns (GetCurrentSetUpCfgRsp);
-  rpc GetPSVersions(GetPSVersionsReq) returns (GetPSVersionsRsp);
+  rpc GetVersions(VersionsReq) returns (VersionsRsp);
+  rpc GetAsgCfgs(AsgCfgsReq) returns (AsgCfgsRsp);
+  rpc GetCurrentSetUpCfg(CurrentSetUpCfgReq) returns (CurrentSetUpCfgRsp);
+  rpc GetPSVersions(PSVersionsReq) returns (PSVersionsRsp);
   rpc Update(UpdateRequest) returns (stream Response);
   rpc Refresh(RefreshRequest) returns (stream Response);
   rpc Destroy(DestroyRequest) returns (stream Response);

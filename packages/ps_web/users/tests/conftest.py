@@ -15,9 +15,62 @@ from django.conf import settings
 from unittest.mock import patch, MagicMock, Mock
 from time import sleep
 from django.core.cache import cache
+import time
 
 import logging
 from importlib import import_module
+
+import requests
+import time
+
+def poll_for_localstack_status(logger):
+    '''
+    Checks the status of localstack. This is only called when the domain is localhost
+    '''
+    # wait for localstack to be ready
+    start_time = time.time()
+    error_encountered = False  # Flag to track if an error is encountered
+    elapsed_time = 0
+    logger.info("Polling --- Waiting for LocalStack to be ready ---")
+    cnt = 0
+    session = requests.Session()
+    while cnt < 100: # can't poll forever
+        response = None
+        try:
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 1:
+               time.sleep(1) 
+            else:
+               time.sleep(0.1)
+            response = session.get('http://localstack:4566/_localstack/init')
+            logger.debug(f"response:{response}")
+            response.raise_for_status()  # will raise an exception if the status is not 200
+            data = response.json()
+            logger.debug(f"data:{data}")
+            for completed in data.get('completed', []):
+                logger.debug(f"completed:{completed}")
+                if data['completed']['READY'] == True:
+                    logger.info("LocalStack is ready")
+                    return  True # exit the loop and the fixture
+        except requests.exceptions.HTTPError as e:
+            logger.info(f"LocalStack not ready yet e:{e}")
+        except requests.exceptions.ConnectionError as e:
+            logger.info(f"LocalStack not ready yet e:{e}")
+        except Exception as e:
+            logger.exception(f"Exception:{e}")
+            error_encountered = True
+        cnt += 1
+
+        if error_encountered:
+            logger.error("Error encountered during LocalStack setup")
+            logger.info(f"elapsed_time:{elapsed_time} secs cnt:{cnt}")
+            break
+        if elapsed_time > 15:  # timeout 
+            logger.error("Timeout while waiting for LocalStack to be ready")
+            logger.info(f"elapsed_time:{elapsed_time} secs cnt:{cnt}")
+            break
+    logger.info(f"elapsed_time:{elapsed_time} secs cnt:{cnt}")
+    return False
 
 
 
@@ -81,6 +134,15 @@ def developer_TEST_USER(setup_logging):
 @pytest.fixture
 def verified_TEST_USER(create_TEST_USER):
     return verify_user(create_TEST_USER)
+
+@pytest.fixture(scope="session", autouse=True)
+def localstack_setup(setup_logging):
+    # wait for localstack to be ready
+    start_time = time.time()
+    logger = setup_logging
+    assert poll_for_localstack_status(logger), "LocalStack is not running or failed to initialize"   
+    return True
+
 
 @pytest.fixture
 def initialize_test_environ(setup_logging,redis_scheduled_jobs_setup,request):

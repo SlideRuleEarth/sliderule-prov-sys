@@ -18,6 +18,8 @@ AWS_DEFAULT_REGION ?= us-west-2
 PS_SERVER_DIR:=$(abspath $(PS_SERVER_SOURCE_DIR))
 PS_WEB_DIR:=$(abspath $(PS_WEB_SOURCE_DIR))
 
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)
 DOMAIN ?= localhost
 DOMAIN_ROOT = $(firstword $(subst ., ,$(DOMAIN)))
 
@@ -96,10 +98,10 @@ docker-no-versions: distclean ## build docker containers
 	@echo VERSION:$(VERSION)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
 
-
 run: docker ## run prov-sys locally
 	make down && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
@@ -291,6 +293,7 @@ docker-versions: ## dump pip freeze versions from containers
 
 down: ## bring down the test docker containers
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
@@ -516,3 +519,7 @@ help: ## That's me!
 	@echo SITE_ID value:$($(SITE_ID))
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
+	@echo PS_TEST_DIR:$(PS_TEST_DIR)
+	@echo LOCALSTACK_VOLUME_DIR:$(LOCALSTACK_VOLUME_DIR)
+	@echo ROOT:$(ROOT)
+	@echo last_dir:$(last_dir)

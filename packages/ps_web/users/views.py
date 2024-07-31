@@ -20,7 +20,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
-from .tasks import get_db_org_cost,get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs,reconcile_org
+from .tasks import get_db_org_cost,get_versions_for_org, get_asg_cfgs_for_all_versions, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs,reconcile_org,get_asg_cfgs_for_version
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -174,6 +174,7 @@ def orgManageCluster(request, pk):
     #LOG.info("%s %s",request.method,pk)
     orgAccountObj = get_orgAccountObj(pk)
     clusterObj = Cluster.objects.get(org=orgAccountObj)
+    asg_cfgs_by_version = get_asg_cfgs_for_all_versions()
     LOG.info(f"{request.method} {orgAccountObj.name} loop_count:{orgAccountObj.loop_count} ps:{orgAccountObj.num_ps_cmd} ops:{orgAccountObj.num_owner_ps_cmd}  autocommit:{get_autocommit()}")
     orgNumNodeObjs = sort_ONN_by_nn_exp(orgAccountObj)
     if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
@@ -218,7 +219,7 @@ def orgManageCluster(request, pk):
         LOG.info(f"{orgAccountObj.name} cluster current_version:{clusterObj.cur_version} provision_env_ready:{clusterObj.provision_env_ready}")
         #LOG.info(f"about to get versions")
         versions = get_versions_for_org(orgAccountObj.name)
-        config_form = OrgAccountCfgForm(instance=orgAccountObj,available_versions=versions)
+        config_form = OrgAccountCfgForm(instance=orgAccountObj,available_versions=versions,available_asg_cfgs=get_asg_cfgs_for_all_versions())
 
         domain = os.environ.get("DOMAIN")
         pending_refresh = None
@@ -234,6 +235,7 @@ def orgManageCluster(request, pk):
         except OwnerPSCmd.DoesNotExist:
             pending_destroy = False
         context = { 'org': orgAccountObj,
+                    'asg_cfgs_by_version': asg_cfgs_by_version,
                     'cluster': clusterObj, 
                     'add_onn_form': add_onn_form,
                     'config_form': config_form, 
@@ -423,7 +425,7 @@ def orgConfigure(request, pk):
         if request.method == 'POST':
             try:
                 # USING an Unbound form and setting the object explicitly one field at a time!
-                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions_for_org(orgAccountObj.name))
+                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions_for_org(orgAccountObj.name),available_asg_cfgs=get_asg_cfgs_for_all_versions())
                 emsg = ''
                 if(config_form.is_valid()):
                     for field, value in config_form.cleaned_data.items():

@@ -186,6 +186,30 @@ def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,
     # since we can get a 302 on success or failure lets check for the message
     assert(is_in_messages(response,"cfg updated successfully",logger))
 
+
+@pytest.mark.dev
+@pytest.mark.real_ps_server
+@pytest.mark.django_db
+def test_asg_cfgs(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ,localstack_setup):
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(orgAccountObj.version == 'latest') 
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    upload_json_string_to_s3(s3_client=s3,
+                             s3_bucket=S3_BUCKET,
+                             s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                             json_string=f'["{test_name}"]') # test_name is unit-test-org
+    assert verify_upload(s3_client=s3,
+                         s3_bucket=S3_BUCKET,
+                         s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                         original_json_string=f'["{test_name}"]')                     
+    versions_for_org = get_versions_for_org(name='unit-test-private')
+    logger.info(f'versions_for_org:{versions_for_org}')
+
+
 @pytest.mark.real_ps_server
 @pytest.mark.ps_disable
 @pytest.mark.django_db

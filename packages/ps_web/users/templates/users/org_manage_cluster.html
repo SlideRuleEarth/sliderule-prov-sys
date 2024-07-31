@@ -196,10 +196,14 @@
                                                             <dd>{{ org.spot_allocation_strategy }}</dd>
                                                             <dt>Max Price</dt>
                                                             <dd>{{ org.spot_max_price }}</dd>
+                                                            <dt> AutoScaling Cfg</dt>
+                                                            <dd>{{ org.asg_cfg }}</dd>
                                                         </dl>
                                                         <div class="mt-auto d-flex justify-content-center ">
                                                             <button type="button" id="config_modal_btn"  class="btn btn-primary mt-1 me-1" data-bs-toggle="modal" data-bs-target="#psConfigModal"  data-bs-url="{% url 'org-configure' org.id %}"  data-bs-action="Configure">Configure</button>
                                                             <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
+                                                        
+                                                            <!-- First Modal -->
                                                             <div class="modal fade" id="psConfigModal" tabindex="-1" aria-labelledby="psConfigModalLabel" aria-hidden="true">
                                                                 <div class="modal-dialog modal-dialog-scrollable">
                                                                     <div class="modal-content">
@@ -220,7 +224,7 @@
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
+                                                            </div>                                                        
                                                         </div>
                                                     </div>
                                                 </div>                                            
@@ -503,6 +507,9 @@
         const activePS_cmd = "{{ cluster.active_ps_cmd }}";
         const isDeployed = "{{ cluster.is_deployed }}" === "True";
         const destroyWhenNoNodes = "{{ org.destroy_when_no_nodes }}"
+        const asgCfgSelect = document.getElementById('asg_cfg');
+        const asgCfgsByVersion = "{{ asg_cfgs_by_version }}";
+
         convertedDestroyWhenNoNodes = destroyWhenNoNodes.toLowerCase() === "true";
         minNodeCap = "{{ org.min_node_cap }}"
         const utcTimes = document.querySelectorAll('.utc-time');
@@ -511,12 +518,23 @@
             utcTimeElement.textContent = utcTime.toLocaleString();
         });
 
-        let deploying = ((activePS_cmd === 'Update') || (activePS_cmd === 'Deploy'))
+        let deploying = ((activePS_cmd === 'Update') || (activePS_cmd === 'Deploy'));
         // Note: activePS_cmd === 'Deploy' is deprecated so we need another way to tell 
         // if coming up from scratch vs updating running cluster
         // validVersion will be None if the cluster was previously down and now being deployed
-        let validVersion = (clusterVersion !== null && clusterVersion !== undefined && clusterVersion !== 'None')
-        let checkState = (isDeployed || (deploying && validVersion))
+        let validVersion = (clusterVersion !== null && clusterVersion !== undefined && clusterVersion !== 'None');
+        let checkState = (isDeployed || (deploying && validVersion));
+
+        function getAsgConfigs(version) {
+            asgCfgSelect.innerHTML = ''; // Clear existing options
+            asgCfgsByVersion[version].forEach(asg_cfg => {
+                const option = document.createElement('option');
+                option.value = asg_cfg;
+                option.textContent = asg_cfg;
+                asgCfgSelect.appendChild(option);
+            });                  
+        }
+        getAsgConfigs(versionField.value);
         versionField.addEventListener("change", function() {
             // show if changing is_public or version when deployed or deploying
             selectedVersion = versionField.value
@@ -526,6 +544,7 @@
                 } else {
                     version_is_public_Warning.classList.add("d-none");
                 }
+                getAsgConfigs(selectedVersion);
             }
         });
 

@@ -99,6 +99,11 @@ from google.protobuf.json_format import Parse
 from google.protobuf.json_format import MessageToJson
 from google.protobuf.text_format import MessageToString
 import threading
+from collections import defaultdict
+
+
+from typing import List, Dict
+
 
 
 # Initialize thread-local storage at the module level
@@ -635,6 +640,55 @@ def get_all_versions(s3_client):
         LOG.exception(f"get_all_versions caught exception:{repr(e)}") 
     LOG.info(f"versions:{versions}")  
     return versions
+
+def get_asg_cfgs_for_all_versions(s3_client):
+    all_versions_asg_cfgs = {}
+    try:
+        result = s3_client.list_objects_v2( Bucket=S3_BUCKET,
+                                            Prefix=get_tf_versions_s3_root(),
+                                            Delimiter='/')
+        versions = []
+        for o in result.get('CommonPrefixes',[]):
+            #LOG.info(o.get('Prefix'))
+            path = o.get('Prefix')
+            #LOG.info(path.split("/")[:-1][2])
+            version = path.split("/")[:-1][2].rstrip()
+            versions.append(version)
+        LOG.info(f"versions:{versions}")
+        for version in versions:
+            asg_cfgs = []
+            result = s3_client.list_objects_v2(Bucket=S3_BUCKET,
+                                               Prefix=f'{get_tf_versions_s3_root()}{version}/')
+            LOG.info(f"result:{result}")
+            for obj in result.get('Contents', []):
+                key = obj['Key']
+                LOG.info(f"key:{key}")
+                if key.endswith('.OPTION'):
+                    # Extract filename prefix until the first period
+                    filename = key.split('/')[-1]
+                    option_prefix = filename.split('.')[0]
+                    option_prefix = option_prefix.removeprefix('sliderule-asg-')
+                    asg_cfgs.append(option_prefix)
+            LOG.info(f"version:{version} asg_cfgs:{asg_cfgs}")
+            all_versions_asg_cfgs[version] = asg_cfgs
+
+    except botocore.exceptions.NoCredentialsError:
+        LOG.error("No AWS credentials found.")
+        
+    except botocore.exceptions.PartialCredentialsError:
+        LOG.error("Incomplete AWS credentials provided.")
+        
+    except botocore.exceptions.ClientError as e:
+        # You can further inspect the error response to tailor the log message
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        LOG.error(f"AWS Client Error ({error_code}): {error_message}")
+    except Exception as e:
+        LOG.exception(f"get_asg_cfgs_for_all_versions caught exception: {repr(e)}")
+    
+    LOG.info(f"all_versions_asg_cfgs: {all_versions_asg_cfgs}")
+    return all_versions_asg_cfgs
+
 
 def get_last_part_of_prefix(prefix):
     # Split the prefix by '/' and get the second last segment
@@ -1669,20 +1723,32 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         else:
             versions = get_versions_for_org(get_s3_client(),request.name)
         sorted_versions = sort_versions(versions)
-        return ps_server_pb2.GetVersionsRsp(versions=sorted_versions)
+        return ps_server_pb2.VersionsRsp(versions=sorted_versions)
+
+    def GetAsgCfgs(self, request, context):
+        '''
+        This is the list of AutoScalingGroup Configuration terraform files available in s3
+        with the extension .OPTION
+        '''
+        all_versions_asg_cfgs = get_asg_cfgs_for_all_versions(get_s3_client())
+        asg_cfg_list = [
+            ps_server_pb2.AsgCfg(version=version, asg_cfg_options=options)
+            for version, options in all_versions_asg_cfgs.items()
+        ]
+        return ps_server_pb2.AsgCfgsRsp(asg_cfg=asg_cfg_list)
 
     def GetCurrentSetUpCfg(self,request,context):
         '''
         This is the version of terraform files setup for the Org's cluster
         '''
         setup_cfg = read_SetUpCfg(request.name)
-        return ps_server_pb2.GetCurrentSetUpCfgRsp(setup_cfg=setup_cfg)
+        return ps_server_pb2.CurrentSetUpCfgRsp(setup_cfg=setup_cfg)
 
     # these are the pkg versions obtained from the container
     def GetPSVersions(self, request, context):
         ps_server_versions = get_ps_versions()
         LOG.debug(f'ps server versions:{ps_server_versions}')
-        return ps_server_pb2.GetPSVersionsRsp(ps_versions=ps_server_versions)
+        return ps_server_pb2.PSVersionsRsp(ps_versions=ps_server_versions)
 
     def Update(self, request, context):  ## This is called by GRPC framework
         LOG.info(f'Update domain:{get_domain_env()} TERRAFORM_CLI:{get_terraform_cli()}')
