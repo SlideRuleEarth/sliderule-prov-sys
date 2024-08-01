@@ -546,16 +546,16 @@ def get_asg_cfgs_for_all_versions():
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
-            LOG.info("Calling GetAsgCfgs")
+            #LOG.info("Calling GetAsgCfgs")
             asg_cfgs_rsp = stub.GetAsgCfgs(ps_server_pb2.AsgCfgsReq())
-            LOG.info(f"asg_cfgs_rsp: {asg_cfgs_rsp}")
+            #LOG.info(f"asg_cfgs_rsp: {asg_cfgs_rsp}")
 
             # Parse the response
             asg_cfgs_dict = {}
             for asg_cfg in asg_cfgs_rsp.asg_cfg:
                 version = asg_cfg.version
                 options = list(asg_cfg.asg_cfg_options)
-                LOG.info(f"Version: {version}, Options: {options}")
+                #LOG.info(f"Version: {version}, Options: {options}")
                 asg_cfgs_dict[version] = options
 
             return asg_cfgs_dict
@@ -566,16 +566,15 @@ def get_asg_cfgs_for_version(current_version):
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
-            LOG.info("Calling GetAsgCfgs")
             asg_cfgs_rsp = stub.GetAsgCfgs(ps_server_pb2.AsgCfgsReq())
-            LOG.info(f"asg_cfgs_rsp: {asg_cfgs_rsp}")
+            #LOG.info(f"asg_cfgs_rsp: {asg_cfgs_rsp}")
 
             # Parse the response
             asg_cfgs_dict = {}
             for asg_cfg in asg_cfgs_rsp.asg_cfg:
                 version = asg_cfg.version
                 options = list(asg_cfg.asg_cfg_options)
-                LOG.info(f"Version: {version}, Options: {options}")
+                #LOG.info(f"Version: {version}, Options: {options}")
                 asg_cfgs_dict[version] = options
 
             return asg_cfgs_dict[current_version]

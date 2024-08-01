@@ -120,19 +120,18 @@ class OrgAccountCfgForm(ModelForm):
     version = forms.ChoiceField(widget=forms.Select(attrs={'id': 'version'}))
     is_public = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'id': 'is_public'}))
     spot_allocation_strategy = forms.ChoiceField(widget=forms.Select(attrs={'id': 'spot_allocation_strategy'}))
-    asg_cfg = forms.ChoiceField(widget=forms.Select(attrs={'id': 'asg_cfg'}))  # Add this line
+    asg_cfg = forms.ChoiceField(required=False,widget=forms.Select(attrs={'id': 'asg_cfg'}))  # Add this line
     def __init__(self, *args, **kwargs):
         available_versions = kwargs.pop('available_versions', None)
         available_asg_cfgs = kwargs.pop('available_asg_cfgs', None)
-        LOG.info(f'available_asg_cfgs: {available_asg_cfgs}')
         super().__init__(*args, **kwargs)
         if available_versions:
             self.fields['version'].choices = [(v, v) for v in available_versions]
         if available_asg_cfgs:
-            available_asg_cfgs_by_version = available_asg_cfgs.get(self.instance.version, {})
-            self.fields['asg_cfg'].choices = [(v, v) for v in available_asg_cfgs_by_version]
+            self.fields['asg_cfg'].choices = [(cfg, cfg) for cfg in available_asg_cfgs]
         max_value = OrgAccount.ABS_MAX_NODES
         width = len(str(max_value))
+        self.fields['asg_cfg'].choices = []  # Initially empty
         self.fields['min_node_cap'].widget = NumberInput(attrs={'style': f'width: {width}em'})
         self.fields['max_node_cap'].widget = NumberInput(attrs={'style': f'width: {width}em'})
         self.fields['spot_allocation_strategy'].choices = [

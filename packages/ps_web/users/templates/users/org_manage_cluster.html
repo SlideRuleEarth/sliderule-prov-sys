@@ -507,9 +507,9 @@
         const activePS_cmd = "{{ cluster.active_ps_cmd }}";
         const isDeployed = "{{ cluster.is_deployed }}" === "True";
         const destroyWhenNoNodes = "{{ org.destroy_when_no_nodes }}"
-        const asgCfgSelect = document.getElementById('asg_cfg');
-        const asgCfgsByVersion = "{{ asg_cfgs_by_version }}";
-
+        const asgCfgField = document.getElementById('asg_cfg');
+        const asgCfgsByVersion = "";
+        const cfg_form = document.getElementById('configure-form');
         convertedDestroyWhenNoNodes = destroyWhenNoNodes.toLowerCase() === "true";
         minNodeCap = "{{ org.min_node_cap }}"
         const utcTimes = document.querySelectorAll('.utc-time');
@@ -518,33 +518,82 @@
             utcTimeElement.textContent = utcTime.toLocaleString();
         });
 
-        let deploying = ((activePS_cmd === 'Update') || (activePS_cmd === 'Deploy'));
-        // Note: activePS_cmd === 'Deploy' is deprecated so we need another way to tell 
-        // if coming up from scratch vs updating running cluster
+        let deploying = (activePS_cmd === 'Update');
+        // coming up from scratch vs updating running cluster
         // validVersion will be None if the cluster was previously down and now being deployed
         let validVersion = (clusterVersion !== null && clusterVersion !== undefined && clusterVersion !== 'None');
         let checkState = (isDeployed || (deploying && validVersion));
 
-        function getAsgConfigs(version) {
-            asgCfgSelect.innerHTML = ''; // Clear existing options
-            asgCfgsByVersion[version].forEach(asg_cfg => {
-                const option = document.createElement('option');
-                option.value = asg_cfg;
-                option.textContent = asg_cfg;
-                asgCfgSelect.appendChild(option);
-            });                  
+        async function fetchAndConfigure(version) {
+            try {
+                const response = await fetch("{% url 'get-asg-configs' %}");
+                const asgCfgsByVersion = await response.json();
+                
+                //console.log('Fetched data type:', typeof asgCfgsByVersion);
+                //console.log('Fetched data:', asgCfgsByVersion);
+                
+                if (typeof asgCfgsByVersion === 'object' && !Array.isArray(asgCfgsByVersion)) {
+                    //console.log('All keys in fetched asgCfgsByVersion:', Object.keys(asgCfgsByVersion));
+                    getAsgConfigs(version, asgCfgsByVersion);
+                } else {
+                    console.error('Fetched data is not an object:', asgCfgsByVersion);
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
         }
-        getAsgConfigs(versionField.value);
+
+        function getAsgConfigs(version, asgCfgsByVersion) {
+            //console.log('getAsgConfigs called');
+            //console.log('getAsgConfigs asgCfgsByVersion:', asgCfgsByVersion);
+            //console.log('getAsgConfigs version:', version);
+
+            //console.log('All keys in asgCfgsByVersion:', Object.keys(asgCfgsByVersion));
+
+            if (asgCfgsByVersion && asgCfgsByVersion.hasOwnProperty(version)) {
+                //console.log('Found configurations for version:', version);
+                asgCfgField.innerHTML = ''; // Clear existing options
+
+                if (Array.isArray(asgCfgsByVersion[version])) {
+                    asgCfgsByVersion[version].forEach(asg_cfg => {
+                        const option = document.createElement('option');
+                        option.value = asg_cfg;
+                        option.textContent = asg_cfg;
+                        asgCfgField.appendChild(option);
+                    });
+                    } else {
+                    console.error(`Expected an array but got ${typeof asgCfgsByVersion[version]} for version ${version}`);
+                }
+            } else {
+                console.warn(`No configurations found for version ${version}`);
+                const option = document.createElement('option');
+                option.value = 'None';
+                option.textContent = 'None';
+                asgCfgField.appendChild(option);
+            }
+            //console.log('asgCfgsByVersion[version]:', asgCfgsByVersion[version]);
+        }
+        fetchAndConfigure(versionField.value);
         versionField.addEventListener("change", function() {
             // show if changing is_public or version when deployed or deploying
             selectedVersion = versionField.value
+            //console.log('Event Listener selectedVersion:', selectedVersion);
             if (checkState) {
                 if (selectedVersion !== clusterVersion) {
                     version_is_public_Warning.classList.remove("d-none");
                 } else {
                     version_is_public_Warning.classList.add("d-none");
                 }
-                getAsgConfigs(selectedVersion);
+            }
+            fetchAndConfigure(selectedVersion);
+        });
+
+        cfg_form.addEventListener('submit', function(event) {
+            if (selectedVersion) {
+                // Update the cfg_form action URL with the selected version as a query parameter
+                const originalAction = cfg_form.getAttribute('action');
+                const newAction = `${originalAction}?version=${selectedVersion}`;
+                cfg_form.setAttribute('action', newAction);
             }
         });
 
