@@ -96,7 +96,8 @@ message SetUpReq {
   bool    is_public = 3;
   string  now       = 4;
   string  spot_allocation_strategy = 5;
-  double  spot_max_price = 6; 
+  double  spot_max_price = 6;
+  string  asg_cfg = 7; 
 }
 
 // The TearDown Request message 

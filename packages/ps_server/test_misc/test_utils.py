@@ -9,6 +9,7 @@ from botocore.exceptions import NoCredentialsError
 from google.protobuf.json_format import MessageToDict
 from google.protobuf import json_format
 from datetime import date, datetime, timedelta, timezone, tzinfo
+import hashlib
 
 import time
 import requests
@@ -286,7 +287,7 @@ def verify_rsp_generator(rrsp_gen, name, ps_cmd,  logger):
 def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, name, logger):
 
     assert bucket_exists(s3_client, s3_bucket)
-    rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,name=name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"),spot_allocation_strategy='lowest-price',spot_max_price=0.17)
+    rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,name=name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"),spot_allocation_strategy='lowest-price',spot_max_price=0.17,asg_cfg='None')
 
     cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(rrsp_gen,name,'SetUp',logger)
 
@@ -426,3 +427,15 @@ def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key,logger):
 
 def have_same_elements(list1, list2):
     return set(list1) == set(list2)
+
+
+def files_are_identical(file1_path, file2_path):
+    def compute_md5(file_path):
+        hash_md5 = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    return compute_md5(file1_path) == compute_md5(file2_path)
+

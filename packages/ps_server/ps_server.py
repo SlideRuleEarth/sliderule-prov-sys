@@ -659,17 +659,17 @@ def get_asg_cfgs_for_all_versions(s3_client):
             asg_cfgs = []
             result = s3_client.list_objects_v2(Bucket=S3_BUCKET,
                                                Prefix=f'{get_tf_versions_s3_root()}{version}/')
-            LOG.info(f"result:{result}")
+            #LOG.info(f"result:{result}")
             for obj in result.get('Contents', []):
                 key = obj['Key']
-                LOG.info(f"key:{key}")
+                #LOG.info(f"key:{key}")
                 if key.endswith('.OPTION'):
                     # Extract filename prefix until the first period
                     filename = key.split('/')[-1]
                     option_prefix = filename.split('.')[0]
                     option_prefix = option_prefix.removeprefix('sliderule-asg-')
                     asg_cfgs.append(option_prefix)
-            LOG.info(f"version:{version} asg_cfgs:{asg_cfgs}")
+            #LOG.info(f"version:{version} asg_cfgs:{asg_cfgs}")
             all_versions_asg_cfgs[version] = asg_cfgs
 
     except botocore.exceptions.NoCredentialsError:
@@ -779,7 +779,7 @@ def write_SetUpCfg(name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price):
+def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
     LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
@@ -790,6 +790,7 @@ def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max
         setup_cfg.now = now
         setup_cfg.spot_allocation_strategy = spot_allocation_strategy
         setup_cfg.spot_max_price = spot_max_price
+        setup_cfg.asg_cfg = asg_cfg
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
         write_SetUpCfg(name, setup_cfg)
     except Exception as e:
@@ -1388,7 +1389,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             LOG.exception(f'Exception:{e}')
             raise e
 
-    def setup_terraform_env(self, s3_client, name, version, is_public, now, spot_allocation_strategy, spot_max_price):
+    def setup_terraform_env(self, s3_client, name, version, is_public, now, spot_allocation_strategy, spot_max_price,asg_cfg):
         LOG.info(f"Start SetUp of provision environment for org:{name} version:{version}")
         st = datetime.now(timezone.utc)
         try:
@@ -1413,18 +1414,23 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     setup_cfg.now = now
                     setup_cfg.spot_allocation_strategy = spot_allocation_strategy
                     setup_cfg.spot_max_price = spot_max_price
+                    setup_cfg.asg_cfg = asg_cfg
                 except Exception as e:
                     emsg = (f" Processing SetUp {name} cluster caught this exception creating tf_dir: ")
                     LOG.exception(emsg)
                 try:
                     write_SetUpCfg(name, setup_cfg)
+                    if((asg_cfg != 'None') and (asg_cfg != '')):
+                        asg_cfg_src_file_path = os.path.join(tf_dir, 'sliderule-asg-' + asg_cfg + '.tf.OPTION')
+                        asg_cfg_dst_file_path = os.path.join(tf_dir, 'sliderule-asg.tf')
+                        yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["cp", asg_cfg_src_file_path, asg_cfg_dst_file_path])
                     yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["ls", tf_dir])
                 except subprocess.CalledProcessError as e:
                     # expect to see this--> "ls: cannot access {tf_dir}: No such file or directory"
                     LOG.info(f"terraform folder {tf_dir} do not exist expect to see this--> 'ls: cannot access {tf_dir}: No such file or directory' in e:{e}")
             yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
             self.get_specific_tf_version_files_from_s3(s3_client, name, version)       
-            update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price)
+            update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price, asg_cfg)
             yield from self.execute_cmd          (name=name, ps_cmd='SetUp',    cmd_args=["ls", '-al', tf_dir])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["init"])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["validate"])
@@ -1707,7 +1713,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def SetUp(self, request, context):
         LOG.info(f"SetUp request:{MessageToString(request)} ")
         s3_client = get_s3_client()
-        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now, spot_allocation_strategy=request.spot_allocation_strategy, spot_max_price=request.spot_max_price)
+        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now, spot_allocation_strategy=request.spot_allocation_strategy, spot_max_price=request.spot_max_price,asg_cfg=request.asg_cfg)
 
     def TearDown(self, request, context):
         s3_client = get_s3_client()
@@ -1747,7 +1753,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     # these are the pkg versions obtained from the container
     def GetPSVersions(self, request, context):
         ps_server_versions = get_ps_versions()
-        LOG.debug(f'ps server versions:{ps_server_versions}')
+        LOG.info(f'ps server versions:{ps_server_versions}')
         return ps_server_pb2.PSVersionsRsp(ps_versions=ps_server_versions)
 
     def Update(self, request, context):  ## This is called by GRPC framework

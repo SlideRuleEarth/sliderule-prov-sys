@@ -1435,7 +1435,11 @@ def process_SetUp_cmd(orgAccountObj):
                     name=orgAccountObj.name,
                     version=orgAccountObj.version,
                     is_public=orgAccountObj.is_public,
-                    now=datetime.now(timezone.utc).strftime(FMT)),
+                    now=datetime.now(timezone.utc).strftime(FMT),
+                    spot_allocation_strategy=orgAccountObj.spot_allocation_strategy,
+                    spot_max_price=orgAccountObj.spot_max_price,
+                    asg_cfg=orgAccountObj.asg_cfg,
+                    ),
                     timeout=timeout)
             done = False
             setup_occurred = True

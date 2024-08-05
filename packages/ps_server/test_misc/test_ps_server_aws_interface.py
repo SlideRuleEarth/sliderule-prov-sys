@@ -13,7 +13,7 @@ from unittest.mock import patch
 from google.protobuf.text_format import MessageToString
 from google.protobuf import json_format
 from ps_server import ps_server_pb2,upload_current_tf_files_to_s3,get_terraform_dir,download_s3_folder,delete_folder_from_s3,get_versions_for_org,sort_versions,SETUP_JSON_FILE,get_cluster_root_dir
-from test_utils import run_subprocess_command, bucket_exists, s3_folder_exist,verify_rsp_generator,terraform_teardown 
+from test_utils import run_subprocess_command, bucket_exists, s3_folder_exist,verify_rsp_generator,terraform_teardown,files_are_identical 
 
 # discover the src directory to import the file being tested
 parent_dir = pathlib.Path(__file__).parent.resolve()
@@ -173,49 +173,82 @@ def test_download_dir_when_deployed(setup_logging, s3, get_S3_BUCKET, test_name,
     # must leave terraform env as we found it so other tests don't fail because of this test
     assert terraform_teardown(ps_server_cntrl=control_instance, s3_client=s3, s3_bucket=get_S3_BUCKET, name=test_name, logger=setup_logging)
 
-#@pytest.mark.dev 
-@pytest.mark.parametrize("version", ['v3', 'latest'])
-def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_name, control_instance, version):
+@pytest.mark.dev 
+@pytest.mark.parametrize(
+    "version, asg_cfg", 
+    [
+        ('v3', ''), 
+        ('latest', ''), 
+        ('unstable', ''),
+        ('unstable', 'None'),
+        ('unstable', 'aarch64'),
+        ('unstable', 'aarch64_pytorch'),
+    ]
+)
+def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_name, control_instance, version, asg_cfg):
+    '''
+        This tests the setup_terraform_env and teardown_terraform_env functions in the ps_server module
+        The ps_server will copy the terraform files from the selected version to the terraform directory
+        Then it will copy the selected asg_cfg file from sliderule-asg-<asg_cfg>.tf.OPTION to sliderule-asg.tf
+        In order to verify if the proper asg_cfg is being used we cheat and add a comment at the top of the files 
+        with the name of the file.  This way we can verify that the correct file was copied.
+    '''
     s3_client = s3
     s3_bucket = get_S3_BUCKET
     logger = setup_logging
     assert bucket_exists(s3_client, s3_bucket)  
     assert not s3_folder_exist(logger, s3_client, s3_bucket, f'prov-sys/localhost/current_cluster_tf_by_org/{test_name}') 
     
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.setup_terraform_env(s3_client, test_name, version, is_public=False, now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"),spot_allocation_strategy='lowest-price',spot_max_price=0.16 ),test_name,'SetUp',logger)
+    cnt, done, stop_cnt, exc_cnt, error_cnt, stdout, stderr = verify_rsp_generator(
+        control_instance.setup_terraform_env(
+            s3_client, 
+            test_name, 
+            version, 
+            is_public=False, 
+            now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"), 
+            spot_allocation_strategy='lowest-price', 
+            spot_max_price=0.16, 
+            asg_cfg=asg_cfg 
+        ), 
+        test_name, 
+        'SetUp', 
+        logger
+    )
+    
     logger.info(f'done with setup_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
-    # normal exit shows this message
     assert 'unit-test-org SetUp Completed' in stdout
-    assert stderr==''
-    assert exc_cnt==0 
-    assert stop_cnt==0
-    assert error_cnt==0
+    assert stderr == ''
+    assert exc_cnt == 0 
+    assert stop_cnt == 0
+    assert error_cnt == 0
     assert done
-    # first time it creates the SetUp.json file so more iters required
-    #assert ((cnt==22) or (cnt==16) or (cnt==26) or (cnt==19) or (cnt==20) or (cnt==19)) # this is the number of times the next function should be called for the 'SetUp' command
-    assert cnt>15
+    assert cnt > 15
+
     path = f'/ps_server/{test_name}/terraform'
-    returncode,stdout_lns,stderr_lns = run_subprocess_command(['ls', '-al', path],logger)
+    returncode, stdout_lns, stderr_lns = run_subprocess_command(['ls', '-al', path], logger)
     assert returncode == 0
     logger.info(f'path:{path} stdout_lns:{stdout_lns}')
-    # Iterate over the list and check for the substring
-    in_output = False
-    for entry in stdout_lns:
-        if 'vpc.tf' in entry:
-            in_output = True
+    
+    in_output = any('vpc.tf' in entry for entry in stdout_lns)
     assert in_output
     assert os.path.isdir(get_cluster_root_dir(test_name))
 
-    cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(control_instance.teardown_terraform_env(s3_client, test_name),test_name,'TearDown',logger)
+    if version == 'unstable' and asg_cfg != 'None' and asg_cfg != '':
+        assert files_are_identical(f'{path}/sliderule-asg-{asg_cfg}.tf.OPTION', f'{path}/sliderule-asg.tf')
+
+    cnt, done, stop_cnt, exc_cnt, error_cnt, stdout, stderr = verify_rsp_generator(
+        control_instance.teardown_terraform_env(s3_client, test_name),
+        test_name,
+        'TearDown',
+        logger
+    )
+    
     logger.info(f'done with teardown_terraform_env cnt:{cnt} exception_cnt:{exc_cnt} stop_exception_cnt:{stop_cnt}')
     assert not os.path.isdir(get_cluster_root_dir(test_name))
-
-    # normal exit shows this message
     assert 'unit-test-org TearDown Completed' in stdout
-    assert stderr==''
-    assert exc_cnt==0 
-    assert stop_cnt==0
-    assert error_cnt==0
+    assert stderr == ''
+    assert exc_cnt == 0 
+    assert stop_cnt == 0
+    assert error_cnt == 0
     assert done
-    assert cnt==10 # this is the number of times the next function should be called for the 'TearDown' command
-
+    assert cnt == 10

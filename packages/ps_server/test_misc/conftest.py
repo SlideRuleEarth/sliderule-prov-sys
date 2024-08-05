@@ -137,6 +137,7 @@ def SetUpReq(test_name,setup_logging,request):  # You can provide a default valu
         now=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         spot_allocation_strategy='lowest-price',
         spot_max_price=0.17,
+        asg_cfg='None'
     )
     return setup_request
 

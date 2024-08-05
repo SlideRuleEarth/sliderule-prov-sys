@@ -314,3 +314,8 @@ def test_read_PermittedOrg_excluded(setup_logging,s3,terraform_env,test_name):
     assert ('latest' not in versions_for_org)
     assert ('v3' in versions_for_org)
     assert ('unstable' in versions_for_org)
+    
+#@pytest.mark.dev
+@pytest.mark.parametrize('terraform_env', [('unstable',False),('v3',False)], indirect=True)
+def test_read_SetUpCfg_is_public_False(setup_logging,terraform_env,test_name):
+    logger = setup_logging

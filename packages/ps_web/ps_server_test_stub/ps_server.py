@@ -177,7 +177,7 @@ def write_SetUpCfg(name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price):
+def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
     LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
@@ -188,6 +188,7 @@ def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max
         setup_cfg.now = now
         setup_cfg.spot_allocation_strategy = spot_allocation_strategy
         setup_cfg.spot_max_price = spot_max_price
+        setup_cfg.asg_cfg = asg_cfg
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
         write_SetUpCfg(name, setup_cfg)
     except Exception as e:
