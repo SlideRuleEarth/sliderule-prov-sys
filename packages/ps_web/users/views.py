@@ -20,7 +20,7 @@ from django.db.transaction import get_autocommit
 from .models import Cluster, GranChoice, OrgAccount, OrgCost, Membership, User, OrgNumNode, PsCmdResult, OwnerPSCmd
 from .forms import MembershipForm, OrgAccountForm, OrgAccountCfgForm, OrgProfileForm, UserProfileForm,OrgNumNodeForm
 from .utils import has_admin_privilege,user_in_one_of_these_groups,disable_provisioning
-from .tasks import get_db_org_cost,get_versions_for_org, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs,reconcile_org
+from .tasks import get_db_org_cost,get_versions_for_org, get_asg_cfgs_for_all_versions, update_burn_rates, update_all_burn_rates, getGranChoice, sort_ONN_by_nn_exp,enqueue_process_state_change,remove_num_node_requests,get_PROVISIONING_DISABLED,process_num_nodes_api,update_ddt,create_all_forecasts,get_scheduled_jobs,reconcile_org,get_asg_cfgs_for_version
 from django.core.mail import send_mail
 from django.conf import settings
 from django.forms import formset_factory
@@ -41,6 +41,8 @@ from allauth.account.decorators import verified_email_required
 from oauth2_provider.models import Application
 from django_rq import get_queue,enqueue
 import requests
+from django.http import JsonResponse
+
 
 # logging.basicConfig(
 #     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -167,6 +169,13 @@ def orgManageMembers(request, pk):
     else:
         messages.error(request,"Unauthorized access")
         return HttpResponse('Unauthorized', status=401)
+
+@login_required(login_url='account_login')
+@verified_email_required
+def getAsgConfigs(request):
+    LOG.info(f"{request.method} {request.user.username} get_asg_configs_view")
+    data = get_asg_cfgs_for_all_versions()
+    return JsonResponse(data)
 
 @login_required(login_url='account_login')
 @verified_email_required
@@ -418,46 +427,69 @@ def clearActiveNumNodeReq(request, pk):
 def orgConfigure(request, pk):
     orgAccountObj = get_orgAccountObj(pk)
     LOG.info(f"{request.method} {orgAccountObj.name}")
-    updated = False
-    if has_admin_privilege(user=request.user,orgAccountObj=orgAccountObj):
-        if request.method == 'POST':
-            try:
-                # USING an Unbound form and setting the object explicitly one field at a time!
-                config_form = OrgAccountCfgForm(request.POST, instance=orgAccountObj, available_versions=get_versions_for_org(orgAccountObj.name))
-                emsg = ''
-                if(config_form.is_valid()):
-                    for field, value in config_form.cleaned_data.items():
-                        LOG.info(f"Field: {field}, Value: {value}")
-                    LOG.info(f"orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes}")
-                    config_form.save()
-                    # Force the cluster env to be reinitialized
-                    clusterObj = Cluster.objects.get(org=orgAccountObj)
-                    clusterObj.provision_env_ready = False
-                    clusterObj.save()
-                    LOG.info(f"saved clusterObj for orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} ")
-                    messages.success(request,f'org {orgAccountObj.name} cfg updated successfully')
-                    enqueue_process_state_change(orgAccountObj.name)
-                else:
-                    emsg = f"Input Errors:{config_form.errors.as_text}"
-                    messages.warning(request, emsg)
-                    LOG.info(f"Did not save org_config for {orgAccountObj.name} {emsg}")
-                    LOG.info("These are the fields as submitted:")
-                    for field, value in config_form.data.items():
-                        LOG.info(f"Field: {field} - Value: {value}")            
-            except Exception as e:
-                LOG.exception("caught exception:")
-                emsg = "Server ERROR"
-                messages.error(request, emsg)
-        orgAccountObj = get_orgAccountObj(pk)
 
+    if has_admin_privilege(user=request.user, orgAccountObj=orgAccountObj):
+        try:
+            available_versions = get_versions_for_org(orgAccountObj.name)
+            all_available_asg_cfgs = get_asg_cfgs_for_all_versions()
+            if request.method == 'POST':
+                version = request.POST.get('version', None)
+                post_data = request.POST.copy()  # Create a mutable copy of the POST data
+                if not post_data.get('asg_cfg'):
+                    post_data['asg_cfg'] = 'None'  # Set default value if asg_cfg is empty
+
+                # Create the form with modified POST data and the necessary choices
+                config_form = OrgAccountCfgForm(
+                    post_data, 
+                    instance=orgAccountObj, 
+                    available_versions=available_versions, 
+                    available_asg_cfgs=all_available_asg_cfgs.get(version, [])
+                )
+                if version and version in all_available_asg_cfgs:
+                    LOG.info('config_form.fields[asg_cfg]: %s', config_form.fields['asg_cfg'])
+                    config_form.fields['asg_cfg'].choices = [('None', 'None')] + [(v, v) for v in all_available_asg_cfgs[version]]
+                    emsg = ''
+   
+                    if config_form.is_valid():
+                        for field, value in config_form.cleaned_data.items():
+                            LOG.info(f"Field: {field}, Value: {value}")
+                        LOG.info(f"orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes}")
+                        config_form.save()
+                        # Force the cluster env to be reinitialized
+                        clusterObj = Cluster.objects.get(org=orgAccountObj)
+                        clusterObj.provision_env_ready = False
+                        clusterObj.save()
+                        LOG.info(f"saved clusterObj for orgAccountObj:{orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} ")
+                        messages.success(request, f'org {orgAccountObj.name} cfg updated successfully')
+                        enqueue_process_state_change(orgAccountObj.name)
+                    else:
+                        emsg = f"Input Errors:{config_form.errors.as_text()}"
+                        messages.warning(request, emsg)
+                        LOG.info(f"Did not save org_config for {orgAccountObj.name} {emsg}")
+                        LOG.info("These are the fields as submitted:")
+                        for field, value in config_form.data.items():
+                            if field != 'csrfmiddlewaretoken':
+                                LOG.info(f"Field: {field} - Value: {value}")
+                        messages.error(request, emsg)
+            else:
+                config_form = OrgAccountCfgForm(
+                    instance=orgAccountObj, 
+                    available_versions=available_versions, 
+                    available_asg_cfgs=all_available_asg_cfgs[orgAccountObj.version]
+                )
+                if version and version in all_available_asg_cfgs:
+                    config_form.fields['asg_cfg'].choices = [(v, v) for v in all_available_asg_cfgs[version]]
+        except Exception as e:
+            LOG.exception("caught exception:")
+            emsg = "Server ERROR"
         LOG.info(f"{request.user.username} orgAccountObj:{request.method} {orgAccountObj.id} name:{orgAccountObj.name} is_public:{orgAccountObj.is_public} version:{orgAccountObj.version} min_node_cap:{orgAccountObj.min_node_cap} max_node_cap:{orgAccountObj.max_node_cap} allow_deploy_by_token:{orgAccountObj.allow_deploy_by_token} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes}")
         LOG.info("redirect to org-manage-cluster")
         for handler in LOG.handlers:
             handler.flush()
-        messages.info(request,f'org {orgAccountObj.name} cfg updated successfully')
         return redirect('org-manage-cluster',pk=orgAccountObj.id)
     else:
-        messages.error(request,"Unauthorized access")
+        LOG.warning(f"{request.user.username} {request.method} {orgAccountObj.name} UNAUTHORIZED")
+        messages.error(request, "Unauthorized access")
         return HttpResponse('Unauthorized', status=401)
 
 @login_required(login_url='account_login')

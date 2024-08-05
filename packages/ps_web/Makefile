@@ -5,14 +5,23 @@ PS_NGINX_DOCKER_TAG ?= dev
 NGINX_CONF ?= dev
 DOCKER_EXEC_OPTS ?=
 PS_WEB_SOURCE_DIR = $(ROOT)
-PS_SERVER_SOURCE_DIR = $(ROOT)/../ps_server
-PS_TEST_SOURCE_DIR = $(ROOT)/../test/prov-sys
+last_dir = $(shell basename $(ROOT))
+
+# Conditional setting of PS_TEST_DIR
+ifeq ($(last_dir),ps_server)
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)
+PS_SERVER_SOURCE_DIR = $(ROOT)
+else # is test/prov-sys
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)/../../test/prov-sys
+PS_SERVER_SOURCE_DIR = $(ROOT)/../../packages/ps_server
+endif
 ENVVER = $(shell git --git-dir ../../.git --work-tree . describe --abbrev --dirty --always --tags --long)
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 SITE_ID = 1
 PS_SERVER_DIR:=$(abspath $(PS_SERVER_SOURCE_DIR))
 PS_WEB_DIR:=$(abspath $(PS_WEB_SOURCE_DIR))
-PS_TEST_DIR:=$(abspath $(PS_TEST_SOURCE_DIR))
 
 all: docker ps-nginx-build-docker
 
@@ -180,3 +189,7 @@ help: ## That's me!
 	@printf "\033[37m%-30s\033[0m %s\n" "#----target--------------------description------------------------------------------------"
 	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo ENVVER:$(ENVVER)	
+	@echo PS_TEST_DIR:$(PS_TEST_DIR)
+	@echo LOCALSTACK_VOLUME_DIR:$(LOCALSTACK_VOLUME_DIR)
+	@echo ROOT:$(ROOT)
+	@echo last_dir:$(last_dir)

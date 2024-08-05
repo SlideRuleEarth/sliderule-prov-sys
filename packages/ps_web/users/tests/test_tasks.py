@@ -274,6 +274,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
         'provisioning_suspended': False,
         'spot_max_price': 0.15,
         'spot_allocation_strategy': 'lowest-price',
+        'asg_cfg': 'aarch64',
     }
     verify_org_configure(client=client,
                          data=form_data,
@@ -319,6 +320,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
         'provisioning_suspended': False,
         'spot_max_price': 0.15,
         'spot_allocation_strategy': 'lowest-price',
+        'asg_cfg': 'aarch64',
     }
     verify_org_configure(client=client,
                          data=form_data,
@@ -940,7 +942,7 @@ def test_get_current_version_after_setup(tasks_module,initialize_test_environ,ve
     assert setup_occurred == True # we set provision_env_ready to False above so we forced setup
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
     assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public    
@@ -966,7 +968,7 @@ def test_provision_env_ready(tasks_module_to_import,developer_TEST_USER,initiali
     assert setup_occurred  # fixture already did setup
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
     assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public

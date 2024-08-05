@@ -536,9 +536,48 @@ def get_versions_for_org(name):
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
-            versions_rsp = stub.GetVersions(ps_server_pb2.GetVersionsReq(name=name))
+            versions_rsp = stub.GetVersions(ps_server_pb2.VersionsReq(name=name))
             #LOG.info(f"versions_rsp:{versions_rsp}")
             return versions_rsp.versions
+    except Exception as e:
+        LOG.exception("caught exception:")
+
+def get_asg_cfgs_for_all_versions():
+    try:
+        with ps_client.create_client_channel("control") as channel:
+            stub = ps_server_pb2_grpc.ControlStub(channel)
+            #LOG.info("Calling GetAsgCfgs")
+            asg_cfgs_rsp = stub.GetAsgCfgs(ps_server_pb2.AsgCfgsReq())
+            #LOG.info(f"asg_cfgs_rsp: {asg_cfgs_rsp}")
+
+            # Parse the response
+            asg_cfgs_dict = {}
+            for asg_cfg in asg_cfgs_rsp.asg_cfg:
+                version = asg_cfg.version
+                options = list(asg_cfg.asg_cfg_options)
+                #LOG.info(f"Version: {version}, Options: {options}")
+                asg_cfgs_dict[version] = options
+
+            return asg_cfgs_dict
+    except Exception as e:
+        LOG.exception("caught exception:")
+
+def get_asg_cfgs_for_version(current_version):
+    try:
+        with ps_client.create_client_channel("control") as channel:
+            stub = ps_server_pb2_grpc.ControlStub(channel)
+            asg_cfgs_rsp = stub.GetAsgCfgs(ps_server_pb2.AsgCfgsReq())
+            #LOG.info(f"asg_cfgs_rsp: {asg_cfgs_rsp}")
+
+            # Parse the response
+            asg_cfgs_dict = {}
+            for asg_cfg in asg_cfgs_rsp.asg_cfg:
+                version = asg_cfg.version
+                options = list(asg_cfg.asg_cfg_options)
+                #LOG.info(f"Version: {version}, Options: {options}")
+                asg_cfgs_dict[version] = options
+
+            return asg_cfgs_dict[current_version]
     except Exception as e:
         LOG.exception("caught exception:")
 
@@ -547,7 +586,7 @@ def get_ps_versions():
     try:
         with ps_client.create_client_channel("control") as channel:
             stub = ps_server_pb2_grpc.ControlStub(channel)
-            return stub.GetPSVersions(ps_server_pb2.GetPSVersionsReq()).ps_versions
+            return stub.GetPSVersions(ps_server_pb2.PSVersionsReq()).ps_versions
     except Exception as e:
         LOG.exception("caught exception:")
 
@@ -1396,7 +1435,11 @@ def process_SetUp_cmd(orgAccountObj):
                     name=orgAccountObj.name,
                     version=orgAccountObj.version,
                     is_public=orgAccountObj.is_public,
-                    now=datetime.now(timezone.utc).strftime(FMT)),
+                    now=datetime.now(timezone.utc).strftime(FMT),
+                    spot_allocation_strategy=orgAccountObj.spot_allocation_strategy,
+                    spot_max_price=orgAccountObj.spot_max_price,
+                    asg_cfg=orgAccountObj.asg_cfg,
+                    ),
                     timeout=timeout)
             done = False
             setup_occurred = True
@@ -1460,8 +1503,8 @@ def process_SetUp_cmd(orgAccountObj):
                         if not rrsp.ps_server_error:
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             clusterObj.provision_env_ready = True
-                            ps_server_pb2.GetCurrentSetUpCfgRsp()
-                            rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+                            ps_server_pb2.CurrentSetUpCfgRsp()
+                            rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
                             clusterObj.prov_env_version = rsp.setup_cfg.version
                             clusterObj.prov_env_is_public = rsp.setup_cfg.is_public
                             if rsp.setup_cfg.version != '':

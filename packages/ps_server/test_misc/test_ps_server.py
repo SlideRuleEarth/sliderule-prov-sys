@@ -11,7 +11,7 @@ from importlib import import_module
 from datetime import datetime, timezone, timedelta
 from decimal import *
 from google.protobuf.json_format import MessageToJson
-from ps_server import S3_BUCKET,ps_server_pb2,get_sorted_tm_cost,merge_ccrs,get_ps_versions,get_versions_for_org,read_SetUpCfg,ORGS_PERMITTED_JSON_FILE,get_domain_env,get_all_versions
+from ps_server import S3_BUCKET,ps_server_pb2,get_sorted_tm_cost,merge_ccrs,get_ps_versions,get_versions_for_org,read_SetUpCfg,ORGS_PERMITTED_JSON_FILE,get_domain_env,get_all_versions,get_asg_cfgs_for_all_versions
 from conftest import *
 from test_utils import *
 
@@ -223,6 +223,19 @@ def test_get_ps_versions(setup_logging):
     assert ('PS_SERVER_DOCKER_TAG=dev' in ps_versions)
     assert ('PS_SERVER_GIT_VERSION=' in ps_versions)
 
+@pytest.mark.dev
+def test_get_asg_cfgs_for_all_versions(setup_logging,s3):
+    logger = setup_logging
+    asg_cfgs = get_asg_cfgs_for_all_versions(s3_client=s3)
+    logger.info(f'asg_cfgs:{asg_cfgs}')
+    assert ('latest' in asg_cfgs)
+    assert ('v3' in asg_cfgs)
+    assert( 'aarch64' in asg_cfgs['unstable'])
+    assert( 'aarch64_pytorch' in asg_cfgs['unstable'])
+    assert( 'x86_64' in asg_cfgs['unstable'])
+    assert( 'x86_64_pytorch' in asg_cfgs['unstable'])
+
+
 #@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('v3',False),('latest',True)], indirect=True)
 def test_get_versions(setup_logging,terraform_env,s3,test_name):
@@ -301,3 +314,8 @@ def test_read_PermittedOrg_excluded(setup_logging,s3,terraform_env,test_name):
     assert ('latest' not in versions_for_org)
     assert ('v3' in versions_for_org)
     assert ('unstable' in versions_for_org)
+    
+#@pytest.mark.dev
+@pytest.mark.parametrize('terraform_env', [('unstable',False),('v3',False)], indirect=True)
+def test_read_SetUpCfg_is_public_False(setup_logging,terraform_env,test_name):
+    logger = setup_logging

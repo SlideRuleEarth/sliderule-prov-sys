@@ -4,8 +4,16 @@ PS_SERVER_DOCKER_TAG ?= dev
 PS_VERSION ?= dev
 ENVVER = $(shell git --git-dir ../../.git --work-tree . describe --abbrev --dirty --always --tags --long)
 DOCKER_EXEC_OPTS ?=
-PS_TEST_SOURCE_DIR = $(ROOT)/../test/prov-sys
-PS_TEST_DIR:=$(abspath $(PS_TEST_SOURCE_DIR))
+last_dir = $(shell basename $(ROOT))
+
+# Conditional setting of PS_TEST_DIR
+ifeq ($(last_dir),ps_server)
+PS_TEST_DIR = $(ROOT)
+LOCALSTACK_VOLUME_DIR = $(ROOT)/../../test/prov-sys
+else
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)
+endif
 
 all: docker
 
@@ -74,6 +82,7 @@ bld-and-run-unit-tests: down  # run the ps_server unit tests then exit
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export DOCKER_REPO=$(DOCKER_REPO) && \
 	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
+	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest --log-cli-level=ERROR && \
@@ -86,6 +95,7 @@ bld-and-run-unit-test-dev: down  # run the ps_server unit tests then exit
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export DOCKER_REPO=$(DOCKER_REPO) && \
 	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
+	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest -m "dev" --log-cli-level=ERROR && \
@@ -112,3 +122,6 @@ help: ## That's me!
 	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo ENVVER:$(ENVVER)
 	@echo PS_TEST_DIR:$(PS_TEST_DIR)
+	@echo LOCALSTACK_VOLUME_DIR:$(LOCALSTACK_VOLUME_DIR)
+	@echo ROOT:$(ROOT)
+	@echo last_dir:$(last_dir)

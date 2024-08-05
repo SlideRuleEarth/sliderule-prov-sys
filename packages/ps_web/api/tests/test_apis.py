@@ -520,6 +520,7 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
         'provisioning_suspended': False,
         'spot_max_price': 0.15,
         'spot_allocation_strategy': 'lowest-price',
+        'asg_cfg': 'aarch64',
     }
     time_now = datetime.now(timezone.utc)
     dt = time_now - timedelta(seconds=1)

@@ -40,6 +40,9 @@ import ps_server_pb2
 import ps_server_pb2_grpc
 from users.global_constants import *
 from django_rq import get_scheduler
+import time
+import requests
+import glob
 
 
 
@@ -999,7 +1002,7 @@ def call_SetUp(orgAccountObj):
         assert(f"{setup_req.name}" in stdout)
         assert(stderr == '')
         logger.info(f"SetUp stdout:{stdout}")
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
         logger.info(f"GetCurrentSetUpCfg rsp:{rsp}")
     assert(rsp is not None)
     assert(rsp.setup_cfg.name == setup_req.name)
@@ -1017,7 +1020,7 @@ def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
     logger.info(f"fake_sync_clusterObj_to_orgAccountObj orgAccountObj:{orgAccountObj.name}")
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
     assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public    
@@ -1117,3 +1120,10 @@ def extend_ObjCost(orgAccountObj, gran, tm_data, cost_data):
 
     # Logging
     logger.info(f"oc.ccr:{oc.ccr}")
+def upload_asg_cfg_files_to_s3(s3_client, local_dir, file_pattern, s3_bucket):
+    for file_path in glob.glob(os.path.join(local_dir, file_pattern)):
+        file_name = os.path.basename(file_path)
+        s3_key = os.path.join('prov-sys', 'cluster_tf_versions', 'latest', file_name)
+        with open(file_path, 'rb') as file_data:
+            s3_client.upload_fileobj(file_data, s3_bucket, s3_key)
+        print(f"Uploaded {file_name} to {s3_key}")
