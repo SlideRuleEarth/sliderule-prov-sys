@@ -434,6 +434,7 @@ def orgConfigure(request, pk):
             all_available_asg_cfgs = get_asg_cfgs_for_all_versions()
             if request.method == 'POST':
                 version = request.POST.get('version', None)
+                asg_cfg = request.POST.get('asg_cfg', None)
                 post_data = request.POST.copy()  # Create a mutable copy of the POST data
                 if not post_data.get('asg_cfg'):
                     post_data['asg_cfg'] = 'None'  # Set default value if asg_cfg is empty
@@ -443,9 +444,9 @@ def orgConfigure(request, pk):
                     post_data, 
                     instance=orgAccountObj, 
                     available_versions=available_versions, 
-                    available_asg_cfgs=all_available_asg_cfgs.get(version, [])
+                    available_asg_cfgs=all_available_asg_cfgs.get(version, []) # Get the available ASG configs for the selected version
                 )
-                if version and version in all_available_asg_cfgs:
+                if asg_cfg and asg_cfg in all_available_asg_cfgs:
                     LOG.info('config_form.fields[asg_cfg]: %s', config_form.fields['asg_cfg'])
                     config_form.fields['asg_cfg'].choices = [('None', 'None')] + [(v, v) for v in all_available_asg_cfgs[version]]
                     emsg = ''
@@ -477,7 +478,8 @@ def orgConfigure(request, pk):
                     available_versions=available_versions, 
                     available_asg_cfgs=all_available_asg_cfgs[orgAccountObj.version]
                 )
-                if version and version in all_available_asg_cfgs:
+                asg_cfg = None  # Ensure asg_cfg is initialized for GET requests
+                if asg_cfg and asg_cfg in all_available_asg_cfgs:
                     config_form.fields['asg_cfg'].choices = [(v, v) for v in all_available_asg_cfgs[version]]
         except Exception as e:
             LOG.exception("caught exception:")

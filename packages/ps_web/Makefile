@@ -160,6 +160,8 @@ bld-and-run-unit-tests: down # build and run the unit tests against a running de
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker logs ps-web && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage run -m pytest -k "not TasksTestWithPSServer" -m "not real_ps_server and not ps_disable" && \
 	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage html
 	make down

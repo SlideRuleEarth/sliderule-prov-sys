@@ -178,7 +178,7 @@ def write_SetUpCfg(name,setup_cfg):
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
 def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
-    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price}")
+    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price} asg_cfg:{asg_cfg}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
         LOG.info(f"FROM: {setup_cfg}")
@@ -364,7 +364,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         except KeyError:
             shared_Mock_Clusters.deployed_dict[request.name] = False
             shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
-        update_SetUpCfg(request.name, request.version, request.is_public, request.now, request.spot_allocation_strategy, request.spot_max_price)
+        update_SetUpCfg(request.name, request.version, request.is_public, request.now, request.spot_allocation_strategy, request.spot_max_price, request.asg_cfg)
         yield from self.FakeCMD(request,'SetUp')
 
     def GetCurrentSetUpCfg(self,request,context):

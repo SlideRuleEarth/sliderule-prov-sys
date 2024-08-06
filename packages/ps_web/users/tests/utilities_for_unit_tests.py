@@ -142,6 +142,7 @@ def create_test_user(first_name,last_name, email, username, password, verify=Non
     return new_user
 
 def is_in_messages(response,string_to_check,logger):
+    logger.info(f"response:{response}")
     messages = list(get_messages(response.wsgi_request))
     for message in messages:
         logger.info(f"message:{message}")   
@@ -1052,7 +1053,8 @@ def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key):
         logger.info(f"Successfully uploaded JSON to {s3_key} in bucket {s3_bucket}")
 
     except Exception as e:
-        logger.error(f"Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
+        connection_url = s3_client.meta.endpoint_url if hasattr(s3_client.meta, 'endpoint_url') else 'unknown'
+        logger.error(f"Connection URL: {connection_url}. Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
 
 def verify_upload(s3_client, s3_bucket, s3_key, original_json_string):
     """

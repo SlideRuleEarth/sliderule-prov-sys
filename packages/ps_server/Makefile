@@ -23,6 +23,10 @@ ps-server-clean-stage : # clean docker stage directory
 ps-server-stage : ps-server-clean-stage # stage the files for docker image
 	mkdir -p docker/ps-server/stage
 	# because we build latest and then tag it to PS_VERSION we use PS_VERSION here for PS_SERVER_DOCKER_TAG
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export DOCKER_REPO=$(DOCKER_REPO) && \
+	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	echo PS_SERVER_DOCKER_TAG=$(PS_VERSION) >> docker/ps-server/stage/.ps_server_versions
 	echo PS_SERVER_GIT_VERSION=$(ENVVER) >> docker/ps-server/stage/.ps_server_versions
 	cp docker/ps-server/docker-entrypoint.sh docker/ps-server/stage/
@@ -39,6 +43,8 @@ docker-no-cache : ps-server-stage  ## build the container no cache and tag it wi
 
 docker : ps-server-stage  ## build the container using cache and tag it with $(PS_SERVER_DOCKER_TAG) 
 	cd docker/ps-server && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker build --tag $(DOCKER_REPO)/sliderule-ps-server:$(PS_SERVER_DOCKER_TAG) . && \
 	rm -rf stage && echo ENVVER=$(ENVVER)		
 

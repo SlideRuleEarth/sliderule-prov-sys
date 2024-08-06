@@ -130,6 +130,7 @@ run-debug: docker-test ## run prov-sys locally
 
 unit-tests-local-stack: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
 	make down && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \
@@ -146,6 +147,7 @@ unit-tests-local-stack: docker-test ## run the web_server django unit tests agai
 
 unit-tests-local-stack-dev: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
 	make down && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \

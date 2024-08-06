@@ -780,7 +780,7 @@ def write_SetUpCfg(name,setup_cfg):
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
 def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
-    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
+    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price} asg_cfg:{asg_cfg}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
         LOG.info(f"FROM: {setup_cfg}")

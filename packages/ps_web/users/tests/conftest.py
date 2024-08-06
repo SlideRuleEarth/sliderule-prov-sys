@@ -1,5 +1,6 @@
 import pytest
 import boto3
+from botocore.client import Config  # Make sure to import Config
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -85,8 +86,16 @@ def redis_scheduled_jobs_setup(setup_logging):
 @pytest.fixture(scope="session")
 def s3(setup_logging):
     logger = setup_logging
+    logger.info(f'-------#####   using localstack s3   #####-----')
     # uses localstack
-    s3_client = boto3.client('s3', region_name='us-west-2',endpoint_url="http://localstack:4566")
+    s3_client = boto3.client(
+        's3', 
+        region_name='us-west-2',
+        endpoint_url="http://localstack:4566",
+        aws_access_key_id='dummy_access_key',
+        aws_secret_access_key='dummy_secret_key',
+        config=Config(signature_version='s3v4')
+        )
     yield s3_client
     logger.info(f'verify teardown of localstack s3 with s3_client:{s3_client} ')
 

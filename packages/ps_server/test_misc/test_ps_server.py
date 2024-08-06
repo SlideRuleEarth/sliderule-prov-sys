@@ -223,7 +223,7 @@ def test_get_ps_versions(setup_logging):
     assert ('PS_SERVER_DOCKER_TAG=dev' in ps_versions)
     assert ('PS_SERVER_GIT_VERSION=' in ps_versions)
 
-@pytest.mark.dev
+#@pytest.mark.dev
 def test_get_asg_cfgs_for_all_versions(setup_logging,s3):
     logger = setup_logging
     asg_cfgs = get_asg_cfgs_for_all_versions(s3_client=s3)
