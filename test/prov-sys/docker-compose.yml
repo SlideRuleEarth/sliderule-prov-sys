@@ -10,6 +10,7 @@ services:
       - DEBUG=${DEBUG-}
       - DOCKER_HOST=unix:///var/run/docker.sock
       - S3_TEST_FILES=/tmp/prov-sys/test_misc/cluster_tf_versions
+      - PS_TEST_DIR=${PS_TEST_DIR:?PS_TEST_DIR is not defined?!} # define it in .env file in cwd
     volumes:
       - "${PS_SERVER_SOURCE_DIR}/test_misc/cluster_tf_versions:/tmp/prov-sys/test_misc/cluster_tf_versions"
       - "${PS_TEST_DIR}/init_aws_localstack.py:/etc/localstack/init/ready.d/init-aws.sh"  # ready hook

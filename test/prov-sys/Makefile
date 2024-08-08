@@ -137,6 +137,7 @@ unit-tests-local-stack: docker-test ## run the web_server django unit tests agai
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	docker compose up --detach
 	sleep 3
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	docker exec -it ps-web coverage run -m pytest -m "not ps_server_stubbed and not recon_sim and not cost and not system and not ps_disable" $(PYTEST_ARGS) && \
 	docker exec -it ps-web coverage html
 	make down

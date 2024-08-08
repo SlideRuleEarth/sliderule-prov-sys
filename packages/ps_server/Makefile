@@ -116,7 +116,7 @@ unit-tests-dev: ## build and run ps-server with the dev marker
 down:
 	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
-	docker compose down --timeout 1
+	docker compose down 
 
 .PHONY : ps-server-clean-stage
 

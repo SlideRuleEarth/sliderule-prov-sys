@@ -153,10 +153,14 @@ docker-prune: ## clean up stale dangling docker images
 	docker system prune
 
 down:  ## bring down all the docker containers
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose down
 
 bld-and-run-unit-tests: down # build and run the unit tests against a running dev system then exit NOTE: for github actions the DOCKER_EXEC_OPTS is a null string
 	make ps-unit-test-build-docker && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker logs ps-web && \
