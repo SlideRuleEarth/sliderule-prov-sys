@@ -181,6 +181,7 @@ unit-tests-disable_provisioning: docker-test ## run the web_server django unit t
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	docker compose up --detach
 	sleep 3
 	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_success" && \
@@ -189,6 +190,7 @@ unit-tests-disable_provisioning: docker-test ## run the web_server django unit t
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	docker compose up --detach
 	sleep 3
 	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent" && \
@@ -197,6 +199,7 @@ unit-tests-disable_provisioning: docker-test ## run the web_server django unit t
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	docker compose up --detach
 	sleep 3
 	docker exec -it ps-web coverage run -m pytest -k "test_ps_web_view_disable_provisioning_success"
@@ -208,6 +211,7 @@ unit-tests-disable_provisioning: docker-test ## run the web_server django unit t
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	export PS_SERVER_PORT=50052 && \
 	export PS_SERVER_ALTERNATE_PORT=50051 && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	docker compose up --detach
 	sleep 3
 	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
@@ -219,6 +223,7 @@ unit-tests-disable_provisioning: docker-test ## run the web_server django unit t
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	export PS_SERVER_PORT=50051 && \
 	export PS_SERVER_ALTERNATE_PORT=50052 && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	docker compose up --detach
 	sleep 3
 	docker exec -it ps-web coverage run -m pytest -k "test_disable_provisioning_idempotent"
