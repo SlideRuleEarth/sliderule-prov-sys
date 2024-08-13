@@ -151,6 +151,9 @@ class OrgAccount(models.Model):
     provisioning_suspended = models.BooleanField(editable=True,default=False)
     num_setup_cmd = models.BigIntegerField(editable=True,default=0)
     num_setup_cmd_successful = models.BigIntegerField(editable=True,default=0)
+    spot_max_price = models.FloatField(editable=True,default=0.17)
+    spot_allocation_strategy = models.CharField(editable=True,max_length=32,default='lowest-price')
+    asg_cfg = models.CharField(editable=True,max_length=32,default='unselected')
 
     def __str__(self):
         return str(self.name)

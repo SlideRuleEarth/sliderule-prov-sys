@@ -40,6 +40,9 @@ import ps_server_pb2
 import ps_server_pb2_grpc
 from users.global_constants import *
 from django_rq import get_scheduler
+import time
+import requests
+import glob
 
 
 
@@ -139,6 +142,7 @@ def create_test_user(first_name,last_name, email, username, password, verify=Non
     return new_user
 
 def is_in_messages(response,string_to_check,logger):
+    logger.info(f"response:{response}")
     messages = list(get_messages(response.wsgi_request))
     for message in messages:
         logger.info(f"message:{message}")   
@@ -984,7 +988,7 @@ def call_SetUp(orgAccountObj):
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     clusterObj.provision_env_ready = False
     clusterObj.save()
-    setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT))
+    setup_req = ps_server_pb2.SetUpReq(name=orgAccountObj.name,version=orgAccountObj.version,is_public=orgAccountObj.is_public,now=datetime.now(timezone.utc).strftime(FMT),spot_allocation_strategy=orgAccountObj.spot_allocation_strategy,spot_max_price=orgAccountObj.spot_max_price)
     logger.info(f"SetUp setup_req:{setup_req}")
     rsp = None
     with ps_client.create_client_channel("control") as channel:
@@ -999,13 +1003,15 @@ def call_SetUp(orgAccountObj):
         assert(f"{setup_req.name}" in stdout)
         assert(stderr == '')
         logger.info(f"SetUp stdout:{stdout}")
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
         logger.info(f"GetCurrentSetUpCfg rsp:{rsp}")
     assert(rsp is not None)
     assert(rsp.setup_cfg.name == setup_req.name)
     assert(rsp.setup_cfg.version == setup_req.version)
     assert(rsp.setup_cfg.is_public == setup_req.is_public)
     assert(rsp.setup_cfg.now == setup_req.now)
+    assert(rsp.setup_cfg.spot_allocation_strategy == setup_req.spot_allocation_strategy)
+    assert(rsp.setup_cfg.spot_max_price == setup_req.spot_max_price)
     return True
 
 def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
@@ -1015,7 +1021,7 @@ def fake_sync_clusterObj_to_orgAccountObj(orgAccountObj):
     logger.info(f"fake_sync_clusterObj_to_orgAccountObj orgAccountObj:{orgAccountObj.name}")
     with ps_client.create_client_channel("control") as channel:
         stub = ps_server_pb2_grpc.ControlStub(channel)
-        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.GetCurrentSetUpCfgReq(name=orgAccountObj.name))
+        rsp = stub.GetCurrentSetUpCfg(ps_server_pb2.CurrentSetUpCfgReq(name=orgAccountObj.name))
     assert rsp.setup_cfg.name == orgAccountObj.name
     assert rsp.setup_cfg.version == orgAccountObj.version
     assert rsp.setup_cfg.is_public == orgAccountObj.is_public    
@@ -1047,7 +1053,8 @@ def upload_json_string_to_s3(s3_client, s3_bucket, json_string, s3_key):
         logger.info(f"Successfully uploaded JSON to {s3_key} in bucket {s3_bucket}")
 
     except Exception as e:
-        logger.error(f"Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
+        connection_url = s3_client.meta.endpoint_url if hasattr(s3_client.meta, 'endpoint_url') else 'unknown'
+        logger.error(f"Connection URL: {connection_url}. Failed to upload JSON to {s3_key} in bucket {s3_bucket}. Error: {e}")
 
 def verify_upload(s3_client, s3_bucket, s3_key, original_json_string):
     """
@@ -1115,3 +1122,10 @@ def extend_ObjCost(orgAccountObj, gran, tm_data, cost_data):
 
     # Logging
     logger.info(f"oc.ccr:{oc.ccr}")
+def upload_asg_cfg_files_to_s3(s3_client, local_dir, file_pattern, s3_bucket):
+    for file_path in glob.glob(os.path.join(local_dir, file_pattern)):
+        file_name = os.path.basename(file_path)
+        s3_key = os.path.join('prov-sys', 'cluster_tf_versions', 'latest', file_name)
+        with open(file_path, 'rb') as file_data:
+            s3_client.upload_fileobj(file_data, s3_bucket, s3_key)
+        print(f"Uploaded {file_name} to {s3_key}")

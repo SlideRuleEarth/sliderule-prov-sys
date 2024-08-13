@@ -4,8 +4,16 @@ PS_SERVER_DOCKER_TAG ?= dev
 PS_VERSION ?= dev
 ENVVER = $(shell git --git-dir ../../.git --work-tree . describe --abbrev --dirty --always --tags --long)
 DOCKER_EXEC_OPTS ?=
-PS_TEST_SOURCE_DIR = $(ROOT)/../test/prov-sys
-PS_TEST_DIR:=$(abspath $(PS_TEST_SOURCE_DIR))
+last_dir = $(shell basename $(ROOT))
+
+# Conditional setting of PS_TEST_DIR
+ifeq ($(last_dir),ps_server)
+PS_TEST_DIR = $(ROOT)
+LOCALSTACK_VOLUME_DIR = $(ROOT)/../../test/prov-sys
+else
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)
+endif
 
 all: docker
 
@@ -15,6 +23,10 @@ ps-server-clean-stage : # clean docker stage directory
 ps-server-stage : ps-server-clean-stage # stage the files for docker image
 	mkdir -p docker/ps-server/stage
 	# because we build latest and then tag it to PS_VERSION we use PS_VERSION here for PS_SERVER_DOCKER_TAG
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
+	export DOCKER_REPO=$(DOCKER_REPO) && \
+	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	echo PS_SERVER_DOCKER_TAG=$(PS_VERSION) >> docker/ps-server/stage/.ps_server_versions
 	echo PS_SERVER_GIT_VERSION=$(ENVVER) >> docker/ps-server/stage/.ps_server_versions
 	cp docker/ps-server/docker-entrypoint.sh docker/ps-server/stage/
@@ -31,6 +43,8 @@ docker-no-cache : ps-server-stage  ## build the container no cache and tag it wi
 
 docker : ps-server-stage  ## build the container using cache and tag it with $(PS_SERVER_DOCKER_TAG) 
 	cd docker/ps-server && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker build --tag $(DOCKER_REPO)/sliderule-ps-server:$(PS_SERVER_DOCKER_TAG) . && \
 	rm -rf stage && echo ENVVER=$(ENVVER)		
 
@@ -63,6 +77,7 @@ update-s3-files-for-tests: # stage s3 files for unit tests to mount to localstac
 	aws s3 sync --include "*" s3://sliderule/prov-sys/cluster_tf_versions/ test_misc/cluster_tf_versions
 	python3 test_misc/replace_terraform_aws_provider.py test_misc/cluster_tf_versions
 	python3 test_misc/remove_terraform_backend.py test_misc/cluster_tf_versions
+	python3 test_misc/copy_test_asg_cfg_files.py test_misc/
 
 upload-s3-files-to-localstack: ## upload test s3 files to localstack
 	aws --endpoint-url=http://localhost:4566 s3 sync --include "*" test_misc/cluster_tf_versions/ s3://sliderule/prov-sys/cluster_tf_versions/
@@ -74,6 +89,7 @@ bld-and-run-unit-tests: down  # run the ps_server unit tests then exit
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export DOCKER_REPO=$(DOCKER_REPO) && \
 	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
+	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest --log-cli-level=ERROR && \
@@ -86,6 +102,7 @@ bld-and-run-unit-test-dev: down  # run the ps_server unit tests then exit
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export DOCKER_REPO=$(DOCKER_REPO) && \
 	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
+	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest -m "dev" --log-cli-level=ERROR && \
@@ -100,7 +117,7 @@ unit-tests-dev: ## build and run ps-server with the dev marker
 down:
 	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
-	docker compose down --timeout 1
+	docker compose down 
 
 .PHONY : ps-server-clean-stage
 
@@ -112,3 +129,6 @@ help: ## That's me!
 	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo ENVVER:$(ENVVER)
 	@echo PS_TEST_DIR:$(PS_TEST_DIR)
+	@echo LOCALSTACK_VOLUME_DIR:$(LOCALSTACK_VOLUME_DIR)
+	@echo ROOT:$(ROOT)
+	@echo last_dir:$(last_dir)

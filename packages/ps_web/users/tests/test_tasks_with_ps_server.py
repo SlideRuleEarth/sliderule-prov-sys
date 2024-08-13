@@ -150,7 +150,6 @@ def test_SetUp(initialize_test_environ,setup_logging):
 def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ):
     org_account_id = get_test_org().id
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
-    clusterObj = Cluster.objects.get(org=orgAccountObj)
     assert OrgAccount.objects.count() == 1
     org_account_id = get_test_org().id
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -179,12 +178,78 @@ def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,
     # get the url
     url = reverse('org-configure', args=[org_account_id])
     # send the GET request
-    response = client.get(url)
+    response = client.post(url,data={
+        'provisioning_suspended':False,
+        'is_public':True,
+        'version':'unstable',
+        'min_node_cap':'1',
+        'max_node_cap':'10',
+        'allow_deploy_by_token':'True',
+        'destroy_when_no_nodes':'True',
+        'spot_max_price':'0.5',
+        'spot_allocation_strategy':'lowest-price',
+        'asg_cfg':'aarch64',        
+    })
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
     assert response.status_code == 200 or response.status_code == 302
-    # since we can get a 302 on success or failure lets check for the message
-    assert(is_in_messages(response,"cfg updated successfully",logger))
+    assert orgAccountObj.version == 'unstable'
+    assert orgAccountObj.min_node_cap == 1
+    assert orgAccountObj.max_node_cap == 10
+    assert orgAccountObj.allow_deploy_by_token == True
+    assert orgAccountObj.destroy_when_no_nodes == True
+    assert orgAccountObj.spot_max_price == 0.5
+    assert orgAccountObj.spot_allocation_strategy == 'lowest-price'
+    assert orgAccountObj.asg_cfg == 'aarch64'
+
+
+@pytest.mark.dev
+@pytest.mark.real_ps_server
+@pytest.mark.django_db
+def test_asg_cfgs(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ,localstack_setup):
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(orgAccountObj.version == 'latest') 
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    upload_json_string_to_s3(s3_client=s3,
+                             s3_bucket=S3_BUCKET,
+                             s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                             json_string=f'["{test_name}"]') # test_name is unit-test-org
+    assert verify_upload(s3_client=s3,
+                         s3_bucket=S3_BUCKET,
+                         s3_key=os.path.join('prov-sys','cluster_tf_versions','latest',ORGS_PERMITTED_JSON_FILE),
+                         original_json_string=f'["{test_name}"]')                     
+    # get the url
+    url = reverse('org-configure', args=[org_account_id])
+    # send the request
+    response = client.post(url,data={
+        'provisioning_suspended':False,
+        'is_public':False,
+        'version':'unstable',
+        'min_node_cap':'2',
+        'max_node_cap':'5',
+        'allow_deploy_by_token':'False',
+        'destroy_when_no_nodes':'False',
+        'spot_max_price':'1.5',
+        'spot_allocation_strategy':'capacity-optimized',
+        'asg_cfg':'aarch64_pytorch',        
+    })
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert response.status_code == 200 or response.status_code == 302
+    assert orgAccountObj.is_public == False
+    assert orgAccountObj.version == 'unstable'
+    assert orgAccountObj.min_node_cap == 2
+    assert orgAccountObj.max_node_cap == 5
+    assert orgAccountObj.allow_deploy_by_token == False
+    assert orgAccountObj.destroy_when_no_nodes == False
+    assert orgAccountObj.spot_max_price == 1.5
+    assert orgAccountObj.spot_allocation_strategy == 'capacity-optimized'
+    assert orgAccountObj.asg_cfg == 'aarch64_pytorch'
+
 
 @pytest.mark.real_ps_server
 @pytest.mark.ps_disable

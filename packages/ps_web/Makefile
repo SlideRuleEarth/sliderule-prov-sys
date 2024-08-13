@@ -5,14 +5,23 @@ PS_NGINX_DOCKER_TAG ?= dev
 NGINX_CONF ?= dev
 DOCKER_EXEC_OPTS ?=
 PS_WEB_SOURCE_DIR = $(ROOT)
-PS_SERVER_SOURCE_DIR = $(ROOT)/../ps_server
-PS_TEST_SOURCE_DIR = $(ROOT)/../test/prov-sys
+last_dir = $(shell basename $(ROOT))
+
+# Conditional setting of PS_TEST_DIR
+ifeq ($(last_dir),ps_server)
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)
+PS_SERVER_SOURCE_DIR = $(ROOT)
+else # is test/prov-sys
+PS_TEST_DIR = $(ROOT)/../../packages/ps_server
+LOCALSTACK_VOLUME_DIR = $(ROOT)/../../test/prov-sys
+PS_SERVER_SOURCE_DIR = $(ROOT)/../../packages/ps_server
+endif
 ENVVER = $(shell git --git-dir ../../.git --work-tree . describe --abbrev --dirty --always --tags --long)
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 SITE_ID = 1
 PS_SERVER_DIR:=$(abspath $(PS_SERVER_SOURCE_DIR))
 PS_WEB_DIR:=$(abspath $(PS_WEB_SOURCE_DIR))
-PS_TEST_DIR:=$(abspath $(PS_TEST_SOURCE_DIR))
 
 all: docker ps-nginx-build-docker
 
@@ -144,13 +153,19 @@ docker-prune: ## clean up stale dangling docker images
 	docker system prune
 
 down:  ## bring down all the docker containers
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose down
 
 bld-and-run-unit-tests: down # build and run the unit tests against a running dev system then exit NOTE: for github actions the DOCKER_EXEC_OPTS is a null string
 	make ps-unit-test-build-docker && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose up --detach && \
 	docker logs ps-server && \
 	docker logs ps-web && \
+	export PS_TEST_DIR=$(PS_TEST_DIR) && \
+	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage run -m pytest -k "not TasksTestWithPSServer" -m "not real_ps_server and not ps_disable" && \
 	docker exec $(DOCKER_EXEC_OPTS) ps-web coverage html
 	make down
@@ -180,3 +195,7 @@ help: ## That's me!
 	@printf "\033[37m%-30s\033[0m %s\n" "#----target--------------------description------------------------------------------------"
 	@grep -E '^[a-zA-Z_-].+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 	@echo ENVVER:$(ENVVER)	
+	@echo PS_TEST_DIR:$(PS_TEST_DIR)
+	@echo LOCALSTACK_VOLUME_DIR:$(LOCALSTACK_VOLUME_DIR)
+	@echo ROOT:$(ROOT)
+	@echo last_dir:$(last_dir)

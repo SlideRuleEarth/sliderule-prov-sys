@@ -99,6 +99,11 @@ from google.protobuf.json_format import Parse
 from google.protobuf.json_format import MessageToJson
 from google.protobuf.text_format import MessageToString
 import threading
+from collections import defaultdict
+
+
+from typing import List, Dict
+
 
 
 # Initialize thread-local storage at the module level
@@ -636,6 +641,55 @@ def get_all_versions(s3_client):
     LOG.info(f"versions:{versions}")  
     return versions
 
+def get_asg_cfgs_for_all_versions(s3_client):
+    all_versions_asg_cfgs = {}
+    try:
+        result = s3_client.list_objects_v2( Bucket=S3_BUCKET,
+                                            Prefix=get_tf_versions_s3_root(),
+                                            Delimiter='/')
+        versions = []
+        for o in result.get('CommonPrefixes',[]):
+            #LOG.info(o.get('Prefix'))
+            path = o.get('Prefix')
+            #LOG.info(path.split("/")[:-1][2])
+            version = path.split("/")[:-1][2].rstrip()
+            versions.append(version)
+        LOG.info(f"versions:{versions}")
+        for version in versions:
+            asg_cfgs = []
+            result = s3_client.list_objects_v2(Bucket=S3_BUCKET,
+                                               Prefix=f'{get_tf_versions_s3_root()}{version}/')
+            #LOG.info(f"result:{result}")
+            for obj in result.get('Contents', []):
+                key = obj['Key']
+                #LOG.info(f"key:{key}")
+                if key.endswith('.OPTION'):
+                    # Extract filename prefix until the first period
+                    filename = key.split('/')[-1]
+                    option_prefix = filename.split('.')[0]
+                    option_prefix = option_prefix.removeprefix('sliderule-asg-')
+                    asg_cfgs.append(option_prefix)
+            #LOG.info(f"version:{version} asg_cfgs:{asg_cfgs}")
+            all_versions_asg_cfgs[version] = asg_cfgs
+
+    except botocore.exceptions.NoCredentialsError:
+        LOG.error("No AWS credentials found.")
+        
+    except botocore.exceptions.PartialCredentialsError:
+        LOG.error("Incomplete AWS credentials provided.")
+        
+    except botocore.exceptions.ClientError as e:
+        # You can further inspect the error response to tailor the log message
+        error_code = e.response['Error']['Code']
+        error_message = e.response['Error']['Message']
+        LOG.error(f"AWS Client Error ({error_code}): {error_message}")
+    except Exception as e:
+        LOG.exception(f"get_asg_cfgs_for_all_versions caught exception: {repr(e)}")
+    
+    LOG.info(f"all_versions_asg_cfgs: {all_versions_asg_cfgs}")
+    return all_versions_asg_cfgs
+
+
 def get_last_part_of_prefix(prefix):
     # Split the prefix by '/' and get the second last segment
     # (since prefixes typically end with '/')
@@ -725,8 +779,8 @@ def write_SetUpCfg(name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(name,version,is_public,now):
-    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
+def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
+    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price} asg_cfg:{asg_cfg}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
         LOG.info(f"FROM: {setup_cfg}")
@@ -734,6 +788,9 @@ def update_SetUpCfg(name,version,is_public,now):
         setup_cfg.version = version
         setup_cfg.is_public = is_public
         setup_cfg.now = now
+        setup_cfg.spot_allocation_strategy = spot_allocation_strategy
+        setup_cfg.spot_max_price = spot_max_price
+        setup_cfg.asg_cfg = asg_cfg
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
         write_SetUpCfg(name, setup_cfg)
     except Exception as e:
@@ -1332,7 +1389,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             LOG.exception(f'Exception:{e}')
             raise e
 
-    def setup_terraform_env(self, s3_client, name, version, is_public, now):
+    def setup_terraform_env(self, s3_client, name, version, is_public, now, spot_allocation_strategy, spot_max_price,asg_cfg):
         LOG.info(f"Start SetUp of provision environment for org:{name} version:{version}")
         st = datetime.now(timezone.utc)
         try:
@@ -1355,18 +1412,25 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     setup_cfg.version = version
                     setup_cfg.is_public = is_public
                     setup_cfg.now = now
+                    setup_cfg.spot_allocation_strategy = spot_allocation_strategy
+                    setup_cfg.spot_max_price = spot_max_price
+                    setup_cfg.asg_cfg = asg_cfg
                 except Exception as e:
                     emsg = (f" Processing SetUp {name} cluster caught this exception creating tf_dir: ")
                     LOG.exception(emsg)
                 try:
                     write_SetUpCfg(name, setup_cfg)
+                    if((asg_cfg != 'None') and (asg_cfg != '')):
+                        asg_cfg_src_file_path = os.path.join(tf_dir, 'sliderule-asg-' + asg_cfg + '.tf.OPTION')
+                        asg_cfg_dst_file_path = os.path.join(tf_dir, 'sliderule-asg.tf')
+                        yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["cp", asg_cfg_src_file_path, asg_cfg_dst_file_path])
                     yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["ls", tf_dir])
                 except subprocess.CalledProcessError as e:
                     # expect to see this--> "ls: cannot access {tf_dir}: No such file or directory"
                     LOG.info(f"terraform folder {tf_dir} do not exist expect to see this--> 'ls: cannot access {tf_dir}: No such file or directory' in e:{e}")
             yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
             self.get_specific_tf_version_files_from_s3(s3_client, name, version)       
-            update_SetUpCfg(name, version, is_public, now)
+            update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price, asg_cfg)
             yield from self.execute_cmd          (name=name, ps_cmd='SetUp',    cmd_args=["ls", '-al', tf_dir])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["init"])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["validate"])
@@ -1486,6 +1550,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 LOG.error(emsg)
                 raise PS_InternalError(emsg)
             cluster_version = f"cluster_version={setup_cfg.version}"
+            asg_cfg = f"asg_cfg={setup_cfg.asg_cfg}"
             is_public = "is_public="+ str(setup_cfg.is_public)
             if self.valid_deploy_args(request):
                 domain = "domain=" + get_domain_env()
@@ -1509,7 +1574,9 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     "-var",
                     node_asg_max_capacity,
                     "-var",
-                    node_asg_desired_capacity
+                    node_asg_desired_capacity,
+                    "-var",
+                    asg_cfg
                 ]
                 try:
                     yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
@@ -1649,7 +1716,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def SetUp(self, request, context):
         LOG.info(f"SetUp request:{MessageToString(request)} ")
         s3_client = get_s3_client()
-        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now)
+        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now, spot_allocation_strategy=request.spot_allocation_strategy, spot_max_price=request.spot_max_price,asg_cfg=request.asg_cfg)
 
     def TearDown(self, request, context):
         s3_client = get_s3_client()
@@ -1665,20 +1732,32 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         else:
             versions = get_versions_for_org(get_s3_client(),request.name)
         sorted_versions = sort_versions(versions)
-        return ps_server_pb2.GetVersionsRsp(versions=sorted_versions)
+        return ps_server_pb2.VersionsRsp(versions=sorted_versions)
+
+    def GetAsgCfgs(self, request, context):
+        '''
+        This is the list of AutoScalingGroup Configuration terraform files available in s3
+        with the extension .OPTION
+        '''
+        all_versions_asg_cfgs = get_asg_cfgs_for_all_versions(get_s3_client())
+        asg_cfg_list = [
+            ps_server_pb2.AsgCfg(version=version, asg_cfg_options=options)
+            for version, options in all_versions_asg_cfgs.items()
+        ]
+        return ps_server_pb2.AsgCfgsRsp(asg_cfg=asg_cfg_list)
 
     def GetCurrentSetUpCfg(self,request,context):
         '''
         This is the version of terraform files setup for the Org's cluster
         '''
         setup_cfg = read_SetUpCfg(request.name)
-        return ps_server_pb2.GetCurrentSetUpCfgRsp(setup_cfg=setup_cfg)
+        return ps_server_pb2.CurrentSetUpCfgRsp(setup_cfg=setup_cfg)
 
     # these are the pkg versions obtained from the container
     def GetPSVersions(self, request, context):
         ps_server_versions = get_ps_versions()
-        LOG.debug(f'ps server versions:{ps_server_versions}')
-        return ps_server_pb2.GetPSVersionsRsp(ps_versions=ps_server_versions)
+        LOG.info(f'ps server versions:{ps_server_versions}')
+        return ps_server_pb2.PSVersionsRsp(ps_versions=ps_server_versions)
 
     def Update(self, request, context):  ## This is called by GRPC framework
         LOG.info(f'Update domain:{get_domain_env()} TERRAFORM_CLI:{get_terraform_cli()}')

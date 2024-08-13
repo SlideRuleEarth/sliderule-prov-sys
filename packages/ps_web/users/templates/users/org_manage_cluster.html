@@ -36,9 +36,9 @@
                             <div id="collapse_{{org.name}}_state" class="accordion-collapse collapse show my-1" aria-labelledby="mc_hd_{{org.name}}_state">
                                 <div class="accordion-body">
                                     <div class="container-fluid" style="width: fit-content;">
-                                        <div class="row py-2 d-flex align-items-stretch justify-content-center" style="width: fit-content;">
+                                        <div class="row py-2 d-flex align-items-stretch justify-content-center">
                                             <div class="col">
-                                                <div class="card shadow mx-auto my-1 h-100">
+                                                <div class="card shadow mx-auto my-1 h-100" style="width: fit-content;">
                                                     <h5 class="card-title mt-2">
                                                         Current Cluster State
                                                     </h5>
@@ -157,8 +157,8 @@
                                                     </div>                                                    
                                                 </div>                                        
                                             </div>
-                                            <div class="col">
-                                                <div class="card shadow mx-auto my-1 h-100">
+                                            <div class="col-auto">
+                                                <div class="card shadow mx-auto my-1 h-100" style="width: fit-content;">
                                                     <h5 class="card-title mt-2">
                                                         Current Configuration
                                                     </h5>
@@ -192,13 +192,18 @@
                                                             {% else %}
                                                                 <dd>{{ org.provisioning_suspended }}</dd>
                                                             {% endif %}
-                                                            {% if not cluster.provision_env_ready %}                                                
-                                                                <dt class="text-warning">Configuring</dt> 
-                                                            {% endif %}
+                                                            <dt>Allocation Strategy</dt>
+                                                            <dd>{{ org.spot_allocation_strategy }}</dd>
+                                                            <dt>Max Price</dt>
+                                                            <dd>{{ org.spot_max_price }}</dd>
+                                                            <dt> AutoScaling Cfg</dt>
+                                                            <dd>{{ org.asg_cfg }}</dd>
                                                         </dl>
                                                         <div class="mt-auto d-flex justify-content-center ">
                                                             <button type="button" id="config_modal_btn"  class="btn btn-primary mt-1 me-1" data-bs-toggle="modal" data-bs-target="#psConfigModal"  data-bs-url="{% url 'org-configure' org.id %}"  data-bs-action="Configure">Configure</button>
                                                             <a class="btn btn-primary mt-1 me-1" href=" {% url 'org-manage-cluster' org.id %} "><span><i class="bi-arrow-clockwise"></i></span></a>
+                                                        
+                                                            <!-- First Modal -->
                                                             <div class="modal fade" id="psConfigModal" tabindex="-1" aria-labelledby="psConfigModalLabel" aria-hidden="true">
                                                                 <div class="modal-dialog modal-dialog-scrollable">
                                                                     <div class="modal-content">
@@ -219,7 +224,7 @@
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
+                                                            </div>                                                        
                                                         </div>
                                                     </div>
                                                 </div>                                            
@@ -502,6 +507,9 @@
         const activePS_cmd = "{{ cluster.active_ps_cmd }}";
         const isDeployed = "{{ cluster.is_deployed }}" === "True";
         const destroyWhenNoNodes = "{{ org.destroy_when_no_nodes }}"
+        const asgCfgField = document.getElementById('asg_cfg');
+        const asgCfgsByVersion = "";
+        const cfg_form = document.getElementById('configure-form');
         convertedDestroyWhenNoNodes = destroyWhenNoNodes.toLowerCase() === "true";
         minNodeCap = "{{ org.min_node_cap }}"
         const utcTimes = document.querySelectorAll('.utc-time');
@@ -510,21 +518,82 @@
             utcTimeElement.textContent = utcTime.toLocaleString();
         });
 
-        let deploying = ((activePS_cmd === 'Update') || (activePS_cmd === 'Deploy'))
-        // Note: activePS_cmd === 'Deploy' is deprecated so we need another way to tell 
-        // if coming up from scratch vs updating running cluster
+        let deploying = (activePS_cmd === 'Update');
+        // coming up from scratch vs updating running cluster
         // validVersion will be None if the cluster was previously down and now being deployed
-        let validVersion = (clusterVersion !== null && clusterVersion !== undefined && clusterVersion !== 'None')
-        let checkState = (isDeployed || (deploying && validVersion))
+        let validVersion = (clusterVersion !== null && clusterVersion !== undefined && clusterVersion !== 'None');
+        let checkState = (isDeployed || (deploying && validVersion));
+
+        async function fetchAndConfigure(version) {
+            try {
+                const response = await fetch("{% url 'get-asg-configs' %}");
+                const asgCfgsByVersion = await response.json();
+                
+                //console.log('Fetched data type:', typeof asgCfgsByVersion);
+                //console.log('Fetched data:', asgCfgsByVersion);
+                
+                if (typeof asgCfgsByVersion === 'object' && !Array.isArray(asgCfgsByVersion)) {
+                    //console.log('All keys in fetched asgCfgsByVersion:', Object.keys(asgCfgsByVersion));
+                    getAsgConfigs(version, asgCfgsByVersion);
+                } else {
+                    console.error('Fetched data is not an object:', asgCfgsByVersion);
+                }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        function getAsgConfigs(version, asgCfgsByVersion) {
+            //console.log('getAsgConfigs called');
+            //console.log('getAsgConfigs asgCfgsByVersion:', asgCfgsByVersion);
+            //console.log('getAsgConfigs version:', version);
+
+            //console.log('All keys in asgCfgsByVersion:', Object.keys(asgCfgsByVersion));
+
+            if (asgCfgsByVersion && asgCfgsByVersion.hasOwnProperty(version)) {
+                //console.log('Found configurations for version:', version);
+                asgCfgField.innerHTML = ''; // Clear existing options
+
+                if (Array.isArray(asgCfgsByVersion[version])) {
+                    asgCfgsByVersion[version].forEach(asg_cfg => {
+                        const option = document.createElement('option');
+                        option.value = asg_cfg;
+                        option.textContent = asg_cfg;
+                        asgCfgField.appendChild(option);
+                    });
+                    } else {
+                    console.error(`Expected an array but got ${typeof asgCfgsByVersion[version]} for version ${version}`);
+                }
+            } else {
+                console.warn(`No configurations found for version ${version}`);
+                const option = document.createElement('option');
+                option.value = 'None';
+                option.textContent = 'None';
+                asgCfgField.appendChild(option);
+            }
+            //console.log('asgCfgsByVersion[version]:', asgCfgsByVersion[version]);
+        }
+        fetchAndConfigure(versionField.value);
         versionField.addEventListener("change", function() {
             // show if changing is_public or version when deployed or deploying
             selectedVersion = versionField.value
+            //console.log('Event Listener selectedVersion:', selectedVersion);
             if (checkState) {
                 if (selectedVersion !== clusterVersion) {
                     version_is_public_Warning.classList.remove("d-none");
                 } else {
                     version_is_public_Warning.classList.add("d-none");
                 }
+            }
+            fetchAndConfigure(selectedVersion);
+        });
+
+        cfg_form.addEventListener('submit', function(event) {
+            if (selectedVersion) {
+                // Update the cfg_form action URL with the selected version as a query parameter
+                const originalAction = cfg_form.getAttribute('action');
+                const newAction = `${originalAction}?version=${selectedVersion}`;
+                cfg_form.setAttribute('action', newAction);
             }
         });
 

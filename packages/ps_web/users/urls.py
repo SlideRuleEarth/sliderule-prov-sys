@@ -36,6 +36,7 @@ urlpatterns = [
      path('accounts/profile/', views.userProfile, name="user-profile"),
      path('prov_sys_admin/', views.provSysAdmin, name="prov-sys-admin"),
      path('disable_provisioning/', views.disableProvisioning, name="disable-provisioning"),
+     path('get_asg_configs/', views.getAsgConfigs, name='get-asg-configs'),
      path('', views.browse, name="browse")
 ]
 

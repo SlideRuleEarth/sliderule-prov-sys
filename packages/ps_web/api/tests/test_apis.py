@@ -518,6 +518,9 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
         'allow_deploy_by_token': True,
         'destroy_when_no_nodes': True,
         'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
+        'asg_cfg': 'aarch64',
     }
     time_now = datetime.now(timezone.utc)
     dt = time_now - timedelta(seconds=1)
@@ -587,7 +590,7 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
         assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_org_token_github(caplog,client, social_user, social_user_membership, github_social_account, mock_email_backend,initialize_test_environ):

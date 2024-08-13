@@ -109,6 +109,15 @@ class shared_Mock_Clusters:
     '''
     mocked_NUM_NODES_dict = {'':-1}  
     versions = ['v1', 'v2', 'v3', 'latest', 'unstable']
+
+    asg_cfgs = [
+        {'v1': ['x86_64', 'aarch64', 'x86_64_pytorch']},
+        {'v2': ['x86_64', 'aarch64', 'aarch64_pytorch']},
+        {'v3': ['aarch64', 'x86_64_pytorch', 'aarch64_pytorch']},
+        {'latest': ['x86_64', 'aarch64', 'x86_64_pytorch', 'aarch64_pytorch']},
+        {'unstable': ['x86_64', 'aarch64', 'x86_64_pytorch', 'aarch64_pytorch']}
+    ]
+
     deployed_dict = {False:-1}
     cluster_version_dict = {'':-1}   # SetUp version is in setup.json
     cluster_is_public_dict = {False:-1}   # SetUp version is in setup.json
@@ -168,8 +177,8 @@ def write_SetUpCfg(name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(name,version,is_public,now):
-    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now}")
+def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
+    LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price} asg_cfg:{asg_cfg}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
         LOG.info(f"FROM: {setup_cfg}")
@@ -177,6 +186,9 @@ def update_SetUpCfg(name,version,is_public,now):
         setup_cfg.version = version
         setup_cfg.is_public = is_public
         setup_cfg.now = now
+        setup_cfg.spot_allocation_strategy = spot_allocation_strategy
+        setup_cfg.spot_max_price = spot_max_price
+        setup_cfg.asg_cfg = asg_cfg
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
         write_SetUpCfg(name, setup_cfg)
     except Exception as e:
@@ -201,12 +213,23 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         return ps_server_pb2.InitRsp(success=True, error_msg='')
 
     def GetVersions(self, request, context):
-        return ps_server_pb2.GetVersionsRsp(versions=get_versions_for_org(name=request.name))
+        return ps_server_pb2.VersionsRsp(versions=get_versions_for_org(name=request.name))
+
+    def GetAsgCfgs(self, request, context):
+
+        asg_cfgs_rsp = ps_server_pb2.AsgCfgsRsp()
+
+        for cfg in shared_Mock_Clusters.asg_cfgs:
+            for version, options in cfg.items():
+                asg_cfg = ps_server_pb2.AsgCfg(version=version, asg_cfg_options=options)
+                asg_cfgs_rsp.asg_cfg.append(asg_cfg)
+
+        return asg_cfgs_rsp
 
     def GetPSVersions(self, request, context):
         ps_server_versions = get_ps_versions()
         LOG.debug(f'ps server versions:{ps_server_versions}')
-        return ps_server_pb2.GetPSVersionsRsp(ps_versions=ps_server_versions)
+        return ps_server_pb2.PSVersionsRsp(ps_versions=ps_server_versions)
 
     def get_Response_Obj(
         self, name, ps_cmd, done=False, ps_server_error=False, error_msg=""
@@ -341,7 +364,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         except KeyError:
             shared_Mock_Clusters.deployed_dict[request.name] = False
             shared_Mock_Clusters.mocked_NUM_NODES_dict[request.name] = 0
-        update_SetUpCfg(request.name, request.version, request.is_public, request.now)
+        update_SetUpCfg(request.name, request.version, request.is_public, request.now, request.spot_allocation_strategy, request.spot_max_price, request.asg_cfg)
         yield from self.FakeCMD(request,'SetUp')
 
     def GetCurrentSetUpCfg(self,request,context):
@@ -349,7 +372,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
         This is the version of terraform files setup for the Org's cluster
         '''
         setup_cfg = read_SetUpCfg(request.name)
-        return ps_server_pb2.GetCurrentSetUpCfgRsp(setup_cfg=setup_cfg)
+        return ps_server_pb2.CurrentSetUpCfgRsp(setup_cfg=setup_cfg)
 
 class Account(ps_server_pb2_grpc.AccountServicer):
 
