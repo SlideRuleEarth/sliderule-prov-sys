@@ -77,6 +77,7 @@ update-s3-files-for-tests: # stage s3 files for unit tests to mount to localstac
 	aws s3 sync --include "*" s3://sliderule/prov-sys/cluster_tf_versions/ test_misc/cluster_tf_versions
 	python3 test_misc/replace_terraform_aws_provider.py test_misc/cluster_tf_versions
 	python3 test_misc/remove_terraform_backend.py test_misc/cluster_tf_versions
+	python3 test_misc/copy_test_asg_cfg_files.py test_misc/
 
 upload-s3-files-to-localstack: ## upload test s3 files to localstack
 	aws --endpoint-url=http://localhost:4566 s3 sync --include "*" test_misc/cluster_tf_versions/ s3://sliderule/prov-sys/cluster_tf_versions/

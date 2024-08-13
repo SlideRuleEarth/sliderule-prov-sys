@@ -223,17 +223,17 @@ def test_get_ps_versions(setup_logging):
     assert ('PS_SERVER_DOCKER_TAG=dev' in ps_versions)
     assert ('PS_SERVER_GIT_VERSION=' in ps_versions)
 
-#@pytest.mark.dev
+@pytest.mark.dev
 def test_get_asg_cfgs_for_all_versions(setup_logging,s3):
     logger = setup_logging
     asg_cfgs = get_asg_cfgs_for_all_versions(s3_client=s3)
     logger.info(f'asg_cfgs:{asg_cfgs}')
     assert ('latest' in asg_cfgs)
     assert ('v3' in asg_cfgs)
-    assert( 'aarch64' in asg_cfgs['unstable'])
-    assert( 'aarch64_pytorch' in asg_cfgs['unstable'])
-    assert( 'x86_64' in asg_cfgs['unstable'])
-    assert( 'x86_64_pytorch' in asg_cfgs['unstable'])
+    assert( 'aarch64' in asg_cfgs['test'])
+    assert( 'aarch64_pytorch' in asg_cfgs['test'])
+    assert( 'x86_64' in asg_cfgs['test'])
+    assert( 'x86_64_pytorch' in asg_cfgs['test'])
 
 
 #@pytest.mark.dev

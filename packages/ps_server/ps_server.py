@@ -1550,6 +1550,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 LOG.error(emsg)
                 raise PS_InternalError(emsg)
             cluster_version = f"cluster_version={setup_cfg.version}"
+            asg_cfg = f"asg_cfg={setup_cfg.asg_cfg}"
             is_public = "is_public="+ str(setup_cfg.is_public)
             if self.valid_deploy_args(request):
                 domain = "domain=" + get_domain_env()
@@ -1573,7 +1574,9 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     "-var",
                     node_asg_max_capacity,
                     "-var",
-                    node_asg_desired_capacity
+                    node_asg_desired_capacity,
+                    "-var",
+                    asg_cfg
                 ]
                 try:
                     yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
