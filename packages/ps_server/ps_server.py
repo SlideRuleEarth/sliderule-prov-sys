@@ -1575,9 +1575,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     node_asg_max_capacity,
                     "-var",
                     node_asg_desired_capacity,
-                    "-var",
-                    asg_cfg
                 ]
+                if asg_cfg != 'None' and asg_cfg != '':
+                    cmd_args += [
+                        "-var",
+                        asg_cfg
+                    ]
                 try:
                     yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
                 except Exception as e:
