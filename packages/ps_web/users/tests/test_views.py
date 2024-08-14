@@ -287,6 +287,95 @@ def test_org_destroy_cluster_only_one(caplog, client, mock_tasks_enqueue_stubbed
     current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
     call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
 
+
+@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_org_account_cfg_success2(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_email_backend,initialize_test_environ):
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(not orgAccountObj.is_public) 
+    assert(orgAccountObj.version == 'latest') 
+
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    
+    # setup necessary form data
+    form_data = {
+        'is_public': True,
+        'version': 'v3',
+        'min_node_cap': 1,
+        'max_node_cap': 10,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+        'spot_max_price': 0.15,
+        'spot_allocation_strategy': 'lowest-price',
+        'asg_cfg': 'None',
+    }
+    start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    # get the url
+    url = reverse('org-configure', args=[org_account_id])
+    # send the POST request
+    response = client.post(url, data=form_data)
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    #LOG.warning(f"??? start_cnt:{start_cnt} current_cnt:{current_cnt}")
+    call_process_state_change(orgAccountObj,1,start_cnt,current_cnt)
+    # assert the form was successful
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert response.status_code == 200 or response.status_code == 302
+    assert(orgAccountObj.is_public) 
+    assert(orgAccountObj.version == 'v3') 
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
+    assert clusterObj.provision_env_ready == True # Setup was called
+
+
+
+
+@pytest.mark.dev
+@pytest.mark.django_db
+@pytest.mark.ps_server_stubbed
+def test_org_account_cfg_fail2(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out,mock_email_backend,initialize_test_environ):
+    assert OrgAccount.objects.count() == 1
+    org_account_id = get_test_org().id
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert(not orgAccountObj.is_public) 
+    assert(orgAccountObj.version == 'latest') 
+
+    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+    saved_min_node_cap = orgAccountObj.min_node_cap
+    saved_max_node_cap = orgAccountObj.max_node_cap
+
+    # setup necessary form data
+    form_data = {
+        'is_public': True,
+        'version': 'v3',
+        'min_node_cap': 0, 
+        'max_node_cap': 9,
+        'allow_deploy_by_token': True,
+        'destroy_when_no_nodes': True,
+        'provisioning_suspended': False,
+        'asg_cfg': '', ## <---- INVALID
+    }
+    start_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    # get the url
+    url = reverse('org-configure', args=[org_account_id])
+    # send the POST request
+    response = client.post(url, data=form_data)
+    current_cnt = mock_tasks_enqueue_stubbed_out.call_count+mock_views_enqueue_stubbed_out.call_count
+    call_process_state_change(orgAccountObj,0,start_cnt,current_cnt)
+    # assert the form was unsuccessful
+    # refresh the OrgAccount object
+    orgAccountObj = OrgAccount.objects.get(id=org_account_id)
+    assert response.status_code == 200 or response.status_code == 302
+    assert(not orgAccountObj.is_public) # i.e. unmodified
+    assert(orgAccountObj.version == 'latest')  # i.e. unmodified
+    assert(orgAccountObj.min_node_cap == saved_min_node_cap) # i.e. unmodified
+    assert(orgAccountObj.max_node_cap == saved_max_node_cap) # i.e. unmodified
+
+
+
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
