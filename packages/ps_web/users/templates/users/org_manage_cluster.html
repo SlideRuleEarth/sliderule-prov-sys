@@ -551,18 +551,31 @@
             //console.log('All keys in asgCfgsByVersion:', Object.keys(asgCfgsByVersion));
 
             if (asgCfgsByVersion && asgCfgsByVersion.hasOwnProperty(version)) {
-                //console.log('Found configurations for version:', version);
                 asgCfgField.innerHTML = ''; // Clear existing options
 
                 if (Array.isArray(asgCfgsByVersion[version])) {
-                    asgCfgsByVersion[version].forEach(asg_cfg => {
-                        const option = document.createElement('option');
-                        option.value = asg_cfg;
-                        option.textContent = asg_cfg;
-                        asgCfgField.appendChild(option);
-                    });
+                    if (asgCfgsByVersion[version].length > 0) {
+                        // If the array is not empty, populate the options
+                        asgCfgsByVersion[version].forEach(asg_cfg => {
+                            const option = document.createElement('option');
+                            option.value = asg_cfg;
+                            option.textContent = asg_cfg;
+                            asgCfgField.appendChild(option);
+                        });
                     } else {
+                        // If the array is empty, add the "None" option
+                        const option = document.createElement('option');
+                        option.value = 'None';
+                        option.textContent = 'None';
+                        asgCfgField.appendChild(option);
+                    }
+                } else {
                     console.error(`Expected an array but got ${typeof asgCfgsByVersion[version]} for version ${version}`);
+                    // Optionally, add the "None" option here as well if the data is not in the expected format
+                    const option = document.createElement('option');
+                    option.value = 'None';
+                    option.textContent = 'None';
+                    asgCfgField.appendChild(option);
                 }
             } else {
                 console.warn(`No configurations found for version ${version}`);

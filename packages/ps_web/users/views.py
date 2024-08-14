@@ -441,6 +441,8 @@ def orgConfigure(request, pk):
                 #LOG.info(f"POST data: {post_data}")
                 # Create the form with modified POST data and the necessary choices
                 available_asg_cfgs = all_available_asg_cfgs.get(version, [])# Get the available ASG configs for the selected version
+                if 'None' not in available_asg_cfgs:
+                    available_asg_cfgs.insert(0, 'None')  # Add 'None' to the beginning of the list
                 config_form = OrgAccountCfgForm(
                     post_data,
                     instance=orgAccountObj,
@@ -450,7 +452,7 @@ def orgConfigure(request, pk):
                 #LOG.info(f"asg_cfg:{asg_cfg}  available_asg_cfgs: {available_asg_cfgs}")
                 if asg_cfg and asg_cfg in available_asg_cfgs:
                     #LOG.info('config_form.fields[asg_cfg]: %s', config_form.fields['asg_cfg'])
-                    config_form.fields['asg_cfg'].choices = [('None', 'None')] + [(v, v) for v in all_available_asg_cfgs[version]]
+                    config_form.fields['asg_cfg'].choices = [(v, v) for v in all_available_asg_cfgs[version]]
                     emsg = ''
 
                     if config_form.is_valid():
@@ -474,6 +476,9 @@ def orgConfigure(request, pk):
                             if field != 'csrfmiddlewaretoken':
                                 LOG.info(f"Field: {field} - Value: {value}")
                         messages.error(request, emsg)
+                else:
+                    config_form.fields['asg_cfg'].choices = [('None', 'None')] + [(v, v) for v in all_available_asg_cfgs[version]]
+                    messages.error(request, f"Invalid ASG config: {asg_cfg}")
             else:
                 config_form = OrgAccountCfgForm(
                     instance=orgAccountObj,
