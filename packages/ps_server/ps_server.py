@@ -1576,11 +1576,6 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     "-var",
                     node_asg_desired_capacity,
                 ]
-                if setup_cfg.asg_cfg != 'None' and setup_cfg.asg_cfg != '' and setup_cfg.asg_cfg != 'unselected':
-                    cmd_args += [
-                        "-var",
-                        asg_cfg
-                    ]
                 try:
                     yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
                 except Exception as e:
