@@ -510,6 +510,7 @@
         const asgCfgField = document.getElementById('asg_cfg');
         const asgCfgsByVersion = "";
         const cfg_form = document.getElementById('configure-form');
+        const currentAsgCfg = "{{ org.asg_cfg }}";  // Get the current asg_cfg value from the org model
         convertedDestroyWhenNoNodes = destroyWhenNoNodes.toLowerCase() === "true";
         minNodeCap = "{{ org.min_node_cap }}"
         const utcTimes = document.querySelectorAll('.utc-time');
@@ -556,10 +557,14 @@
                 if (Array.isArray(asgCfgsByVersion[version])) {
                     if (asgCfgsByVersion[version].length > 0) {
                         // If the array is not empty, populate the options
+                        // Populate the options
                         asgCfgsByVersion[version].forEach(asg_cfg => {
                             const option = document.createElement('option');
                             option.value = asg_cfg;
                             option.textContent = asg_cfg;
+                            if (asg_cfg === currentAsgCfg) {
+                                option.selected = true;  // Set asg_cfg as the selected option
+                            }
                             asgCfgField.appendChild(option);
                         });
                     } else {
