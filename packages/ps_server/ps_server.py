@@ -1420,10 +1420,6 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     LOG.exception(emsg)
                 try:
                     write_SetUpCfg(name, setup_cfg)
-                    if((asg_cfg != 'None') and (asg_cfg != '')):
-                        asg_cfg_src_file_path = os.path.join(tf_dir, 'sliderule-asg-' + asg_cfg + '.tf.OPTION')
-                        asg_cfg_dst_file_path = os.path.join(tf_dir, 'sliderule-asg.tf')
-                        yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["cp", asg_cfg_src_file_path, asg_cfg_dst_file_path])
                     yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["ls", tf_dir])
                 except subprocess.CalledProcessError as e:
                     # expect to see this--> "ls: cannot access {tf_dir}: No such file or directory"
@@ -1431,6 +1427,10 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
             self.get_specific_tf_version_files_from_s3(s3_client, name, version)       
             update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price, asg_cfg)
+            if((asg_cfg != 'None') and (asg_cfg != '')):
+                asg_cfg_src_file_path = os.path.join(tf_dir, 'sliderule-asg-' + asg_cfg + '.tf.OPTION')
+                asg_cfg_dst_file_path = os.path.join(tf_dir, 'sliderule-asg.tf')
+                yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["cp", asg_cfg_src_file_path, asg_cfg_dst_file_path])
             yield from self.execute_cmd          (name=name, ps_cmd='SetUp',    cmd_args=["ls", '-al', tf_dir])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["init"])
             yield from self.execute_terraform_cmd(name=name, ps_cmd='SetUp',    cmd_args=["validate"])
