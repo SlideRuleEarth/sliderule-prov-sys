@@ -230,7 +230,7 @@ def get_ec2_client():
     if not hasattr(thread_local_storage, "ec2_client"):
         endpoint_url = os.environ.get("AWS_EC2_ENDPOINT_URL")
         aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
-        LOG.info(f"endpoint_url:{endpoint_url} aws_region:{aws_region}")
+        #LOG.info(f"endpoint_url:{endpoint_url} aws_region:{aws_region}")
         if endpoint_url is None or endpoint_url == "":
             ec2_client = boto3.client("ec2", region_name=aws_region)
         else:

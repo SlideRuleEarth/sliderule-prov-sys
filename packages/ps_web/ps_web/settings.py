@@ -471,6 +471,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://uofmdtest.testsliderule.org",
     "https://esr.slideruleearth.io",
     "https://brown.slideruleearth.io",
+    "https://ccid.slideruleearth.io",
+    "https://test-public.testsliderule.org",
+    "https://testsliderule.org",
+    "https://slideruleearth.io",
 ]
 if DEBUG:
     CORS_ALLOWED_ORIGINS.append("http://localhost")
