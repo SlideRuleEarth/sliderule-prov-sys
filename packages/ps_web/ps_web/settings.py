@@ -460,21 +460,14 @@ OAUTH2_PROVIDER = {
 #     r'^https://(\w+\.)?slideruleearth\.io$',
 #     r'^https://(\w+\.)?testsliderule\.org$',
 # ]
-# OR
-# CORS_ORIGIN_ALLOW_ALL = True
-# OR
+# CORS restrictions only affect clients that are browsers, not python clients or C++ clients
 CORS_ALLOWED_ORIGINS = [
-    "https://sliderule.slideruleearth.io",
-    "https://developers.slideruleearth.io",
-    "https://uw.slideruleearth.io",
-    "https://utexas.slideruleearth.io",
-    "https://uofmdtest.testsliderule.org",
-    "https://esr.slideruleearth.io",
-    "https://brown.slideruleearth.io",
-    "https://ccid.slideruleearth.io",
-    "https://test-public.testsliderule.org",
     "https://testsliderule.org",
     "https://slideruleearth.io",
+    "https://client.testsliderule.org",
+    "https://client.slideruleearth.io",
+    "https://demo.testsliderule.org",
+    "https://demo.slideruleearth.io",
 ]
 if DEBUG:
     CORS_ALLOWED_ORIGINS.append("http://localhost")
