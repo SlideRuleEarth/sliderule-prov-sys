@@ -409,7 +409,7 @@ class ClusterConfigView(generics.UpdateAPIView):
 
 class NumNodesView(generics.RetrieveAPIView):
     '''
-    Takes an org_name and returns the min-current-max number of nodes and the version from the cluster for the org.
+    Takes an org_name and returns the min-current-max number of nodes and the version and is_public from the cluster for the org.
     '''
     serializer_class = DummySerializer
     def get(self, request, org_name, *args, **kwargs):
@@ -425,9 +425,9 @@ class NumNodesView(generics.RetrieveAPIView):
                     update_cur_num_nodes(orgAccountObj)
                     clusterObj = Cluster.objects.get(org=orgAccountObj)
                     if clusterObj.is_deployed:
-                        jrsp = {'status': "SUCCESS",'min_nodes':orgAccountObj.min_node_cap,'current_nodes': clusterObj.cur_nodes, 'max_nodes':orgAccountObj.max_node_cap, 'version':clusterObj.cur_version}
+                        jrsp = {'status': "SUCCESS",'min_nodes':orgAccountObj.min_node_cap,'current_nodes': clusterObj.cur_nodes, 'max_nodes':orgAccountObj.max_node_cap, 'version':clusterObj.cur_version, 'is_public':clusterObj.is_public}
                     else:
-                        jrsp = {'status': "SUCCESS",'min_nodes':orgAccountObj.min_node_cap,'current_nodes': 0, 'max_nodes':orgAccountObj.max_node_cap, 'version':clusterObj.cur_version}
+                        jrsp = {'status': "SUCCESS",'min_nodes':orgAccountObj.min_node_cap,'current_nodes': 0, 'max_nodes':orgAccountObj.max_node_cap, 'version':clusterObj.cur_version, 'is_public':clusterObj.is_public}
                     http_status = status.HTTP_200_OK
                 except:
                     LOG.exception("caught exception:")
