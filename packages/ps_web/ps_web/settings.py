@@ -460,7 +460,10 @@ OAUTH2_PROVIDER = {
 #     r'^https://(\w+\.)?slideruleearth\.io$',
 #     r'^https://(\w+\.)?testsliderule\.org$',
 # ]
+
+
 # CORS restrictions only affect clients that are browsers, not python clients or C++ clients
+# These allow the web client to access the org_num_nodes API(s) from the specified origins
 CORS_ALLOWED_ORIGINS = [
     "https://testsliderule.org",
     "https://slideruleearth.io",
