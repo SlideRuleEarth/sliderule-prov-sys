@@ -5,7 +5,7 @@ djangorestframework-simplejwt<6
 django-amazon-ses<5
 grpcio<2
 grpcio-tools<2
-gunicorn>=22,<23
+gunicorn>=23.0.0
 ansi2html<2
 pytz
 Babel<3

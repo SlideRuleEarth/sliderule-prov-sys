@@ -779,7 +779,7 @@ def write_SetUpCfg(name,setup_cfg):
         json_file.write(json_str)
         LOG.info(f"{MessageToString(setup_cfg)} to {setup_json_file_path} ")
 
-def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg):
+def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max_price,asg_cfg,availability_zone):
     LOG.info(f"update_SetUpCfg: name:{name} version:{version} is_public:{is_public} now:{now} spot_allocation_strategy:{spot_allocation_strategy} spot_max_price:{spot_max_price} asg_cfg:{asg_cfg}")
     try:
         setup_cfg = read_SetUpCfg(name) # might not exist
@@ -791,6 +791,7 @@ def update_SetUpCfg(name,version,is_public,now,spot_allocation_strategy,spot_max
         setup_cfg.spot_allocation_strategy = spot_allocation_strategy
         setup_cfg.spot_max_price = spot_max_price
         setup_cfg.asg_cfg = asg_cfg
+        setup_cfg.availability_zone = availability_zone
         LOG.info(f"update_SetUpCfg: {MessageToString(setup_cfg,print_unknown_fields=True)}")
         write_SetUpCfg(name, setup_cfg)
     except Exception as e:
@@ -1389,7 +1390,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
             LOG.exception(f'Exception:{e}')
             raise e
 
-    def setup_terraform_env(self, s3_client, name, version, is_public, now, spot_allocation_strategy, spot_max_price,asg_cfg):
+    def setup_terraform_env(self, s3_client, name, version, is_public, now, spot_allocation_strategy, spot_max_price, asg_cfg, availability_zone):
         LOG.info(f"Start SetUp of provision environment for org:{name} version:{version}")
         st = datetime.now(timezone.utc)
         try:
@@ -1415,6 +1416,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     setup_cfg.spot_allocation_strategy = spot_allocation_strategy
                     setup_cfg.spot_max_price = spot_max_price
                     setup_cfg.asg_cfg = asg_cfg
+                    setup_cfg.availability_zone = availability_zone
                 except Exception as e:
                     emsg = (f" Processing SetUp {name} cluster caught this exception creating tf_dir: ")
                     LOG.exception(emsg)
@@ -1426,7 +1428,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     LOG.info(f"terraform folder {tf_dir} do not exist expect to see this--> 'ls: cannot access {tf_dir}: No such file or directory' in e:{e}")
             yield from self.execute_cmd(name=name, ps_cmd='SetUp', cmd_args=["mkdir", "-vp", tf_dir])
             self.get_specific_tf_version_files_from_s3(s3_client, name, version)       
-            update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price, asg_cfg)
+            update_SetUpCfg(name, version, is_public, now, spot_allocation_strategy, spot_max_price, asg_cfg, availability_zone)
             if((asg_cfg != 'None') and (asg_cfg != '')):
                 asg_cfg_src_file_path = os.path.join(tf_dir, 'sliderule-asg-' + asg_cfg + '.tf.OPTION')
                 asg_cfg_dst_file_path = os.path.join(tf_dir, 'sliderule-asg.tf')
@@ -1551,6 +1553,9 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 raise PS_InternalError(emsg)
             cluster_version = f"cluster_version={setup_cfg.version}"
             asg_cfg = f"asg_cfg={setup_cfg.asg_cfg}"
+            spot_allocation_strategy = "spot_allocation_strategy=" + setup_cfg.spot_allocation_strategy
+            spot_max_price = "spot_max_price=" + str(setup_cfg.spot_max_price)
+            availability_zone = "availability_zone=" + setup_cfg.availability_zone
             is_public = "is_public="+ str(setup_cfg.is_public)
             if self.valid_deploy_args(request):
                 domain = "domain=" + get_domain_env()
@@ -1575,6 +1580,12 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     node_asg_max_capacity,
                     "-var",
                     node_asg_desired_capacity,
+                    "-var",
+                    spot_allocation_strategy,
+                    "-var",
+                    spot_max_price,
+                    "-var",
+                    availability_zone,
                 ]
                 try:
                     yield from self.execute_sequence_of_terraform_cmds(name=request.name, ps_cmd='Update', cmd_args=cmd_args)
@@ -1714,7 +1725,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
     def SetUp(self, request, context):
         LOG.info(f"SetUp request:{MessageToString(request)} ")
         s3_client = get_s3_client()
-        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now, spot_allocation_strategy=request.spot_allocation_strategy, spot_max_price=request.spot_max_price,asg_cfg=request.asg_cfg)
+        yield from self.setup_terraform_env(s3_client=s3_client, name=request.name, version=request.version, is_public=request.is_public, now=request.now, spot_allocation_strategy=request.spot_allocation_strategy, spot_max_price=request.spot_max_price,asg_cfg=request.asg_cfg, availability_zone=request.availability_zone)
 
     def TearDown(self, request, context):
         s3_client = get_s3_client()

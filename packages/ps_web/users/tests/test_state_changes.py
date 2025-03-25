@@ -165,7 +165,7 @@ def test_negative_test_apis(caplog,client,verified_TEST_USER,mock_email_backend,
                                     url_args=[orgAccountObj.name,3,15],
                                     access_token=access_token+'BAD',
                                     expected_status=403)
-    assert(json_data['messages'][0]['message'] == 'Token is invalid or expired') 
+    assert(json_data['messages'][0]['message'] == 'Token is invalid') 
 
     # test invalid num_nodes gets clamped
     json_data = simple_test_onn_api(client,

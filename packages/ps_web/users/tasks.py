@@ -1439,6 +1439,7 @@ def process_SetUp_cmd(orgAccountObj):
                     spot_allocation_strategy=orgAccountObj.spot_allocation_strategy,
                     spot_max_price=orgAccountObj.spot_max_price,
                     asg_cfg=orgAccountObj.asg_cfg,
+                    availability_zone=orgAccountObj.availability_zone,
                     ),
                     timeout=timeout)
             done = False

@@ -174,6 +174,9 @@ unit-tests-ps-web-only-dev:   ## run the web_server unit tests against a running
 unit-tests-ps-server-only:   ## run the ps_server unit tests  then exit
 	cd $(PS_SERVER_SOURCE_DIR) && make unit-tests && make down
 
+unit-tests-ps-server-only-dev:   ## run the ps_server unit tests  then exit
+	cd $(PS_SERVER_SOURCE_DIR) && make unit-tests-dev && make down
+
 unit-tests-disable_provisioning: docker-test ## run the web_server django unit tests against a running dev system with localstack then exit
 #   These test cause the system to be disabled so each have to be run in isolation
 	make down && \
@@ -281,7 +284,7 @@ unit-tests-with-cost: docker ## (incurs $$) run the web_server django unit tests
 	@echo DOMAIN:$(DOMAIN)
 	@echo BLD_ENVVER:$(BLD_ENVVER)
 
-unit-tests-dev: docker ## run the web_server django unit tests against a running dev system then exit
+unit-tests-dev: docker ## run the web_server django unit tests with dev marker system then exit
 	make down && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	export PS_WEB_DIR=$(PS_WEB_DIR) && \

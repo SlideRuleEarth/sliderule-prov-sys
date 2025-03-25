@@ -63,7 +63,7 @@ def test_token(tasks_module,caplog,client,initialize_test_environ):
     response = client.post(url,data)
     assert (response.status_code == 200) # first pass is 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_org_token_refresh(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend,initialize_test_environ):
@@ -104,7 +104,7 @@ def test_org_token_refresh(caplog, client, mock_tasks_enqueue_stubbed_out, mock_
     
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_org_token_github_refresh(caplog,client, social_user, social_user_membership, github_social_account, mock_email_backend,initialize_test_environ):

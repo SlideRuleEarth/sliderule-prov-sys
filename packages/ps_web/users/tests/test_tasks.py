@@ -275,6 +275,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
         'spot_max_price': 0.15,
         'spot_allocation_strategy': 'lowest-price',
         'asg_cfg': 'aarch64',
+        'availability_zone': 'us-west-2a',
     }
     verify_org_configure(client=client,
                          data=form_data,
@@ -321,6 +322,7 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client
         'spot_max_price': 0.15,
         'spot_allocation_strategy': 'lowest-price',
         'asg_cfg': 'aarch64',
+        'availability_zone': 'us-west-2a',
     }
     verify_org_configure(client=client,
                          data=form_data,

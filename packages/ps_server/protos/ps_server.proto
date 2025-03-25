@@ -97,7 +97,8 @@ message SetUpReq {
   string  now       = 4;
   string  spot_allocation_strategy = 5;
   double  spot_max_price = 6;
-  string  asg_cfg = 7; 
+  string  asg_cfg = 7;
+  string  availability_zone = 8; 
 }
 
 // The TearDown Request message 
