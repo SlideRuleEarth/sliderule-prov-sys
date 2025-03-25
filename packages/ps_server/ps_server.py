@@ -1222,7 +1222,7 @@ class Control(ps_server_pb2_grpc.ControlServicer):
 
         t_out = {"ilb_state": "", "ilb_ip_address": "", "ilb_id": "","monitor_state": "", "monitor_id": ""}
         if (
-            lines.__len__() == 5
+            lines.__len__() >= 5 # we added some to this to sanity check for updates to spot instance stuff
         ):  # expected ini formatted output of ilb_state=<xxx> and ilb_ip_address = <xxx>
             t_out = dict(lines)
             LOG.info(t_out)
