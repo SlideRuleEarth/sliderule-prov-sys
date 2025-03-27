@@ -287,7 +287,7 @@ def verify_rsp_generator(rrsp_gen, name, ps_cmd,  logger):
 def terraform_setup(ps_server_cntrl, s3_client, s3_bucket, version, is_public, name, logger):
 
     assert bucket_exists(s3_client, s3_bucket)
-    rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,name=name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"),spot_allocation_strategy='lowest-price',spot_max_price=0.17,asg_cfg='None')
+    rrsp_gen = ps_server_cntrl.setup_terraform_env(s3_client=s3_client,name=name,version=version,is_public=is_public,now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"),spot_allocation_strategy='lowest-price',spot_max_price=0.17,asg_cfg='None',availability_zone='us-west-2a')
 
     cnt,done,stop_cnt,exc_cnt,error_cnt,stdout,stderr = verify_rsp_generator(rrsp_gen,name,'SetUp',logger)
 

@@ -96,18 +96,18 @@
                             <!---------  Then display orgs where user is not a member --------> 
                             {% if any_unaffiliated %}
                             <div class="container-lg text-center">
-                                <div class="accordion" id="org_accordian">
+                                <div class="accordion" id="org_accordion_unaffiliated">
                                     <div class="container text-center">
                                         {% for org in org_accounts %}
                                             {% if not org.is_public %}
                                                 {% if not is_member_of_org|get_item:org.name %}
-                                                    <div class="accordian-item shadow">
-                                                        <h2 class="accordian-header" id="hd_{{org.name}}">
+                                                    <div class="accordion-item shadow">
+                                                        <h2 class="accordion-header" id="hd_{{org.name}}">
                                                             <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_u" aria-expanded="true" aria-controls="collapse_{{org.name}}_u">
                                                                 {{org.name}}
                                                             </button>
                                                         </h2>
-                                                        <div id="collapse_{{org.name}}_u" class="accordion-collapse collapse" aria-labelledby="hd_{{org.name}}" data-bs-parent="#org_accordion">
+                                                        <div id="collapse_{{org.name}}_u" class="accordion-collapse collapse" aria-labelledby="hd_{{org.name}}" data-bs-parent="#org_accordion_unaffiliated">
                                                             <div class="accordion-body">
                                                                 <div class="container-fluid">
                                                                     <div class="card text-center mb-2 border-0">
@@ -151,7 +151,7 @@
                         <div class="card-body">                                     
                             <!---------  Then display orgs where user is not a member --------> 
                             <div class="container-lg text-center">
-                                <div class="accordion" id="org_accordian">
+                                <div class="accordion" id="org_accordion_public">
                                     <div class="container text-center">
                                         {% if user_is_developer %}
                                             {% for org in org_accounts %}
@@ -166,13 +166,13 @@
                                         {% else %}
                                             {% for org in org_accounts %}
                                                 {% if org_is_public|get_item:org.name %}
-                                                    <div class="accordian-item shadow">
-                                                        <h2 class="accordian-header" id="hd_{{org.name}}">
+                                                    <div class="accordion-item shadow">
+                                                        <h2 class="accordion-header" id="hd_{{org.name}}">
                                                             <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_{{org.name}}_p" aria-expanded="true" aria-controls="collapse_{{org.name}}_p">
                                                                 {{org.name}}
                                                             </button>
                                                         </h2>
-                                                        <div id="collapse_{{org.name}}_p" class="accordion-collapse collapse" aria-labelledby="hd_{{org.name}}" data-bs-parent="#org_accordion">
+                                                        <div id="collapse_{{org.name}}_p" class="accordion-collapse collapse" aria-labelledby="hd_{{org.name}}" data-bs-parent="#org_accordion_public">
                                                             <div class="accordion-body">
                                                                 <div class="container-fluid">
                                                                     <div class="card text-center mb-2 border-0">

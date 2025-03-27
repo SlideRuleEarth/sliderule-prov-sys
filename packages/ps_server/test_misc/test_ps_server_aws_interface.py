@@ -208,7 +208,8 @@ def test_setup_teardown_terraform_env(setup_logging, s3, get_S3_BUCKET, test_nam
             now=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%Z"), 
             spot_allocation_strategy='lowest-price', 
             spot_max_price=0.16, 
-            asg_cfg=asg_cfg 
+            asg_cfg=asg_cfg,
+            availability_zone='us-west-2a' 
         ), 
         test_name, 
         'SetUp', 

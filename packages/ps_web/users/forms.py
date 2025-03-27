@@ -120,6 +120,7 @@ class OrgAccountCfgForm(ModelForm):
     version = forms.ChoiceField(widget=forms.Select(attrs={'id': 'version'}))
     is_public = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'id': 'is_public'}))
     spot_allocation_strategy = forms.ChoiceField(widget=forms.Select(attrs={'id': 'spot_allocation_strategy'}))
+    availability_zone = forms.ChoiceField(widget=forms.Select(attrs={'id':'availability_zone'}))
     asg_cfg = forms.ChoiceField(required=False,widget=forms.Select(attrs={'id': 'asg_cfg'}))  # Add this line
     def __init__(self, *args, **kwargs):
         available_versions = kwargs.pop('available_versions', None)
@@ -139,10 +140,11 @@ class OrgAccountCfgForm(ModelForm):
             ('capacity-optimized', 'capacity-optimized'), 
             ('capacity-optimized-prioritized', 'capacity-optimized-prioritized'), 
             ('price-capacity-optimized', 'price-capacity-optimized'),
-        ]   
+        ]
+        self.fields['availability_zone'].choices = [(zone, zone) for zone in ['us-west-2a', 'us-west-2b', 'us-west-2c', 'us-west-2d']]
     class Meta:
         model = OrgAccount
-        fields = ['provisioning_suspended', 'is_public', 'version', 'min_node_cap', 'max_node_cap', 'allow_deploy_by_token', 'destroy_when_no_nodes', 'spot_max_price', 'spot_allocation_strategy', 'asg_cfg']
+        fields = ['provisioning_suspended', 'is_public', 'version', 'min_node_cap', 'max_node_cap', 'allow_deploy_by_token', 'destroy_when_no_nodes', 'spot_max_price', 'spot_allocation_strategy', 'asg_cfg', 'availability_zone']
 
 
 class OrgProfileForm(ModelForm):

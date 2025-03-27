@@ -188,7 +188,8 @@ def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,
         'destroy_when_no_nodes':'True',
         'spot_max_price':'0.5',
         'spot_allocation_strategy':'lowest-price',
-        'asg_cfg':'aarch64',        
+        'asg_cfg':'aarch64',
+        'availability_zone':'us-west-2a',        
     })
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)
@@ -203,7 +204,7 @@ def test_org_account_cfg_versions(caplog,client,s3,test_name,mock_email_backend,
     assert orgAccountObj.asg_cfg == 'aarch64'
 
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.real_ps_server
 @pytest.mark.django_db
 def test_asg_cfgs(caplog,client,s3,test_name,mock_email_backend,initialize_test_environ,localstack_setup):
@@ -235,7 +236,8 @@ def test_asg_cfgs(caplog,client,s3,test_name,mock_email_backend,initialize_test_
         'destroy_when_no_nodes':'False',
         'spot_max_price':'1.5',
         'spot_allocation_strategy':'capacity-optimized',
-        'asg_cfg':'aarch64_pytorch',        
+        'asg_cfg':'aarch64_pytorch',
+        'availability_zone':'us-west-2a',        
     })
     # refresh the OrgAccount object
     orgAccountObj = OrgAccount.objects.get(id=org_account_id)

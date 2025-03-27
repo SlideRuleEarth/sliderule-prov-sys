@@ -468,26 +468,28 @@ def test_org_ONN_ttl(caplog, client, mock_tasks_enqueue_stubbed_out, mock_views_
     assert (mock_schedule_process_state_change.call_count == current_cnt-start_cnt)
     assert(clusterObj.provision_env_ready)
     assert(orgAccountObj.provisioning_suspended==False)
-    assert(orgAccountObj.num_ps_cmd==2) # onn triggered setup update
-    assert(orgAccountObj.num_ps_cmd_successful==2) 
+    assert(orgAccountObj.num_ps_cmd==3) # onn triggered setup update refresh
+    assert(orgAccountObj.num_ps_cmd_successful==3) 
 
-    assert PsCmdResult.objects.count() == 2 # SetUp Update 
+    assert PsCmdResult.objects.count() == 3 # SetUp Update Refresh
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
     assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
 
     assert(orgAccountObj.provisioning_suspended==False)
-    assert(orgAccountObj.num_ps_cmd==2)
-    assert(orgAccountObj.num_ps_cmd_successful==2) 
+    assert(orgAccountObj.num_ps_cmd==3)
+    assert(orgAccountObj.num_ps_cmd_successful==3) 
     logger.info(f"min_tm:{min_tm} max_tm:{max_tm}")
     verify_schedule_process_state_change(mock_schedule_process_state_change=mock_schedule_process_state_change,
                                          min_tm=min_tm,
                                          max_tm=max_tm) 
 
 
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db 
 @pytest.mark.ps_server_stubbed
 def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enqueue_stubbed_out, mock_views_enqueue_stubbed_out, mock_schedule_process_state_change, mock_email_backend):
@@ -521,6 +523,7 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
         'spot_max_price': 0.15,
         'spot_allocation_strategy': 'lowest-price',
         'asg_cfg': 'aarch64',
+        'availability_zones': 'us-east-1a,us-east-1b',
     }
     time_now = datetime.now(timezone.utc)
     dt = time_now - timedelta(seconds=1)
@@ -568,12 +571,14 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
     clusterObj.refresh_from_db()
     orgAccountObj.refresh_from_db()
 
-    assert PsCmdResult.objects.count() == 2 # SetUp Update 
+    assert PsCmdResult.objects.count() == 3 # SetUp Update Refresh
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
     assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
     time_now = datetime.now(timezone.utc)
     # now change past the ttl triggers a call to process_state_change
     # so that the table is processed again and the exipred ONN is removed
@@ -582,12 +587,14 @@ def test_org_ONN_expires(caplog, client,initialize_test_environ,mock_tasks_enque
     with time_machine.travel(dt,tick=True):
         fake_now = datetime.now(timezone.utc)
         logger.info(f"fake_now:{fake_now} dt:{dt}")
-        assert psCmdResultObjs.count() == 2
+        assert psCmdResultObjs.count() == 3
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
         assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
         logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
 
 
 #@pytest.mark.dev

@@ -14,6 +14,7 @@ from subprocess import CalledProcessError
 import ps_server_pb2
 import ps_server_pb2_grpc
 from google.protobuf.json_format import MessageToJson
+from unittest.mock import patch, MagicMock, ANY
 
 from importlib import import_module
 from datetime import datetime, timezone, timedelta
@@ -124,18 +125,20 @@ def test_process_num_node_table_ONN_EMPTY_DESTROY(tasks_module,initialize_test_e
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     
     assert orgAccountObj.num_setup_cmd == 0
-    assert orgAccountObj.num_ps_cmd == 1 # Destroy
+    assert orgAccountObj.num_ps_cmd == 2 # Destroy
     assert orgAccountObj.num_setup_cmd_successful == 0
-    assert orgAccountObj.num_ps_cmd_successful == 1
-    assert PsCmdResult.objects.count() == 1
+    assert orgAccountObj.num_ps_cmd_successful == 2
+    assert PsCmdResult.objects.count() == 2
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"[1]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
 
 
 #@pytest.mark.dev
@@ -162,17 +165,19 @@ def test_process_num_node_table_ONN_EMPTY_UPDATE(tasks_module,initialize_test_en
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     
-    assert orgAccountObj.num_ps_cmd == 1 #  Update
+    assert orgAccountObj.num_ps_cmd == 2 #  Update Refresh
     assert orgAccountObj.num_setup_cmd_successful == 0
-    assert orgAccountObj.num_ps_cmd_successful == 1
-    assert PsCmdResult.objects.count() == 1
+    assert orgAccountObj.num_ps_cmd_successful == 2
+    assert PsCmdResult.objects.count() == 2
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
     assert orgAccountObj.desired_num_nodes == 1
 
 #@pytest.mark.dev
@@ -199,7 +204,7 @@ def test_process_num_node_table_ONN_EMPTY_NOT_DEPLOYED(tasks_module,initialize_t
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     
     assert orgAccountObj.num_ps_cmd == 0
@@ -232,154 +237,186 @@ def test_process_num_node_table_ONN_EMPTY_SET_TO_MIN(tasks_module,initialize_tes
     assert OrgNumNode.objects.count() == 0
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
     orgAccountObj.refresh_from_db()
     
-    assert orgAccountObj.num_ps_cmd == 1 #  Update
+    assert orgAccountObj.num_ps_cmd == 2 #  Update Refresh
     assert orgAccountObj.num_setup_cmd_successful == 0
-    assert orgAccountObj.num_ps_cmd_successful == 1
-    assert PsCmdResult.objects.count() == 1
+    assert orgAccountObj.num_ps_cmd_successful == 2
+    assert PsCmdResult.objects.count() == 2
     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
     logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
     assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
 
 #@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_VERSION(tasks_module,client,create_TEST_USER,initialize_test_environ,mock_tasks_enqueue_stubbed_out,mock_views_enqueue_stubbed_out):
-    '''
-        This procedure will test the 'process_num_node_table' routine
-        for the case when the ONN table entry is processed when the version was changed
-        and generates a Destroy cmd
-    '''
+    with patch('users.tasks.get_scheduler') as mock_get_scheduler:
+        '''
+            This procedure will test the 'process_num_node_table' routine
+            for the case when the ONN table entry is processed when the version was changed
+            and generates a Destroy cmd
+        '''
+        mock_scheduler_instance = MagicMock()
+        mock_get_scheduler.return_value = mock_scheduler_instance
+        mock_scheduler_instance.enqueue_at = MagicMock()
 
-    orgAccountObj = get_test_org()
-    clusterObj = Cluster.objects.get(org=orgAccountObj)
-    assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
-    # setup necessary form data
-    initial_version = orgAccountObj.version
-    initial_is_public = orgAccountObj.is_public
-    if initial_version == 'latest':
-        new_version = 'v3' 
-    elif initial_version == 'v3':
-        new_version = 'latest'
-    form_data = {
-        'is_public': initial_is_public,
-        'version': initial_version, 
-        'min_node_cap': 1,
-        'max_node_cap': 3,
-        'allow_deploy_by_token': True,
-        'destroy_when_no_nodes': True,
-        'provisioning_suspended': False,
-        'spot_max_price': 0.15,
-        'spot_allocation_strategy': 'lowest-price',
-        'asg_cfg': 'aarch64',
-    }
-    verify_org_configure(client=client,
-                         data=form_data,
-                         orgAccountObj=orgAccountObj,
-                         expected_change_ps_cmd=2, # SetUp Update
-                         expected_change_setup_cmd=1,
-                         mock_tasks_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                         mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
+ 
+        orgAccountObj = get_test_org()
+        clusterObj = Cluster.objects.get(org=orgAccountObj)
+        assert(client.login(username=OWNER_USER, password=OWNER_PASSWORD))
+        # setup necessary form data
+        initial_version = orgAccountObj.version
+        initial_is_public = orgAccountObj.is_public
+        if initial_version == 'latest':
+            new_version = 'v3' 
+        elif initial_version == 'v3':
+            new_version = 'latest'
+        form_data = {
+            'is_public': initial_is_public,
+            'version': initial_version, 
+            'min_node_cap': 1,
+            'max_node_cap': 3,
+            'allow_deploy_by_token': True,
+            'destroy_when_no_nodes': True,
+            'provisioning_suspended': False,
+            'spot_max_price': 0.15,
+            'spot_allocation_strategy': 'lowest-price',
+            'asg_cfg': 'aarch64',
+            'availability_zone': 'us-west-2a',
+        }
+        verify_org_configure(client=client,
+                            data=form_data,
+                            orgAccountObj=orgAccountObj,
+                            expected_change_ps_cmd=3, # SetUp Update Refresh
+                            expected_change_setup_cmd=1,
+                            mock_tasks_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
+                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
 
-    logger.info(f"clusterObj.cur_version={clusterObj.cur_version} clusterObj.is_deployed={clusterObj.is_deployed}")
+        logger.info(f"clusterObj.cur_version={clusterObj.cur_version} clusterObj.is_deployed={clusterObj.is_deployed}")
 
-    logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
-    assert orgAccountObj.desired_num_nodes == 1
-    
-    assert OrgNumNode.objects.count() == 0
-    assert orgAccountObj.num_ps_cmd == 2
-    assert PsCmdResult.objects.count() == 2
-    
-    orgAccountObj.refresh_from_db()
-    logger.info(f"orgAccountObj: num_ps_cmd={orgAccountObj.num_ps_cmd} desired_num_nodes={orgAccountObj.desired_num_nodes} cnt:{PsCmdResult.objects.count()}")
-     
-    assert OwnerPSCmd.objects.count() == 0
-    assert orgAccountObj.num_setup_cmd == 1 
-    assert orgAccountObj.num_ps_cmd == 2 #  SetUp, Update
-    assert orgAccountObj.num_setup_cmd_successful == 1
-    assert orgAccountObj.num_ps_cmd_successful == 2 # SetUp, Update 
-    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
-    assert PsCmdResult.objects.count() == 2
-    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
-    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        logger.info(f"desired:{orgAccountObj.desired_num_nodes}")
+        assert orgAccountObj.desired_num_nodes == 1
+        
+        assert OrgNumNode.objects.count() == 0
+        assert orgAccountObj.num_ps_cmd == 3
+        assert PsCmdResult.objects.count() == 3
+        
+        orgAccountObj.refresh_from_db()
+        logger.info(f"orgAccountObj: num_ps_cmd={orgAccountObj.num_ps_cmd} desired_num_nodes={orgAccountObj.desired_num_nodes} cnt:{PsCmdResult.objects.count()}")
+        
+        assert OwnerPSCmd.objects.count() == 0
+        assert orgAccountObj.num_setup_cmd == 1 
+        assert orgAccountObj.num_ps_cmd == 3 #  SetUp, Update Refresh
+        assert orgAccountObj.num_setup_cmd_successful == 1
+        assert orgAccountObj.num_ps_cmd_successful == 3 # SetUp, Update Refresh
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
+        assert PsCmdResult.objects.count() == 3
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
 
-    form_data = {
-        'is_public': initial_is_public,
-        'version': new_version, 
-        'min_node_cap': 1,
-        'max_node_cap': 3,
-        'allow_deploy_by_token': True,
-        'destroy_when_no_nodes': True,
-        'provisioning_suspended': False,
-        'spot_max_price': 0.15,
-        'spot_allocation_strategy': 'lowest-price',
-        'asg_cfg': 'aarch64',
-    }
-    verify_org_configure(client=client,
-                         data=form_data,
-                         orgAccountObj=orgAccountObj,
-                         expected_change_ps_cmd=3, # ... SetUp, Destroy, Update,
-                         expected_change_setup_cmd=1,
-                         mock_tasks_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                         mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
-    assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
-    assert orgAccountObj.num_ps_cmd == 5 # SetUp, Update, Destroy, SetUp, Update
-    assert orgAccountObj.num_setup_cmd_successful == 2
-    assert orgAccountObj.num_ps_cmd_successful == 5 #  SetUp, Update, SetUp, Destroy, Update
-    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
-    assert PsCmdResult.objects.count() == 5
-    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
-    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[2].ps_cmd_summary_label
-    logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-    assert 'Destroy' in psCmdResultObjs[3].ps_cmd_summary_label
-    logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[4].ps_cmd_summary_label
+        form_data = {
+            'is_public': initial_is_public,
+            'version': new_version, 
+            'min_node_cap': 1,
+            'max_node_cap': 3,
+            'allow_deploy_by_token': True,
+            'destroy_when_no_nodes': True,
+            'provisioning_suspended': False,
+            'spot_max_price': 0.15,
+            'spot_allocation_strategy': 'lowest-price',
+            'asg_cfg': 'aarch64',
+            'availability_zone': 'us-west-2a',
+        }
+        verify_org_configure(client=client,
+                            data=form_data,
+                            orgAccountObj=orgAccountObj,
+                            expected_change_ps_cmd=4, # ... SetUp, Destroy, Update, Refresh
+                            expected_change_setup_cmd=1,
+                            mock_tasks_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
+                            mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
+        assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
+        assert orgAccountObj.num_ps_cmd == 7 # SetUp, Update, Refresh, Destroy, SetUp, Update, Refresh
+        assert orgAccountObj.num_setup_cmd_successful == 2
+        assert orgAccountObj.num_ps_cmd_successful == 7
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
+        assert PsCmdResult.objects.count() == 7
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
+        logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
+        assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+        logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
+        assert 'Destroy' in psCmdResultObjs[4].ps_cmd_summary_label
+        logger.info(f"[5]:{psCmdResultObjs[5].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[5].ps_cmd_summary_label
+        logger.info(f"[6]:{psCmdResultObjs[6].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[6].ps_cmd_summary_label
 
-    form_data = {
-        'form_submit': 'add_onn',
-        'add_onn-desired_num_nodes': orgAccountObj.desired_num_nodes,
-        'add_onn-ttl_minutes': 15,
-    }
-    response = verify_org_manage_cluster_onn(   client=client,
-                                                orgAccountObj=orgAccountObj,
-                                                url_args=[orgAccountObj.id],
-                                                data=form_data,
-                                                expected_change_ps_cmd=0, # Destroy is now handled in configure/SetUp
-                                                expected_status='QUEUED',
-                                                mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
-                                                mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
-    assert OwnerPSCmd.objects.count() == 0
-    assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
-    assert orgAccountObj.num_ps_cmd == 5 # SetUp, Update, SetUp Destroy, Update
-    assert orgAccountObj.num_setup_cmd_successful == 2
-    assert orgAccountObj.num_ps_cmd_successful == 5 #  SetUp, Update, SetUp, Destroy, Update
-    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
-    assert PsCmdResult.objects.count() == 5
-    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
-    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
-    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
-    assert 'Configure' in psCmdResultObjs[2].ps_cmd_summary_label
-    logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
-    assert 'Destroy' in psCmdResultObjs[3].ps_cmd_summary_label
-    logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
-    assert 'Update' in psCmdResultObjs[4].ps_cmd_summary_label
+        form_data = {
+            'form_submit': 'add_onn',
+            'add_onn-desired_num_nodes': orgAccountObj.desired_num_nodes,
+            'add_onn-ttl_minutes': 15,
+        }
+        response = verify_org_manage_cluster_onn(   client=client,
+                                                    orgAccountObj=orgAccountObj,
+                                                    url_args=[orgAccountObj.id],
+                                                    data=form_data,
+                                                    expected_change_ps_cmd=0, # Destroy is now handled in configure/SetUp
+                                                    expected_status='QUEUED',
+                                                    mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
+                                                    mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out)
+        assert OwnerPSCmd.objects.count() == 0
+        assert orgAccountObj.num_setup_cmd == 2 # handled in fixture and here
+        assert orgAccountObj.num_ps_cmd == 7 # SetUp, Update, SetUp Destroy, Update
+        assert orgAccountObj.num_setup_cmd_successful == 2
+        assert orgAccountObj.num_ps_cmd_successful == 7 # SetUp, Update, Refresh, Destroy, SetUp, Update, Refresh, Update, Refresh
+
+
+        # assert that enqueue_at was called with expected arguments
+        # mock_scheduler_instance.enqueue_at.assert_called_with(
+        #     ANY,  # You can also provide a specific datetime
+        #     enqueue_process_state_change,  # This is your real function
+        #     orgAccountObj.name             # Args passed to the job
+        # )
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"PsCmdResult.objects.count()={PsCmdResult.objects.count()}")
+        assert PsCmdResult.objects.count() == 7
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+        assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
+        logger.info(f"[3]:{psCmdResultObjs[3].ps_cmd_summary_label}")
+        assert 'Configure' in psCmdResultObjs[3].ps_cmd_summary_label
+        logger.info(f"[4]:{psCmdResultObjs[4].ps_cmd_summary_label}")
+        assert 'Destroy' in psCmdResultObjs[4].ps_cmd_summary_label
+        logger.info(f"[5]:{psCmdResultObjs[5].ps_cmd_summary_label}")
+        assert 'Update' in psCmdResultObjs[5].ps_cmd_summary_label
+        logger.info(f"[6]:{psCmdResultObjs[6].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[6].ps_cmd_summary_label
+        # logger.info(f"[7]:{psCmdResultObjs[7].ps_cmd_summary_label}")
+        # assert 'Update' in psCmdResultObjs[7].ps_cmd_summary_label
+        # logger.info(f"[8]:{psCmdResultObjs[8].ps_cmd_summary_label}")
+        # assert 'Refresh' in psCmdResultObjs[8].ps_cmd_summary_label
+
 
 #@pytest.mark.dev
 @pytest.mark.django_db
@@ -416,16 +453,17 @@ def test_process_num_node_table_ONN_NOT_EMPTY_CHANGE_IS_PUBLIC(tasks_module,crea
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
 
     orgAccountObj.refresh_from_db()
     
     assert OwnerPSCmd.objects.count() == 0
-    assert orgAccountObj.num_ps_cmd == 1
+    assert orgAccountObj.num_ps_cmd == 2
     assert orgAccountObj.desired_num_nodes == 3 
-    assert PsCmdResult.objects.count() == 1
-    psCmdResultObj = PsCmdResult.objects.first()
-    assert 'Update' in psCmdResultObj.ps_cmd_summary_label
+    assert PsCmdResult.objects.count() == 2
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    assert 'Update'  in psCmdResultObjs[0].ps_cmd_summary_label
+    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
     assert OrgNumNode.objects.count() == 1 # until it expires
 
 #@pytest.mark.dev
@@ -459,16 +497,17 @@ def test_process_num_node_table_ONN_NOT_EMPTY_UPDATE(tasks_module,create_TEST_US
     assert orgAccountObj.num_ps_cmd == 0
     assert PsCmdResult.objects.count() == 0
     
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
 
     orgAccountObj.refresh_from_db()
     
     assert OwnerPSCmd.objects.count() == 0 
-    assert orgAccountObj.num_ps_cmd == 1 # 
+    assert orgAccountObj.num_ps_cmd == 2 # 
     assert orgAccountObj.desired_num_nodes == new_desire_num_nodes
-    assert PsCmdResult.objects.count() == 1
-    psCmdResultObj = PsCmdResult.objects.first()
-    assert 'Update' in psCmdResultObj.ps_cmd_summary_label
+    assert PsCmdResult.objects.count() == 2
+    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+    assert 'Update'  in psCmdResultObjs[0].ps_cmd_summary_label
+    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
     assert OrgNumNode.objects.count() == 1 # until it expires
     onn = OrgNumNode.objects.first()
     clusterObj.refresh_from_db()
@@ -656,13 +695,13 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
     clusterObj = Cluster.objects.get(org=orgAccountObj)
     logger.info(f"orgAccountObj.max_ddt:{orgAccountObj.max_ddt}")
     logger.info(f"timedelta(hours=MIN_HRS_TO_LIVE_TO_START):{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
-    assert OrgNumNode.objects.count() == 0 # on exception we remove the entry
-    assert ((clusterObj.cnnro_ids == []) or (clusterObj.cnnro_ids == None)) # cleaned up on exception
+    #assert ((clusterObj.cnnro_ids == []) or (clusterObj.cnnro_ids == None)) # cleaned up on exception
     called_process_Destroy_cmd = False
     called_process_Update_cmd = False
     called_process_SetUp_cmd = False
     cmd_cnt = 0
     if ONN_IS_EMPTY:
+        assert OrgNumNode.objects.count() == 0
         if DESTROY_WHEN_NO_NODES and MIN_NODE_CAP == 0:
             if WAS_DEPLOYED:
                 called_process_Destroy_cmd = True
@@ -675,6 +714,7 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
                 called_process_Update_cmd = True
                 cmd_cnt = cmd_cnt+1
     else:
+        assert OrgNumNode.objects.count() == 1
         if not WAS_DEPLOYED:
             called_process_SetUp_cmd = True
             cmd_cnt = cmd_cnt+1
@@ -682,29 +722,35 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
         cmd_cnt = cmd_cnt+1
     if called_process_Destroy_cmd:
         assert WAS_DEPLOYED
-        assert orgAccountObj.num_ps_cmd == 1  
-        logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-        assert PsCmdResult.objects.count() == 1
-        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-        assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
-    elif called_process_SetUp_cmd:
-        assert not WAS_DEPLOYED
         assert orgAccountObj.num_ps_cmd == 2  
         logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
         assert PsCmdResult.objects.count() == 2
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+        assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
+    elif called_process_SetUp_cmd:
+        assert not WAS_DEPLOYED
+        assert orgAccountObj.num_ps_cmd == 3  
+        logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+        assert PsCmdResult.objects.count() == 3
+        psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+        logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
         assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
         logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+        logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
     elif called_process_Update_cmd:
-        assert orgAccountObj.num_ps_cmd == 1  
+        assert orgAccountObj.num_ps_cmd == 2  
         logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-        assert PsCmdResult.objects.count() == 1
+        assert PsCmdResult.objects.count() == 2
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
         assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+        logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+        assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
 
 
 
@@ -789,35 +835,45 @@ def test_process_num_node_table_NEGATIVE_TESTS(tasks_module,create_TEST_USER, PS
     init_test_environ(name=NEG_TEST_ERROR_ORG_NAME)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
     setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
     logger.info(f"orgAccountObj:{orgAccountObj} ONN_IS_EMPTY:{ONN_IS_EMPTY} DESTROY_WHEN_NO_NODES:{DESTROY_WHEN_NO_NODES} MIN_NODE_CAP:{MIN_NODE_CAP} WAS_DEPLOYED:{IS_DEPLOYED}")
     verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     if ONN_IS_EMPTY:
         if DESTROY_WHEN_NO_NODES and MIN_NODE_CAP == 0:
             if IS_DEPLOYED:
-                psCmdResultObj = PsCmdResult.objects.first()
-                assert 'Destroy' in psCmdResultObj.ps_cmd_summary_label
+                assert orgAccountObj.num_ps_cmd == 2  
+                logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+                assert PsCmdResult.objects.count() == 2
+                psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+                logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+                assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label
+                logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+                assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
                 assert orgAccountObj.destroy_when_no_nodes == False # under these conditions on exception we set destroy_when_no_nodes to False to stop loop
                 assert orgAccountObj.desired_num_nodes == 0 # on exception we set desired to zero to match min to stop loop
                 assert orgAccountObj.min_node_cap == 0 # on exception we set min to zero
         else:
             if MIN_NODE_CAP != orgAccountObj.desired_num_nodes:
                 if IS_DEPLOYED:
-                    assert orgAccountObj.num_ps_cmd == 1  
-                    logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-                    assert PsCmdResult.objects.count() == 1
-                    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-                    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-                    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
-                else:
                     assert orgAccountObj.num_ps_cmd == 2  
                     logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
                     assert PsCmdResult.objects.count() == 2
                     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
                     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+                    assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+                    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+                    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
+                else:
+                    assert orgAccountObj.num_ps_cmd == 3
+                    logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+                    assert PsCmdResult.objects.count() == 3
+                    psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+                    logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
                     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
                     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
                     assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label     
+                    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+                    assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
                     assert orgAccountObj.desired_num_nodes == 0 # on exception we set desired to zero to match min to stop loop
                     assert orgAccountObj.min_node_cap == 0 # on exception we set min to zero
                     assert orgAccountObj.desired_num_nodes == 0 # on exception we set desired to zero to match min to stop loop
@@ -826,21 +882,25 @@ def test_process_num_node_table_NEGATIVE_TESTS(tasks_module,create_TEST_USER, PS
         # Note: here we just remove the entry that got the exception
         # and we do not expect the desired_num_nodes to be changed in this pass
         if IS_DEPLOYED:
-            assert orgAccountObj.num_ps_cmd == 1  
-            logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-            assert PsCmdResult.objects.count() == 1
-            psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-            logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-            assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
-        else:
             assert orgAccountObj.num_ps_cmd == 2  
             logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
             assert PsCmdResult.objects.count() == 2
             psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
             logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+            assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+            logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+            assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label     
+        else:
+            assert orgAccountObj.num_ps_cmd == 3  
+            logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+            assert PsCmdResult.objects.count() == 3
+            psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+            logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
             assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
             logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
             assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label     
+            logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+            assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label     
 
 test_params = [
     ((ProvisionCmdError,Exception),'LowBalanceError_org',True,True,2,False),
@@ -877,53 +937,63 @@ def test_process_process_num_node_table_when_LOW_BALANCE_exception_occurs_ON_Upd
     setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     orgAccountObj.balance = 2.0 # force low balance exception
     orgAccountObj.save()
-    process_num_node_table(orgAccountObj,0,False)
+    process_num_node_table(orgAccountObj,False)
     verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     if ONN_IS_EMPTY:
         if DESTROY_WHEN_NO_NODES and MIN_NODE_CAP == 0:
             if IS_DEPLOYED:
-                assert PsCmdResult.objects.count() == 1 
+                assert PsCmdResult.objects.count() == 2 
                 psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
                 logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
                 assert 'Destroy' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+                logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+                assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
                 assert orgAccountObj.destroy_when_no_nodes == DESTROY_WHEN_NO_NODES # we don't throw an exception when destroying for low balance
                 assert orgAccountObj.min_node_cap == MIN_NODE_CAP # on exception we set min to zero
         else:
             if MIN_NODE_CAP != orgAccountObj.desired_num_nodes:
                 if not IS_DEPLOYED:
-                    assert orgAccountObj.num_ps_cmd == 2  
+                    assert orgAccountObj.num_ps_cmd == 3  
                     logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-                    assert PsCmdResult.objects.count() == 2
+                    assert PsCmdResult.objects.count() == 3
                     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
                     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
                     assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
                     logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
                     assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label
+                    logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+                    assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
                 else:
-                    assert PsCmdResult.objects.count() == 1 #  Update (min_node_cap is 1)
+                    assert PsCmdResult.objects.count() == 2 #  Update (min_node_cap is 1)
                     psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
                     logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
                     assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
+                    logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+                    assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label # we use Configure (it's user friendly) but it's really SetUp)
     else:
         # assume onnTop.desired_num_nodes != orgAccountObj.desired_num_nodes
         # Note: here we just remove the entry that got the exception
         # and we do not expect the desired_num_nodes to be changed in this pass
         if IS_DEPLOYED:
-            assert orgAccountObj.num_ps_cmd == 1  
-            logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
-            assert PsCmdResult.objects.count() == 1
-            psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
-            logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
-            assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
-        else:
             assert orgAccountObj.num_ps_cmd == 2  
             logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
             assert PsCmdResult.objects.count() == 2
             psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
             logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
+            assert 'Update' in psCmdResultObjs[0].ps_cmd_summary_label
+            logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
+            assert 'Refresh' in psCmdResultObjs[1].ps_cmd_summary_label
+        else:
+            assert orgAccountObj.num_ps_cmd == 3  
+            logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
+            assert PsCmdResult.objects.count() == 3
+            psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
+            logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
             assert 'Configure' in psCmdResultObjs[0].ps_cmd_summary_label
             logger.info(f"[1]:{psCmdResultObjs[1].ps_cmd_summary_label}")
             assert 'Update' in psCmdResultObjs[1].ps_cmd_summary_label     
+            logger.info(f"[2]:{psCmdResultObjs[2].ps_cmd_summary_label}")
+            assert 'Refresh' in psCmdResultObjs[2].ps_cmd_summary_label
 
 #@pytest.mark.dev
 @pytest.mark.real_ps_server
