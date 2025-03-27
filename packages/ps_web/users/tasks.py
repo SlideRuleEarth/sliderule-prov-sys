@@ -328,7 +328,6 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
     then it will set desired num nodes to min node cap 
     '''
     try:
-        prior_need_refresh = (prior_num_cmds_processed == 0 and prior_set_up_occurred)
         if not orgAccountObj.provisioning_suspended: 
             env_ready,this_setup_occurred = check_provision_env_ready(orgAccountObj)
             setup_occurred = this_setup_occurred or prior_set_up_occurred
@@ -339,6 +338,7 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                 num_nodes_to_deploy,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
                 expire_time = None
                 onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
+                cmd_check = orgAccountObj.num_ps_cmd_successful
                 if onnTop is not None:
                     user = onnTop.user
                     expire_time = onnTop.expiration
@@ -354,22 +354,45 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                             except Exception as e:
                                 LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} SetUp {orgAccountObj.name} {user.username} {deploy_values} Exception:")
                         try:
+                            LOG.info(f"Update {orgAccountObj.name} to desired_num_nodes:{num_nodes_to_deploy} exp_time:{expire_time} deploy_values:{deploy_values}")
                             process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=expire_time)
                         except Exception as e:
                             LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} Update {orgAccountObj.name} {user.username} {deploy_values} Exception:")
-                            clean_up_ONN_cnnro_ids(orgAccountObj,suspend_provisioning=False)
-                            LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                            #delete_onn_and_its_scheduled_job(onnTop)
+                            cull_expired_entries(orgAccountObj,datetime.now(timezone.utc))
+                            cnt = OrgNumNode.objects.filter(org=orgAccountObj).count()
+                            LOG.info(f"ONN cnt:{cnt}")
+                            if(cnt == 0):
+                                try:
+                                    LOG.info(f"Destroy {orgAccountObj.name} when no entries in ONN")
+                                    process_Destroy_cmd(orgAccountObj=orgAccountObj, username=user.username)
+                                except Exception as e:
+                                    LOG.exception("ERROR processing Destroy {orgAccountObj.name} when no entries in ONN: caught exception:")
+                                    LOG.warning(f"Destroy {orgAccountObj.name} FAILED when no entries in ONN; Setting destroy_when_no_nodes to False")
+                                    orgAccountObj.destroy_when_no_nodes = False
+                                    orgAccountObj.min_node_cap = 0 
+                                    orgAccountObj.desired_num_nodes = 0
+                                    orgAccountObj.save(update_fields=['destroy_when_no_nodes','min_node_cap','desired_num_nodes'])
+                                    LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                                    sleep(COOLOFF_SECS)                            
+                                LOG.info(f"{orgAccountObj.name} Destroy processed")
+
+                            LOG.info(f"{orgAccountObj.name} ONN cnt:{cnt} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                             sleep(COOLOFF_SECS)
+                            LOG.info(f"{orgAccountObj.name} Refresh {orgAccountObj.name} after failed Update")
                         
                         LOG.info(f"Update {orgAccountObj.name} processed")
                 else:
                     # No entries in table
                     user = orgAccountObj.owner
+                    LOG.info(f"{orgAccountObj.name} No entries in ONN - destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} min_node_cap:{orgAccountObj.min_node_cap}")
                     if orgAccountObj.destroy_when_no_nodes and (orgAccountObj.min_node_cap == 0):
                         clusterObj = Cluster.objects.get(org=orgAccountObj)
+                        LOG.info(f"{orgAccountObj.name} No entries in ONN - clusterObj.is_deployed:{clusterObj.is_deployed}")
                         if clusterObj.is_deployed:
                             LOG.info(f"org:{orgAccountObj.name} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} min_node_cap:{orgAccountObj.min_node_cap}")
                             try:
+                                LOG.info(f"Destroy {orgAccountObj.name} when no entries in ONN")
                                 process_Destroy_cmd(orgAccountObj=orgAccountObj, username=user.username)
                             except Exception as e:
                                 LOG.exception("ERROR processing Destroy {orgAccountObj.name} when no entries in ONN: caught exception:")
@@ -382,19 +405,22 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                                 sleep(COOLOFF_SECS)                            
                             LOG.info(f"{orgAccountObj.name} Destroy processed")
                     else:
+                        LOG.info(f"{orgAccountObj.name} No entries in ONN - min_node_cap:{orgAccountObj.min_node_cap} desired_num_nodes:{orgAccountObj.desired_num_nodes}")
                         if orgAccountObj.min_node_cap != orgAccountObj.desired_num_nodes: 
                             num_entries = OrgNumNode.objects.filter(org=orgAccountObj).count()
-                            LOG.info(f"{orgAccountObj.name} ({num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} exp_time:None")
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
+                            LOG.info(f"{orgAccountObj.name} is_deployed:{clusterObj.is_deployed} (num ONN:{num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} ")
                             if not clusterObj.is_deployed: # Force SetUp if not deployed because 'latest' and 'v3','v4' etc terraform files can be updated without changing version
                                 try:
                                     if not setup_occurred:
                                         LOG.info(f"Calling SetUp {orgAccountObj.name} from process_num_node_table for Deployment to min_node_cap setup_occured:{setup_occurred}")
                                         process_SetUp_cmd(orgAccountObj=orgAccountObj)
+                                        LOG.info(f"{orgAccountObj.name} SetUp Cmd Processed")
                                 except Exception as e:
                                     LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} SetUp {orgAccountObj.name} {user.username} {deploy_values} Exception:")
                             try:
                                 deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': orgAccountObj.min_node_cap, 'max_node_cap': orgAccountObj.max_node_cap,'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
+                                LOG.info(f"Update {orgAccountObj.name} by {user.username} to min_node_cap:{orgAccountObj.min_node_cap} deploy_values:{deploy_values}")
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=None)
                             except Exception as e:
                                 LOG.exception("ERROR in Update {orgAccountObj.name} ps_cmd when no entries in ONN and min != desired: caught exception:")
@@ -405,24 +431,14 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                                 LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                                 sleep(COOLOFF_SECS)
                             LOG.info(f"{orgAccountObj.name} Update processed")
-                # if we setup the env but did not process any commands, then we need to Refresh to set state
-                need_refresh = False
-                if setup_occurred:
-                    if orgAccountObj.num_ps_cmd == start_num_ps_cmds:
-                        # setup with no commands processed
-                        need_refresh = True
-                else:
-                    if prior_need_refresh and (orgAccountObj.num_ps_cmd == start_num_ps_cmds):
-                        # setup with no commands processed
-                        need_refresh = True
-                if need_refresh:
-                    try:
+                try:
+                    if(cmd_check != orgAccountObj.num_ps_cmd_successful):
                         LOG.info(f"Refresh {orgAccountObj.name} post SetUp")
                         process_Refresh_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
-                    except Exception as e:
-                        LOG.exception("ERROR processing Refresh {orgAccountObj.name} caught exception:")
-                        LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
-                        sleep(COOLOFF_SECS)
+                except Exception as e:
+                    LOG.exception("ERROR processing Refresh {orgAccountObj.name} caught exception:")
+                    LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
+                    sleep(COOLOFF_SECS)
     except Exception as e:
         LOG.exception(f"{orgAccountObj.name} caught exception:")
         LOG.info(f"{orgAccountObj.name} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
@@ -451,6 +467,7 @@ def schedule_process_state_change(tm,orgAccountObj):
     except Exception as e:
         LOG.exception(f"{orgAccountObj.name} caught exception:")
         LOG.error(f"{orgAccountObj.name} got {str(e)}")
+    log_scheduled_jobs()
 
 def get_or_create_OrgNumNodes(orgAccountObj,user,desired_num_nodes,expire_date):
     # if it doesn't exist create it then process all orgNumNodes for org                                          
@@ -1598,7 +1615,7 @@ def process_Update_cmd(orgAccountObj, username, deploy_values, expire_time):
                 now = datetime.now(timezone.utc)
                 if expire_time is not None and expire_time < now:
                     elapsed = now - st
-                    LOG.warn(f"Update {orgAccountObj.name} took {elapsed} expire_time:{expire_time} has already passed (now:{now}) calling enqueue_process_state_change for {orgAccountObj.name}")
+                    LOG.warning(f"Update {orgAccountObj.name} took {elapsed} expire_time:{expire_time} has already passed (now:{now}) calling enqueue_process_state_change for {orgAccountObj.name}")
                     enqueue_process_state_change(orgAccountObj.name)
         except LowBalanceError as e:
             error_msg = f"{org_cmd_str} Low Balance Error: The account balance ({str(orgAccountObj.balance)}) of this organization is too low.The auto-shutdown time is {str(orgAccountObj.min_ddt)}  Check with the support team for assistance. Can NOT deploy with less than 8 hrs left until automatic shutdown"

@@ -145,7 +145,7 @@ class OrgTokenObtainPairGitHubSerializer(serializers.Serializer):
                 username = response.json().get('login')
                 #LOG.info(f"github username:{username}")
             except KeyError:
-                LOG.warn('no "login" key in response')
+                LOG.warning('no "login" key in response')
                 LOG.error(response.json())
             except Exception as e:
                 LOG.error(e)
