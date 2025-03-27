@@ -313,7 +313,7 @@ def check_provision_env_ready(orgAccountObj):
     #LOG.info(f"check_provision_env_ready:{clusterObj.provision_env_ready} setup_occurred:{setup_occurred}")
     return clusterObj.provision_env_ready,setup_occurred       
 
-def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_occurred):
+def process_num_node_table(orgAccountObj,prior_set_up_occurred):
     '''
     If the the OrgNumNode table changed and the highest num nodes desired 
     in the table is different than what is currently running
@@ -327,12 +327,12 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
     the current desired num nodes is not the min node cap
     then it will set desired num nodes to min node cap 
     '''
+    start_num_ps_cmds = orgAccountObj.num_ps_cmd
     try:
         if not orgAccountObj.provisioning_suspended: 
             env_ready,this_setup_occurred = check_provision_env_ready(orgAccountObj)
             setup_occurred = this_setup_occurred or prior_set_up_occurred
             #LOG.info(f"process_num_node_table({orgAccountObj.name}) env_ready:{env_ready} setup_occurred:{setup_occurred} this_setup_occurred:{this_setup_occurred} prior_set_up_occurred:{prior_set_up_occurred} prior_num_cmds_processed:{prior_num_cmds_processed}")
-            start_num_ps_cmds = orgAccountObj.num_ps_cmd
             if env_ready:
                 cull_expired_entries(orgAccountObj,datetime.now(timezone.utc))
                 num_nodes_to_deploy,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
@@ -447,6 +447,7 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
         for handler in LOG.handlers:
             handler.flush()
         sleep(COOLOFF_SECS)
+    LOG.info(f"{orgAccountObj.name} process_num_node_table processed {orgAccountObj.num_ps_cmd - start_num_ps_cmds} cmds")
 
 def schedule_process_state_change(tm,orgAccountObj): 
     '''
@@ -1800,7 +1801,7 @@ def  process_prov_sys_tbls(orgAccountObj):
                 num_cmds_processed += num_cmds_processed_this_time
             # check if at least one API called and/or onn expired and is not processed yet
             #LOG.info(f"clusterObj:{clusterObj.org.name} {Cluster.objects.count()} {clusterObj.org.id}")
-            process_num_node_table(orgAccountObj,num_cmds_processed,setup_occurred)
+            process_num_node_table(orgAccountObj,setup_occurred)
     except Exception as e:
         LOG.exception(f'Exception caught for {orgAccountObj.name}')
         LOG.info(f"sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")

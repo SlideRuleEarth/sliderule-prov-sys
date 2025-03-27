@@ -239,7 +239,7 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             access_token=access_token,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,                                                            
-                                                            expected_change_ps_cmd=2, # Setup and Update
+                                                            expected_change_ps_cmd=3, # Setup and Update Refresh
                                                             expected_status='QUEUED')
 
         loop_count,response = verify_post_org_num_nodes_ttl(client=client,
@@ -293,7 +293,7 @@ def test_api_urls(caplog,client,verified_TEST_USER, mock_tasks_enqueue_stubbed_o
                                                             access_token=access_token,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                                                            expected_change_ps_cmd=1, # we bumped the highest to 4 and iter
+                                                            expected_change_ps_cmd=2, # we bumped the highest to 4 and iter
                                                             expected_status='QUEUED')
 
 #@pytest.mark.dev
@@ -450,7 +450,7 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
                                                             new_time=current_fake_tm,
                                                             url_args=[orgAccountObj.name,3,15],
                                                             access_token=owner_access_token,
-                                                            expected_change_ps_cmd=2,# Setup and Update
+                                                            expected_change_ps_cmd=3,# Setup and Update Refresh
                                                             expected_status='QUEUED',
                                                             expected_change_OrgNumNode=1,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
@@ -464,7 +464,7 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
                                                             expected_change_OrgNumNode=1,
                                                             mock_tasks_enqueue_stubbed_out=mock_tasks_enqueue_stubbed_out,
                                                             mock_views_enqueue_stubbed_out=mock_views_enqueue_stubbed_out,
-                                                            expected_change_ps_cmd=1,
+                                                            expected_change_ps_cmd=2,
                                                             expected_status='QUEUED')
 
         loop_count,response = verify_post_org_num_nodes_ttl(client=client,
@@ -488,9 +488,9 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
 
         # this on gets updated every time a ps cmd is processed
         # regardless of where it originated from (i.e. onn or owner_ps_cmd)
-        assert(orgAccountObj.num_ps_cmd==3) 
+        assert(orgAccountObj.num_ps_cmd==5) 
         assert(orgAccountObj.desired_num_nodes==4)
-        assert(orgAccountObj.num_ps_cmd_successful==3)
+        assert(orgAccountObj.num_ps_cmd_successful==5)
         task_idle, loop_count = process_state_change(orgAccountObj.name)
         
         # nothing else changes
@@ -498,8 +498,8 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==0)
         
-        assert(orgAccountObj.num_ps_cmd==3)
-        assert(orgAccountObj.num_ps_cmd_successful==3)
+        assert(orgAccountObj.num_ps_cmd==5)
+        assert(orgAccountObj.num_ps_cmd_successful==5)
         assert(orgAccountObj.desired_num_nodes==4)
         # web login
         assert(client.login(username=OWNER_USER,password=OWNER_PASSWORD))
@@ -522,8 +522,8 @@ def test_state_change(caplog,client,mock_tasks_enqueue_stubbed_out, mock_views_e
         assert(OrgNumNode.objects.count()==3)
         assert(orgAccountObj.num_owner_ps_cmd==1)
         
-        assert(orgAccountObj.num_ps_cmd==4) # processed
-        assert(orgAccountObj.num_ps_cmd_successful==4)
+        assert(orgAccountObj.num_ps_cmd==6) # processed
+        assert(orgAccountObj.num_ps_cmd_successful==6)
         assert(orgAccountObj.desired_num_nodes==4)
 
 
