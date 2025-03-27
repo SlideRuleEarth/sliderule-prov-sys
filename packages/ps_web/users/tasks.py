@@ -338,11 +338,12 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                 num_nodes_to_deploy,cnnro_ids = sum_of_highest_nodes_for_each_user(orgAccountObj)
                 expire_time = None
                 onnTop = sort_ONN_by_nn_exp(orgAccountObj).first()
-                cmd_check = orgAccountObj.num_ps_cmd_successful
+                need_refresh = False
                 if onnTop is not None:
                     user = onnTop.user
                     expire_time = onnTop.expiration
                     if num_nodes_to_deploy != orgAccountObj.desired_num_nodes: 
+                        need_refresh = True # any path here has at least one cmd
                         deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': num_nodes_to_deploy , 'max_node_cap': orgAccountObj.max_node_cap, 'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                         LOG.info(f"{orgAccountObj.name} Using top entries of each user sorted by num/exp_tm  with num_nodes_to_set:{onnTop.desired_num_nodes} exp_time:{expire_time} ")
                         clusterObj = Cluster.objects.get(org=orgAccountObj)
@@ -350,7 +351,7 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                             try:
                                 if not setup_occurred:
                                     LOG.info(f"Calling SetUp {orgAccountObj.name} from process_num_node_table for Deployment to desired_num_nodes:{num_nodes_to_deploy}")
-                                    process_SetUp_cmd(orgAccountObj=orgAccountObj)
+                                    process_SetUp_cmd(orgAccountObj=orgAccountObj)                                    
                             except Exception as e:
                                 LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} SetUp {orgAccountObj.name} {user.username} {deploy_values} Exception:")
                         try:
@@ -380,13 +381,13 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                             LOG.info(f"{orgAccountObj.name} ONN cnt:{cnt} sleeping... {COOLOFF_SECS} seconds give terraform time to clean up")
                             sleep(COOLOFF_SECS)
                             LOG.info(f"{orgAccountObj.name} Refresh {orgAccountObj.name} after failed Update")
-                        
                         LOG.info(f"Update {orgAccountObj.name} processed")
                 else:
                     # No entries in table
                     user = orgAccountObj.owner
                     LOG.info(f"{orgAccountObj.name} No entries in ONN - destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} min_node_cap:{orgAccountObj.min_node_cap}")
                     if orgAccountObj.destroy_when_no_nodes and (orgAccountObj.min_node_cap == 0):
+                        need_refresh = True # any path here has at least one cmd
                         clusterObj = Cluster.objects.get(org=orgAccountObj)
                         LOG.info(f"{orgAccountObj.name} No entries in ONN - clusterObj.is_deployed:{clusterObj.is_deployed}")
                         if clusterObj.is_deployed:
@@ -407,6 +408,7 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                     else:
                         LOG.info(f"{orgAccountObj.name} No entries in ONN - min_node_cap:{orgAccountObj.min_node_cap} desired_num_nodes:{orgAccountObj.desired_num_nodes}")
                         if orgAccountObj.min_node_cap != orgAccountObj.desired_num_nodes: 
+                            need_refresh = True # any path here has at least one cmd
                             num_entries = OrgNumNode.objects.filter(org=orgAccountObj).count()
                             clusterObj = Cluster.objects.get(org=orgAccountObj)
                             LOG.info(f"{orgAccountObj.name} is_deployed:{clusterObj.is_deployed} (num ONN:{num_entries} (i.e. no) entries left; using min_node_cap:{orgAccountObj.min_node_cap} ")
@@ -432,7 +434,7 @@ def process_num_node_table(orgAccountObj,prior_num_cmds_processed,prior_set_up_o
                                 sleep(COOLOFF_SECS)
                             LOG.info(f"{orgAccountObj.name} Update processed")
                 try:
-                    if(cmd_check != orgAccountObj.num_ps_cmd_successful):
+                    if(need_refresh):
                         LOG.info(f"Refresh {orgAccountObj.name} post SetUp")
                         process_Refresh_cmd(orgAccountObj=orgAccountObj, username=orgAccountObj.owner.username)
                 except Exception as e:
