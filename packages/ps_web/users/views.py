@@ -70,6 +70,7 @@ def get_user_orgs(request):
             "PS_SITE_TITLE":settings.PS_SITE_TITLE,
             "PS_BLD_ENVVER":PS_BLD_ENVVER,
             "version_is_release":version_is_release,
+            "current_year": datetime.now().year,
             "domain": domain }
 
 def get_orgAccountObj(pk):
