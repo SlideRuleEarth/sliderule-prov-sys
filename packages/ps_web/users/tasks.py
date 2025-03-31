@@ -117,6 +117,9 @@ def format_num_nodes_tbl(org):
 def sort_ONN_by_nn_exp(orgAccountObj):
     return OrgNumNode.objects.filter(org=orgAccountObj).order_by('-desired_num_nodes','expiration')
 
+def get_highest_ONN_expiration(orgAccountObj):
+    return OrgNumNode.objects.filter(org=orgAccountObj).aggregate(Max('expiration'))['expiration__max']
+
 def log_highest_nodes_per_user(highest_nodes_per_user,orgAccountObj):
     msg = '['
     n=0

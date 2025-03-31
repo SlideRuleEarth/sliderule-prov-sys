@@ -65,10 +65,10 @@
                                                             {% endif %}
                                                         </dl>
                                                         <dl>
-                                                            <dt>Current Capacity Request Expires</dt>                                                           
+                                                            <dt>Capacity Requests Expire</dt>                                                           
                                                             {% if cluster.is_deployed %}
                                                                 {% if cluster.expire_time %}
-                                                                    <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ cluster.expire_time.isoformat }}">Loading...</p></dd>
+                                                                    <dd><p class="utc-time mx-1 my-1" data-utc-time="{{ highest_ONN_expiration.isoformat }}">Loading...</p></dd>
                                                                 {% else %}
                                                                     <dd>No Expiration</dd>
                                                                 {% endif %}
