@@ -387,10 +387,10 @@ def process_num_node_table(orgAccountObj,prior_set_up_occurred):
                     user = orgAccountObj.owner
                     LOG.info(f"{orgAccountObj.name} No entries in ONN - destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} min_node_cap:{orgAccountObj.min_node_cap}")
                     if orgAccountObj.destroy_when_no_nodes and (orgAccountObj.min_node_cap == 0):
-                        need_refresh = True # any path here has at least one cmd
                         clusterObj = Cluster.objects.get(org=orgAccountObj)
                         LOG.info(f"{orgAccountObj.name} No entries in ONN - clusterObj.is_deployed:{clusterObj.is_deployed}")
                         if clusterObj.is_deployed:
+                            need_refresh = True 
                             LOG.info(f"org:{orgAccountObj.name} destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} min_node_cap:{orgAccountObj.min_node_cap}")
                             try:
                                 LOG.info(f"Destroy {orgAccountObj.name} when no entries in ONN")

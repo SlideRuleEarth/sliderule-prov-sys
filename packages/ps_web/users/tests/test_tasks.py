@@ -661,7 +661,9 @@ def setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPT
     orgAccountObj.is_public = clusterObj.is_public
     orgAccountObj.version = clusterObj.cur_version
     orgAccountObj.save()
-
+    #logger.critical(f"BEFORE orgAccountObj:{pprint.pformat(model_to_dict(orgAccountObj,fields=None))}")
+    #logger.critical(f"BEFORE clusterObj:{pprint.pformat(model_to_dict(clusterObj,fields=None))}")
+    logger.info(f"BEFORE clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
     if not ONN_IS_EMPTY:
         OrgNumNode.objects.create(  org=orgAccountObj, 
                                     user=orgAccountObj.owner, 
@@ -687,12 +689,14 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
                     ONN_IS_EMPTY:           Boolean indicating if the OrgNumNode table is empty
                     DESTROY_WHEN_NO_NODES:  Boolean indicating if the OrgAccount.destroy_when_no_nodes is True
                     MIN_NODE_CAP:           The OrgAccount.min_node_cap
-                    WAS_DEPLOYED:           Boolean indicating if the Cluster.is_deployed is True
+                    WAS_DEPLOYED:           Boolean indicating if the Cluster.is_deployed was True
         we assume in setup that onnTop.desired_num_nodes != orgAccountObj.desired_num_nodes: 
     '''
     logger.info(f"orgAccountObj:{orgAccountObj} ONN_IS_EMPTY:{ONN_IS_EMPTY} DESTROY_WHEN_NO_NODES:{DESTROY_WHEN_NO_NODES} MIN_NODE_CAP:{MIN_NODE_CAP} WAS_DEPLOYED:{WAS_DEPLOYED}")
     orgAccountObj.refresh_from_db()
     clusterObj = Cluster.objects.get(org=orgAccountObj)
+    clusterObj.refresh_from_db()
+    logger.info(f"AFTER clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
     logger.info(f"orgAccountObj.max_ddt:{orgAccountObj.max_ddt}")
     logger.info(f"timedelta(hours=MIN_HRS_TO_LIVE_TO_START):{timedelta(hours=MIN_HRS_TO_LIVE_TO_START)}")
     #assert ((clusterObj.cnnro_ids == []) or (clusterObj.cnnro_ids == None)) # cleaned up on exception
@@ -722,8 +726,8 @@ def verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMP
         cmd_cnt = cmd_cnt+1
     if called_process_Destroy_cmd:
         assert WAS_DEPLOYED
+        logger.info(f"orgAccountObj.num_ps_cmd::{orgAccountObj.num_ps_cmd} PsCmdResult.objects.count():{PsCmdResult.objects.count()} cmd_cnt:{cmd_cnt}")
         assert orgAccountObj.num_ps_cmd == 2  
-        logger.info(f"PsCmdResult.objects.count():{PsCmdResult.objects.count()}")
         assert PsCmdResult.objects.count() == 2
         psCmdResultObjs = PsCmdResult.objects.filter(org=orgAccountObj).order_by('creation_date')
         logger.info(f"[0]:{psCmdResultObjs[0].ps_cmd_summary_label}")
@@ -820,7 +824,7 @@ test_params = [
     ((ProvisionCmdError,StopIteration,Exception),NEG_TEST_STOP_ITER_ERROR_ORG_NAME,False,False,0,False),
 
 ]
-#@pytest.mark.dev
+@pytest.mark.dev
 @pytest.mark.django_db
 @pytest.mark.ps_server_stubbed
 @pytest.mark.parametrize("PS_EXCEPTIONS,NEG_TEST_ERROR_ORG_NAME, ONN_IS_EMPTY, DESTROY_WHEN_NO_NODES, MIN_NODE_CAP, IS_DEPLOYED", test_params)
@@ -834,8 +838,12 @@ def test_process_num_node_table_NEGATIVE_TESTS(tasks_module,create_TEST_USER, PS
     '''
     init_test_environ(name=NEG_TEST_ERROR_ORG_NAME)
     orgAccountObj = get_test_org(NEG_TEST_ERROR_ORG_NAME)
+    clusterObj = Cluster.objects.get(org=orgAccountObj)
     setup_before_process_num_node_table_with_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
+    clusterObj.refresh_from_db()
+    logger.info(f"BEFORE clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
     process_num_node_table(orgAccountObj,False)
+    logger.info(f"AFTER1 clusterObj.is_deployed:{clusterObj.is_deployed} clusterObj.is_public:{clusterObj.is_public} orgAccountObj.min_node_cap:{orgAccountObj.min_node_cap} orgAccountObj.desired_num_nodes:{orgAccountObj.desired_num_nodes}")
     logger.info(f"orgAccountObj:{orgAccountObj} ONN_IS_EMPTY:{ONN_IS_EMPTY} DESTROY_WHEN_NO_NODES:{DESTROY_WHEN_NO_NODES} MIN_NODE_CAP:{MIN_NODE_CAP} WAS_DEPLOYED:{IS_DEPLOYED}")
     verify_after_process_num_node_table_after_exception(orgAccountObj,ONN_IS_EMPTY,DESTROY_WHEN_NO_NODES,MIN_NODE_CAP,IS_DEPLOYED)
     if ONN_IS_EMPTY:

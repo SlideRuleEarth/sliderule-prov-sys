@@ -282,7 +282,7 @@ import pytest
 import os
 import json
 
-@pytest.mark.dev
+#@pytest.mark.dev
 @pytest.mark.parametrize('terraform_env', [('latest', True), ('v3', True)], indirect=True)
 def test_read_PermittedOrg_included(setup_logging, s3, terraform_env, test_name):
     logger = setup_logging
