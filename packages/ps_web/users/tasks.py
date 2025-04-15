@@ -387,7 +387,6 @@ def process_num_node_table(orgAccountObj,prior_set_up_occurred):
                     user = orgAccountObj.owner
                     LOG.info(f"{orgAccountObj.name} No entries in ONN - destroy_when_no_nodes:{orgAccountObj.destroy_when_no_nodes} min_node_cap:{orgAccountObj.min_node_cap}")
                     if orgAccountObj.destroy_when_no_nodes and (orgAccountObj.min_node_cap == 0):
-                        need_refresh = True # any path here has at least one cmd
                         clusterObj = Cluster.objects.get(org=orgAccountObj)
                         LOG.info(f"{orgAccountObj.name} No entries in ONN - clusterObj.is_deployed:{clusterObj.is_deployed}")
                         if clusterObj.is_deployed:
@@ -395,6 +394,7 @@ def process_num_node_table(orgAccountObj,prior_set_up_occurred):
                             try:
                                 LOG.info(f"Destroy {orgAccountObj.name} when no entries in ONN")
                                 process_Destroy_cmd(orgAccountObj=orgAccountObj, username=user.username)
+                                need_refresh = True 
                             except Exception as e:
                                 LOG.exception("ERROR processing Destroy {orgAccountObj.name} when no entries in ONN: caught exception:")
                                 LOG.warning(f"Destroy {orgAccountObj.name} FAILED when no entries in ONN; Setting destroy_when_no_nodes to False")
@@ -417,6 +417,7 @@ def process_num_node_table(orgAccountObj,prior_set_up_occurred):
                                     if not setup_occurred:
                                         LOG.info(f"Calling SetUp {orgAccountObj.name} from process_num_node_table for Deployment to min_node_cap setup_occured:{setup_occurred}")
                                         process_SetUp_cmd(orgAccountObj=orgAccountObj)
+                                        need_refresh = True 
                                         LOG.info(f"{orgAccountObj.name} SetUp Cmd Processed")
                                 except Exception as e:
                                     LOG.exception(f"{e.message} processing top ONN id:{onnTop.id} SetUp {orgAccountObj.name} {user.username} {deploy_values} Exception:")
@@ -424,6 +425,7 @@ def process_num_node_table(orgAccountObj,prior_set_up_occurred):
                                 deploy_values ={'min_node_cap': orgAccountObj.min_node_cap, 'desired_num_nodes': orgAccountObj.min_node_cap, 'max_node_cap': orgAccountObj.max_node_cap,'version': orgAccountObj.version, 'is_public': orgAccountObj.is_public, 'expire_time': expire_time }
                                 LOG.info(f"Update {orgAccountObj.name} by {user.username} to min_node_cap:{orgAccountObj.min_node_cap} deploy_values:{deploy_values}")
                                 process_Update_cmd(orgAccountObj=orgAccountObj, username=user.username, deploy_values=deploy_values, expire_time=None)
+                                need_refresh = True 
                             except Exception as e:
                                 LOG.exception("ERROR in Update {orgAccountObj.name} ps_cmd when no entries in ONN and min != desired: caught exception:")
                                 LOG.warning(f"Setting {orgAccountObj.name} min_node_cap to zero; Update FAILED when no entries in ONN and min_node_cap != desired_num_nodes (i.e. current target, assumed num nodes)")
