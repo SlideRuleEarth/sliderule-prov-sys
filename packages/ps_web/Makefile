@@ -162,6 +162,7 @@ bld-and-run-unit-tests: down # build and run the unit tests against a running de
 	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose up --detach && \
+	sleep 3 && \
 	docker logs ps-server && \
 	docker logs ps-web && \
 	export PS_TEST_DIR=$(PS_TEST_DIR) && \
@@ -175,6 +176,7 @@ bld-and-run-unit-test-dev: down # build and run the unit tests against a running
 	export PS_TEST_DIR=$(PS_TEST_DIR) && \
 	export PS_SERVER_DIR=$(PS_SERVER_DIR) && \
 	docker compose up --detach && \
+	sleep 3 && \
 	docker logs ps-server && \
 	docker logs ps-web && \
 	docker exec $(DOCKER_EXEC_OPTS) ps-web pytest -k "not TasksTestWithPSServer" -m "dev and not real_ps_server and not ps_disable"

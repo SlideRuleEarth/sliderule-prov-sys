@@ -106,6 +106,7 @@ run: docker ## run prov-sys locally
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	docker compose up --detach
+	sleep 3
 	make docker-versions && \
 	make db-backup-timestamped-running
 	@echo SITE_ID:$(SITE_ID)
@@ -120,6 +121,7 @@ run-debug: docker-test ## run prov-sys locally
 	export DOCKER_TAG=$(DOCKER_TAG) && \
 	export PS_SERVER_SOURCE_DIR=$(PS_SERVER_SOURCE_DIR) && \
 	docker compose up --detach
+	sleep 3
 	make docker-versions && \
 	make db-backup-timestamped-running
 	@echo SITE_ID:$(SITE_ID)

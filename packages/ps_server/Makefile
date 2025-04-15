@@ -91,6 +91,7 @@ bld-and-run-unit-tests: down  # run the ps_server unit tests then exit
 	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
 	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	docker compose up --detach && \
+	sleep 3 && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest --log-cli-level=ERROR && \
 	make down
@@ -104,6 +105,7 @@ bld-and-run-unit-test-dev: down  # run the ps_server unit tests then exit
 	export PS_SERVER_DOCKER_TAG=$(PS_SERVER_DOCKER_TAG) && \
 	export LOCALSTACK_VOLUME_DIR=$(LOCALSTACK_VOLUME_DIR) && \
 	docker compose up --detach && \
+	sleep 3 && \
 	docker logs ps-server && \
 	docker exec $(DOCKER_EXEC_OPTS) --workdir /ps_server/test_misc ps-server pytest -m "dev" --log-cli-level=ERROR && \
 	make down
