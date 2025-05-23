@@ -1647,9 +1647,6 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                 domain = "domain=" + get_domain_env()
                 cluster_name = "cluster_name=" + request.name  # lowercase enables matches to dns records
                 cluster_version = f"cluster_version={setup_cfg.version}"
-                node_asg_min_capacity = "node_asg_min_capacity=" + str(request.min_nodes)
-                node_asg_max_capacity = "node_asg_max_capacity=" + str(request.max_nodes)
-                node_asg_desired_capacity = "node_asg_desired_capacity=" + str(request.num_nodes)
                 spot_allocation_strategy = "spot_allocation_strategy=" + setup_cfg.spot_allocation_strategy
                 spot_max_price = "spot_max_price=" + str(setup_cfg.spot_max_price)
                 availability_zone = "availability_zone=" + setup_cfg.availability_zone
@@ -1664,12 +1661,6 @@ class Control(ps_server_pb2_grpc.ControlServicer):
                     is_public,
                     "-var",
                     cluster_name,
-                    "-var",
-                    node_asg_min_capacity,
-                    "-var",
-                    node_asg_max_capacity,
-                    "-var",
-                    node_asg_desired_capacity,
                     "-var",
                     spot_allocation_strategy,
                     "-var",
