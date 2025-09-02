@@ -20,6 +20,39 @@ resource "aws_iam_role" "prov-sys-task-service-role" {
   path               = "/"
   assume_role_policy = data.aws_iam_policy_document.tasks-service-assume-policy.json
 }
+# Allow the ECS *execution* role to read the JSON keys from the secret
+# and decrypt via Secrets Manager if a KMS key is used.
+resource "aws_iam_role_policy" "ecs_exec_read_secrets" {
+  name = "${var.domain_root}-ps-exec-secrets"
+  role = aws_iam_role.prov-sys-task-service-role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "AllowReadProvSysSecret"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        # IMPORTANT: use the base secret ARN with a trailing * to cover versions/aliases
+        Resource = "${data.aws_secretsmanager_secret.provsys.arn}*"
+      },
+      {
+        Sid      = "AllowKmsDecryptViaSecretsManager"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${var.region}.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
 
 resource "aws_iam_role_policy_attachment" "prov-sys-task-service-role-attachment" {
   role       = aws_iam_role.prov-sys-task-service-role.name
